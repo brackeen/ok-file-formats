@@ -302,7 +302,7 @@ static void decode_caf(pcm_decoder *decoder) {
         else {
             // Skip ignored chunk
             //printf("Ignoring chunk '%.4s'\n", chunk_header);
-            if (!ok_seek(decoder, (size_t)chunk_length)) {
+            if (!ok_seek(decoder, (int)chunk_length)) {
                 return;
             }
         }
