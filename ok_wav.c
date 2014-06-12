@@ -103,7 +103,7 @@ ok_audio *ok_wav_read_from_memory(const void *buffer, const size_t buffer_length
     return audio;
 }
 
-ok_audio *ok_wav_read_wav_from_callbacks(void *user_data, ok_read_func read_func, ok_seek_func seek_func,
+ok_audio *ok_wav_read_from_callbacks(void *user_data, ok_read_func read_func, ok_seek_func seek_func,
                                      const bool convert_to_system_endian) {
     ok_audio *audio = calloc(1, sizeof(ok_audio));
     if (user_data != NULL && read_func != NULL && seek_func != NULL) {
