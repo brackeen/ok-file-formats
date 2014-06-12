@@ -319,6 +319,7 @@ static void decode_fnt(ok_font *font, void *reader_data, ok_read_func read_func,
         ok_font_error(font, "Couldn't allocate decoder.");
         return;
     }
+    decoder->font = font;
     decoder->reader_data = reader_data;
     decoder->read_func = read_func;
     decoder->seek_func = seek_func;
