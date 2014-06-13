@@ -1,5 +1,5 @@
 #include "ok_wav.h"
-#include "ok_internal.h"
+#include "ok__internal.h"
 #include <stdlib.h>
 #include <stdarg.h>
 #include <memory.h>

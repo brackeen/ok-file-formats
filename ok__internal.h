@@ -12,6 +12,10 @@
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
+#ifndef max
+#define max(a, b) ((a) > (b) ? (a) : (b))
+#endif
+
 #ifndef _OK_IMAGE_STRUCT_
 #define _OK_IMAGE_STRUCT_
 
@@ -29,11 +33,8 @@ typedef struct {
     uint8_t *data;
     char error_message[80];
 } ok_image;
+
 #endif
-
-void ok_image_error(ok_image *image, const char *format, ... );
-
-void ok_image_free(ok_image *image);
 
 #ifndef _OK_READ_FUNC_
 #define _OK_READ_FUNC_
@@ -43,6 +44,10 @@ typedef size_t (*ok_read_func)(void *user_data, uint8_t *buffer, const size_t co
 /// Seek function. Should return 0 on success.
 typedef int (*ok_seek_func)(void *user_data, const int count);
 #endif
+
+void ok_image_error(ok_image *image, const char *format, ... );
+
+void ok_image_free(ok_image *image);
 
 typedef struct {
     uint8_t *buffer;
@@ -100,4 +105,5 @@ static inline uint64_t readLE64(const uint8_t *data) {
 }
 
 #pragma clang diagnostic pop
+
 #endif
