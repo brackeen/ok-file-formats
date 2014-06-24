@@ -240,7 +240,8 @@ static bool test_image(read_type input_read_type,
     ok_image *image = read_image(path_to_png_suite, name, "png", input_read_type, color_format, flip_y);
     
     // Test equality
-    bool success = compare(name, "png", image, rgba_data, rgba_data_length, 0, print_image_on_error);
+    bool success = compare(name, "png", image, rgba_data, rgba_data_length,
+                           (input_read_type == READ_TYPE_INFO_ONLY), 0, print_image_on_error);
     
     // Cleanup
     if (rgba_data != NULL) {

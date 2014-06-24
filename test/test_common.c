@@ -109,6 +109,15 @@ ok_image *read_image(const char *path, const char *name, const char *ext, const 
             fclose(fp);
             break;
         }
+        case READ_TYPE_INFO_ONLY: {
+            if (is_png) {
+                image = ok_png_read_info(in_filename);
+            }
+            else {
+                image = ok_jpg_read_info(in_filename);
+            }
+            break;
+        }
         default:
             image = NULL;
             break;
@@ -150,11 +159,21 @@ static bool fuzzy_memcmp(const uint8_t *data1, const uint8_t *data2, const size_
 
 bool compare(const char *name, const char *ext, const ok_image *image,
              const uint8_t *rgba_data, const size_t rgba_data_length,
-             const uint8_t fuzziness, const bool print_image_on_error) {
+             const bool info_only, const uint8_t fuzziness, const bool print_image_on_error) {
     float p_identical;
     int peak_diff;
     bool success = false;
-    if (image->data == NULL && rgba_data == NULL) {
+    if (info_only) {
+        if (image->width * image->height * 4 != rgba_data_length) {
+            printf("Failure: Incorrect dimensions for %s.%s (%u x %u - data length should be %u but is %zu)\n",
+                   name, ext, image->width, image->height, (image->width * image->height * 4), rgba_data_length);
+        }
+        else {
+            printf("Success: %14.14s.%s (Info only: %u x %u)\n", name, ext, image->width, image->height);
+            success = true;
+        }
+    }
+    else if (image->data == NULL && rgba_data == NULL) {
         printf("Success (invalid file correctly detected): %s.%s. Error: %s\n", name, ext, image->error_message);
         success = true;
     }
@@ -184,11 +203,11 @@ bool compare(const char *name, const char *ext, const ok_image *image,
         }
     }
     else if (fuzziness > 0) {
-        printf("Success: %16.16s.%s (%9.5f%% diff<=1, peak diff=%i)\n", name, ext, (p_identical * 100), peak_diff);
+        printf("Success: %14.14s.%s (%9.5f%% diff<=1, peak diff=%i)\n", name, ext, (p_identical * 100), peak_diff);
         success = true;
     }
     else {
-        printf("Success: %s.%s\n", name, ext);
+        printf("Success: %14.14s.%s\n", name, ext);
         success = true;
     }
     return success;
