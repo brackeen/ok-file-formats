@@ -88,6 +88,7 @@ typedef struct {
     huffman_table huffman_tables[2][4];
 } jpg_decoder;
 
+__attribute__((__format__ (__printf__, 2, 3)))
 static void ok_image_error(ok_image *image, const char *format, ... ) {
     if (image != NULL) {
         image->width = 0;

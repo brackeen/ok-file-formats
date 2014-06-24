@@ -89,6 +89,7 @@ typedef struct {
     
 } png_decoder;
 
+__attribute__((__format__ (__printf__, 2, 3)))
 static void ok_image_error(ok_image *image, const char *format, ... ) {
     if (image != NULL) {
         image->width = 0;
@@ -1019,7 +1020,7 @@ static bool read_data(png_decoder *decoder, uint32_t bytes_remaining) {
                                            decoder->curr_scanline + decoder->inflater_bytes_read,
                                            curr_bytes_per_scanline - decoder->inflater_bytes_read);
         if (len < 0) {
-            ok_image_error(image, ok_inflater_error_message(decoder->inflater));
+            ok_image_error(image, "inflater: %s", ok_inflater_error_message(decoder->inflater));
             return false;
         }
         decoder->inflater_bytes_read += len;
@@ -1294,6 +1295,7 @@ struct ok_inflater {
     
 };
 
+__attribute__((__format__ (__printf__, 2, 3)))
 static void inflater_error(ok_inflater *inflater, const char *format, ... ) {
     if (inflater != NULL) {
         inflater->state = STATE_ERROR;

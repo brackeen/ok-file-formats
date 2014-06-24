@@ -21,6 +21,7 @@ typedef struct {
     
 } pcm_decoder;
 
+__attribute__((__format__ (__printf__, 2, 3)))
 static void ok_audio_error(ok_audio *audio, const char *format, ... ) {
     if (audio != NULL) {
         if (audio->data != NULL) {
@@ -217,7 +218,7 @@ static void decode_pcm_data(pcm_decoder *decoder) {
         audio->data = malloc(platform_data_length);
     }
     if (audio->data == NULL) {
-        ok_audio_error(audio, "Couldn't allocate memory for audio with %u frames", audio->num_frames);
+        ok_audio_error(audio, "Couldn't allocate memory for audio with %llu frames", audio->num_frames);
         return;
     }
     

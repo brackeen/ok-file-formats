@@ -18,6 +18,7 @@ typedef struct {
     
 } fnt_decoder;
 
+ __attribute__((__format__ (__printf__, 2, 3)))
 static void ok_font_error(ok_font *font, const char *format, ... ) {
     if (font != NULL) {
         font->num_glyphs = 0;
