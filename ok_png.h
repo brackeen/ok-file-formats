@@ -57,6 +57,7 @@ extern "C" {
         uint8_t *data;
         char error_message[80];
     } ok_image;
+    
 #endif
     
 #ifndef _OK_READ_FUNC_

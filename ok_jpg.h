@@ -26,7 +26,6 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <stdlib.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -75,8 +74,9 @@ extern "C" {
     
     /**
      Frees the image. This function should always be called when done with the image, even if reading failed.
+     NOTE: This function is the same as the ok_image_free function in ok_png and can be used interchangeably.
      */
-    void ok_image_free(ok_image *image);
+    void ok_jpg_image_free(ok_image *image);
         
 #ifdef __cplusplus
 }

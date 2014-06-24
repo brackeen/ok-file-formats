@@ -2,7 +2,6 @@
 #import "AppDelegate.h"
 #include "png_suite_test.h"
 #include "jpg_test.h"
-#include "ok_jpg.h"
 
 @interface AppDelegate ()
 

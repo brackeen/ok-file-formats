@@ -1,9 +1,12 @@
 #include "ok_fnt.h"
-#include "ok__internal.h"
+#include <memory.h>
 #include <stdlib.h>
 #include <stdarg.h>
-#include <memory.h>
 #include <errno.h>
+
+#ifndef min
+#define min(a, b) ((a) < (b) ? (a) : (b))
+#endif
 
 typedef struct {
     ok_font *font;
@@ -33,6 +36,57 @@ static bool ok_read(fnt_decoder *decoder, uint8_t *data, const size_t length) {
     else {
         ok_font_error(decoder->font, "Read error: error calling read function.");
         return false;
+    }
+}
+
+typedef struct {
+    uint8_t *buffer;
+    size_t remaining_bytes;
+} ok_memory_source;
+
+static size_t ok_memory_read_func(void *user_data, uint8_t *buffer, const size_t count) {
+    ok_memory_source *memory = (ok_memory_source*)user_data;
+    const size_t len = min(count, memory->remaining_bytes);
+    if (len > 0) {
+        memcpy(buffer, memory->buffer, len);
+        memory->buffer += len;
+        memory->remaining_bytes -= len;
+        return len;
+    }
+    else {
+        return 0;
+    }
+}
+
+static int ok_memory_seek_func(void *user_data, const int count) {
+    ok_memory_source *memory = (ok_memory_source*)user_data;
+    if ((size_t)count <= memory->remaining_bytes) {
+        memory->buffer += count;
+        memory->remaining_bytes -= count;
+        return 0;
+    }
+    else {
+        return -1;
+    }
+}
+
+static size_t ok_file_read_func(void *user_data, uint8_t *buffer, const size_t count) {
+    if (count > 0) {
+        FILE *fp = (FILE *)user_data;
+        return fread(buffer, 1, count, fp);
+    }
+    else {
+        return 0;
+    }
+}
+
+static int ok_file_seek_func(void *user_data, const int count) {
+    if (count != 0) {
+        FILE *fp = (FILE *)user_data;
+        return fseek(fp, count, SEEK_CUR);
+    }
+    else {
+        return 0;
     }
 }
 
@@ -118,6 +172,14 @@ void ok_font_free(ok_font *font) {
 }
 
 // Decoding
+
+static inline uint16_t readLE16(const uint8_t *data) {
+    return (uint16_t)((data[1] << 8) | data[0]);
+}
+
+static inline uint32_t readLE32(const uint8_t *data) {
+    return (data[3] << 24) | (data[2] << 16) | (data[1] << 8) | data[0];
+}
 
 typedef enum {
     BLOCK_TYPE_INFO = 1,

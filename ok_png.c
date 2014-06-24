@@ -1,5 +1,5 @@
 #include "ok_png.h"
-#include "ok__internal.h"
+#include <memory.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -88,6 +88,74 @@ typedef struct {
     bool is_ios_format;
     
 } png_decoder;
+
+static void ok_image_error(ok_image *image, const char *format, ... ) {
+    if (image != NULL) {
+        image->width = 0;
+        image->height = 0;
+        if (image->data != NULL) {
+            free(image->data);
+            image->data = NULL;
+        }
+        if (format != NULL) {
+            va_list args;
+            va_start(args, format);
+            vsnprintf(image->error_message, sizeof(image->error_message), format, args);
+            va_end(args);
+        }
+    }
+}
+
+typedef struct {
+    uint8_t *buffer;
+    size_t remaining_bytes;
+} ok_memory_source;
+
+static size_t ok_memory_read_func(void *user_data, uint8_t *buffer, const size_t count) {
+    ok_memory_source *memory = (ok_memory_source*)user_data;
+    const size_t len = min(count, memory->remaining_bytes);
+    if (len > 0) {
+        memcpy(buffer, memory->buffer, len);
+        memory->buffer += len;
+        memory->remaining_bytes -= len;
+        return len;
+    }
+    else {
+        return 0;
+    }
+}
+
+static int ok_memory_seek_func(void *user_data, const int count) {
+    ok_memory_source *memory = (ok_memory_source*)user_data;
+    if ((size_t)count <= memory->remaining_bytes) {
+        memory->buffer += count;
+        memory->remaining_bytes -= count;
+        return 0;
+    }
+    else {
+        return -1;
+    }
+}
+
+static size_t ok_file_read_func(void *user_data, uint8_t *buffer, const size_t count) {
+    if (count > 0) {
+        FILE *fp = (FILE *)user_data;
+        return fread(buffer, 1, count, fp);
+    }
+    else {
+        return 0;
+    }
+}
+
+static int ok_file_seek_func(void *user_data, const int count) {
+    if (count != 0) {
+        FILE *fp = (FILE *)user_data;
+        return fseek(fp, count, SEEK_CUR);
+    }
+    else {
+        return 0;
+    }
+}
 
 static bool ok_read(png_decoder *decoder, uint8_t *data, const size_t length) {
     if (decoder->read_func(decoder->reader_data, data, length) == length) {
@@ -209,7 +277,24 @@ ok_image *ok_png_read_from_callbacks(void *user_data, ok_read_func read_func, ok
     return read_png_from_callbacks(user_data, read_func, seek_func, color_format, flip_y, false);
 }
 
+void ok_image_free(ok_image *image) {
+    if (image != NULL) {
+        if (image->data != NULL) {
+            free(image->data);
+        }
+        free(image);
+    }
+}
+
 // Main read functions
+
+static inline uint16_t readBE16(const uint8_t *data) {
+    return (uint16_t)((data[0] << 8) | data[1]);
+}
+
+static inline uint32_t readBE32(const uint8_t *data) {
+    return (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
+}
 
 static inline void premultiply(uint8_t *dst) {
     const uint8_t a = dst[3];

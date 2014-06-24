@@ -392,7 +392,6 @@
 		E35A66EF1948F5D600CEBD42 /* z03n2c08.png in Resources */ = {isa = PBXBuildFile; fileRef = E35A64DA1948F5D600CEBD42 /* z03n2c08.png */; };
 		E35A66F01948F5D600CEBD42 /* z06n2c08.png in Resources */ = {isa = PBXBuildFile; fileRef = E35A64DB1948F5D600CEBD42 /* z06n2c08.png */; };
 		E35A66F11948F5D600CEBD42 /* z09n2c08.png in Resources */ = {isa = PBXBuildFile; fileRef = E35A64DC1948F5D600CEBD42 /* z09n2c08.png */; };
-		E35A68EA19493A5200CEBD42 /* ok__internal.c in Sources */ = {isa = PBXBuildFile; fileRef = E35A68E919493A5200CEBD42 /* ok__internal.c */; };
 		E35A6A69194A7EB700CEBD42 /* ok_jpg.c in Sources */ = {isa = PBXBuildFile; fileRef = E35A6A67194A7EB700CEBD42 /* ok_jpg.c */; };
 		E3F35E101950F8C4004E7952 /* jpg_test.c in Sources */ = {isa = PBXBuildFile; fileRef = E3F35E0F1950F8C4004E7952 /* jpg_test.c */; };
 		E3F35E161950FD48004E7952 /* test_common.c in Sources */ = {isa = PBXBuildFile; fileRef = E3F35E151950FD48004E7952 /* test_common.c */; };
@@ -793,8 +792,6 @@
 		E35A64DA1948F5D600CEBD42 /* z03n2c08.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = z03n2c08.png; sourceTree = "<group>"; };
 		E35A64DB1948F5D600CEBD42 /* z06n2c08.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = z06n2c08.png; sourceTree = "<group>"; };
 		E35A64DC1948F5D600CEBD42 /* z09n2c08.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = z09n2c08.png; sourceTree = "<group>"; };
-		E35A68E819492E4300CEBD42 /* ok__internal.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; name = ok__internal.h; path = ../../ok__internal.h; sourceTree = "<group>"; };
-		E35A68E919493A5200CEBD42 /* ok__internal.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = ok__internal.c; path = ../../ok__internal.c; sourceTree = "<group>"; };
 		E35A6A67194A7EB700CEBD42 /* ok_jpg.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = ok_jpg.c; path = ../../ok_jpg.c; sourceTree = "<group>"; };
 		E35A6A68194A7EB700CEBD42 /* ok_jpg.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ok_jpg.h; path = ../../ok_jpg.h; sourceTree = "<group>"; };
 		E3F35E0F1950F8C4004E7952 /* jpg_test.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = jpg_test.c; sourceTree = "<group>"; };
@@ -1059,8 +1056,6 @@
 				E35A63731948F5D500CEBD42 /* ok_png.c */,
 				E35A63701948F5D500CEBD42 /* ok_wav.h */,
 				E35A63741948F5D500CEBD42 /* ok_wav.c */,
-				E35A68E819492E4300CEBD42 /* ok__internal.h */,
-				E35A68E919493A5200CEBD42 /* ok__internal.c */,
 				E35A63751948F5D500CEBD42 /* test */,
 			);
 			name = "ok-file-formats";
@@ -1740,7 +1735,6 @@
 				E35A65951948F5D600CEBD42 /* ok_wav.c in Sources */,
 				E35A6A69194A7EB700CEBD42 /* ok_jpg.c in Sources */,
 				E35A65921948F5D600CEBD42 /* ok_fnt.c in Sources */,
-				E35A68EA19493A5200CEBD42 /* ok__internal.c in Sources */,
 				E35A65941948F5D600CEBD42 /* ok_png.c in Sources */,
 				E3F35E101950F8C4004E7952 /* jpg_test.c in Sources */,
 				E35A66401948F5D600CEBD42 /* png_suite_test.c in Sources */,

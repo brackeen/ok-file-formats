@@ -198,10 +198,6 @@ static const char *filenames[] = {
     //"xs7n0g01",    
 };
 
-#ifndef min
-#define min(a, b) ((a) < (b) ? (a) : (b))
-#endif
-
 static bool test_image(read_type input_read_type,
                        const char *path_to_png_suite, 
                        const char *path_to_rgba_files,

@@ -1,9 +1,12 @@
 #include "ok_wav.h"
-#include "ok__internal.h"
+#include <memory.h>
 #include <stdlib.h>
 #include <stdarg.h>
-#include <memory.h>
 #include <errno.h>
+
+#ifndef min
+#define min(a, b) ((a) < (b) ? (a) : (b))
+#endif
 
 typedef struct {
     ok_audio *audio;
@@ -30,6 +33,57 @@ static void ok_audio_error(ok_audio *audio, const char *format, ... ) {
             vsnprintf(audio->error_message, sizeof(audio->error_message), format, args);
             va_end(args);
         }
+    }
+}
+
+typedef struct {
+    uint8_t *buffer;
+    size_t remaining_bytes;
+} ok_memory_source;
+
+static size_t ok_memory_read_func(void *user_data, uint8_t *buffer, const size_t count) {
+    ok_memory_source *memory = (ok_memory_source*)user_data;
+    const size_t len = min(count, memory->remaining_bytes);
+    if (len > 0) {
+        memcpy(buffer, memory->buffer, len);
+        memory->buffer += len;
+        memory->remaining_bytes -= len;
+        return len;
+    }
+    else {
+        return 0;
+    }
+}
+
+static int ok_memory_seek_func(void *user_data, const int count) {
+    ok_memory_source *memory = (ok_memory_source*)user_data;
+    if ((size_t)count <= memory->remaining_bytes) {
+        memory->buffer += count;
+        memory->remaining_bytes -= count;
+        return 0;
+    }
+    else {
+        return -1;
+    }
+}
+
+static size_t ok_file_read_func(void *user_data, uint8_t *buffer, const size_t count) {
+    if (count > 0) {
+        FILE *fp = (FILE *)user_data;
+        return fread(buffer, 1, count, fp);
+    }
+    else {
+        return 0;
+    }
+}
+
+static int ok_file_seek_func(void *user_data, const int count) {
+    if (count != 0) {
+        FILE *fp = (FILE *)user_data;
+        return fseek(fp, count, SEEK_CUR);
+    }
+    else {
+        return 0;
     }
 }
 
@@ -126,6 +180,34 @@ void ok_audio_free(ok_audio *audio) {
 }
 
 // Decoding
+
+static inline uint16_t readBE16(const uint8_t *data) {
+    return (uint16_t)((data[0] << 8) | data[1]);
+}
+
+static inline uint32_t readBE32(const uint8_t *data) {
+    return (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
+}
+
+static inline uint64_t readBE64(const uint8_t *data) {
+    return
+    (((uint64_t)data[0]) << 56) |
+    (((uint64_t)data[1]) << 48) |
+    (((uint64_t)data[2]) << 40) |
+    (((uint64_t)data[3]) << 32) |
+    (((uint64_t)data[4]) << 24) |
+    (((uint64_t)data[5]) << 16) |
+    (((uint64_t)data[6]) << 8) |
+    (((uint64_t)data[7]) << 0);
+}
+
+static inline uint16_t readLE16(const uint8_t *data) {
+    return (uint16_t)((data[1] << 8) | data[0]);
+}
+
+static inline uint32_t readLE32(const uint8_t *data) {
+    return (data[3] << 24) | (data[2] << 16) | (data[1] << 8) | data[0];
+}
 
 static void decode_pcm_data(pcm_decoder *decoder) {
     ok_audio *audio = decoder->audio;
