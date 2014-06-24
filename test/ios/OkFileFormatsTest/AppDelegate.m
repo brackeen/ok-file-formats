@@ -1,13 +1,14 @@
 
 #import "AppDelegate.h"
 #include "png_suite_test.h"
+#include "jpg_test.h"
+#include "ok_jpg.h"
 
 @interface AppDelegate ()
 
 @end
 
 @implementation AppDelegate
-            
 
 - (BOOL)application:(UIApplication *)application didFinishLaunchingWithOptions:(NSDictionary *)launchOptions {
     self.window = [[UIWindow alloc] initWithFrame:[[UIScreen mainScreen] bounds]];
@@ -17,6 +18,7 @@
     
     const char *path = [[NSBundle mainBundle].bundlePath UTF8String];
     png_suite_test(path, path);
+    jpg_test(path, path);
     
     return YES;
 }

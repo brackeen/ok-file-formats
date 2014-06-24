@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include "test_common.h"
 #include "ok_png.h"
 #ifdef __APPLE__
 #include <TargetConditionals.h>
@@ -201,79 +202,6 @@ static const char *filenames[] = {
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
-static void print_image(const uint8_t *data, const uint32_t width, const uint32_t height) {
-    if (data != NULL) {
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width * 4; x++) {
-                if ((x & 3) == 0) {
-                    printf("|");
-                }
-                uint8_t b = data[y * (width*4) + x];
-                printf("%02x", b);
-            }
-            printf("\n");
-        }
-    }
-}
-
-static char *get_full_path(const char *path, const char *name, const char *ext) {
-    size_t path_len = strlen(path);
-    char *file_name = malloc(path_len + 1 + strlen(name) + 1 + strlen(ext) + 1);
-    strcpy(file_name, path);
-    if (path_len > 0 && path[path_len - 1] != '/') {
-        strcat(file_name, "/");
-    }
-    strcat(file_name, name);
-    strcat(file_name, ".");
-    strcat(file_name, ext);
-    return file_name;
-}
-
-static uint8_t *read_file(const char *filename, size_t *length) {
-    uint8_t *buffer;
-    FILE *fp = fopen(filename, "rb");
-    
-    if (fp != NULL) {
-        fseek(fp, 0, SEEK_END);
-        *length = ftell(fp);
-        fseek(fp, 0, SEEK_SET);
-        buffer = malloc(*length);
-        if (buffer != NULL) {
-            fread(buffer, 1, *length, fp);
-        }
-        fclose(fp);
-    }
-    else {
-        buffer = NULL;
-        *length = 0;
-    }
-    
-    return buffer;
-}
-
-static size_t file_read_func(void *user_data, uint8_t *buffer, const size_t count) {
-    if (count > 0) {
-        FILE *fp = (FILE *)user_data;
-        return fread(buffer, 1, count, fp);
-    }
-    return 0;
-}
-
-static int file_seek_func(void *user_data, const int count) {
-    if (count != 0) {
-        FILE *fp = (FILE *)user_data;
-        return fseek(fp, count, SEEK_CUR);
-    }
-    return 0;
-}
-
-typedef enum {
-    READ_TYPE_FILE = 0,
-    READ_TYPE_MEMORY,
-    READ_TYPE_CALLBACKS,
-    READ_TYPE_COUNT
-} read_type;
-
 static bool test_image(read_type input_read_type,
                        const char *path_to_png_suite, 
                        const char *path_to_rgba_files,
@@ -308,73 +236,17 @@ static bool test_image(read_type input_read_type,
     ok_color_format color_format = OK_COLOR_FORMAT_RGBA;
 #endif
 
-    // Get full filename
-    char *in_filename = get_full_path(path_to_png_suite, name, "png");
-    
     // Load via ok_png
-    ok_image *image;
-    switch(input_read_type) {
-        case READ_TYPE_FILE: {
-            image = ok_png_read(in_filename, color_format, flip_y);
-            break;
-        }
-        case READ_TYPE_MEMORY: {
-            size_t length;
-            uint8_t *png_data = read_file(in_filename, &length);
-            image = ok_png_read_from_memory(png_data, length,
-                                            color_format, flip_y);
-            free(png_data);
-            break;
-        }
-        case READ_TYPE_CALLBACKS: {
-            FILE *fp = fopen(in_filename, "rb");
-            image = ok_png_read_from_callbacks(fp, file_read_func, file_seek_func,
-                                               color_format, flip_y);
-            fclose(fp);
-            break;
-        }
-        default: 
-            image = NULL;
-            break;
-    }
+    ok_image *image = read_image(path_to_png_suite, name, "png", input_read_type, color_format, flip_y);
     
     // Test equality
-    bool success = false;
-    if (image->data == NULL && rgba_data == NULL) {
-        printf("Success (invalid file correctly detected): %s.png. Error: %s\n", name, 
-            image->error_message);
-        success = true;
-    }
-    else if (image->data == NULL) {
-        printf("Failure: ok_png: Couldn't load %s.png. %s\n", name, image->error_message);
-    }
-    else if (rgba_data == NULL) {
-        printf("Failure: Couldn't load %s (raw rgba data)\n", name);
-    }
-    else if (image->width * image->height * 4 != rgba_data_length) {
-        printf("Failure: Incorrect dimensions for %s.png (%u x %u - data length should be %u but is %zu)\n", name,
-            image->width, image->height, (image->width * image->height * 4), rgba_data_length);
-    }
-    else if (memcmp(image->data, rgba_data, rgba_data_length) != 0) {
-        printf("Failure: Data is different for image %s.png\n", name);
-        if (print_image_on_error) {
-            printf("raw:\n");
-            print_image(rgba_data, image->width, image->height);
-            printf("png_file:\n");
-            print_image(image->data, image->width, image->height);
-        }
-    }
-    else {
-        printf("Success: %s.png\n", name);
-        success = true;
-    }
+    bool success = compare(name, "png", image, rgba_data, rgba_data_length, 0, print_image_on_error);
     
     // Cleanup
     if (rgba_data != NULL) {
         free(rgba_data);
     }
     ok_image_free(image);
-    free(in_filename);
     
     return success;
 }

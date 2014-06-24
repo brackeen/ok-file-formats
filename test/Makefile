@@ -5,13 +5,16 @@ CC = clang -Wall -O3 -std=c99
 BIN = bin
 GEN = gen
 PNG_SUITE = PngSuite
+JPG_SUITE = jpg
 INCLUDES = -I .. 
 FILES = *.c ../*.c
 OUT_NAME = ok_file_formats_test
 
-# Get all png files
+# Get all image files
 PNG_SUITE_FILES := $(wildcard $(PNG_SUITE)/*.png)
+JPG_SUITE_FILES := $(wildcard $(JPG_SUITE)/*.jpg)
 RGBA_FILES := $(patsubst $(PNG_SUITE)/%.png, $(GEN)/%.rgba, $(PNG_SUITE_FILES))
+RGBA_FILES += $(patsubst $(JPG_SUITE)/%.jpg, $(GEN)/%.rgba, $(JPG_SUITE_FILES))
 
 test: gen build
 	$(BIN)/$(OUT_NAME)
@@ -29,6 +32,16 @@ $(GEN)/%.rgba: $(PNG_SUITE)/%.png
 	convert -depth 8 -intensity Average temp.png $@
 	@rm temp.png
 	
+# ImageMagick uses some fancy chroma upsampling that I couldn't figure out how 
+# to turn off. So instead use sips to convert the jpg to png, then use
+# ImageMagick to convert to raw rgba.
+# Downside is sips doesn't handle 1x2 upsampling properly.
+$(GEN)/%.rgba: $(JPG_SUITE)/%.jpg
+	#convert $< $@
+	sips -s format png $< --out temp.png
+	convert -intensity Average temp.png $@
+	@rm temp.png
+
 gen: init $(RGBA_FILES)
 
 init:

@@ -1,9 +1,10 @@
 #include "png_suite_test.h"
+#include "jpg_test.h"
 
 int main() {
-    const char *pngPath = "PngSuite";
     const char *rgbaPath = "gen";
-    png_suite_test(pngPath, rgbaPath);
+    png_suite_test("PngSuite", rgbaPath);
+    jpg_test("jpg", rgbaPath);
     
     return 0;
 }
