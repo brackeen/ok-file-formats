@@ -1,7 +1,8 @@
 #ok-file-formats
 A few file format decoders:
 
-* **PNG** - Reads any PNG format, including all color formats, all bit depths, all transparency types, interlacing, and Apple's proprietary `CgBI` chunk for iOS devices. Ignores `gAMA` chunks. Option to get the image dimensions without decoding. Options to premultiply alpha and flip the image vertically. Tested against images in the PngSuite.
+* **PNG** - Reads any PNG format, including all color formats, all bit depths, all transparency types, interlacing, multiple `IDAT` chunks, and Apple's proprietary `CgBI` chunk for iOS devices. Ignores `gAMA` chunks. Option to get the image dimensions without decoding. Options to premultiply alpha and flip the image vertically. 
+* **JPG** - Baseline JPEG only.
 * **WAV** - Reads WAV or CAF files. PCM format only. 
 * **FNT** - Reads AngelCode bitmap font files. Binary format, version 3, from AngelCode Bitmap Font Generator v1.10 or newer.
 
