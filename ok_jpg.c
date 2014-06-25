@@ -833,9 +833,9 @@ static bool decode_scan(jpg_decoder *decoder) {
             for (int i = 0; i < decoder->num_components; i++) {
                 component *c = decoder->components + i;
                 for (int y = 0; y < c->V; y++) {
-                    intptr_t offset_y = (data_unit_y * c->V + y) * 8 * c->stride;
+                    ptrdiff_t offset_y = (data_unit_y * c->V + y) * 8 * c->stride;
                     for (int x = 0; x < c->H; x++) {
-                        intptr_t offset_x = (data_unit_x * c->H + x) * 8;
+                        ptrdiff_t offset_x = (data_unit_x * c->H + x) * 8;
                         if (!decode_data_unit(decoder, c, c->data + offset_y + offset_x)) {
                             return false;
                         }
