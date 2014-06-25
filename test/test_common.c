@@ -6,8 +6,8 @@
 
 static void print_image(const uint8_t *data, const uint32_t width, const uint32_t height) {
     if (data != NULL) {
-        for (int y = 0; y < height; y++) {
-            for (int x = 0; x < width * 4; x++) {
+        for (uint32_t y = 0; y < height; y++) {
+            for (uint32_t x = 0; x < width * 4; x++) {
                 if ((x & 3) == 0) {
                     printf("|");
                 }

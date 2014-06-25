@@ -1292,7 +1292,7 @@ static void decode_jpg2(jpg_decoder *decoder) {
     }
     
     // Upsample and color convert
-    for (int y = 0; y < image->height; y++) {
+    for (uint32_t y = 0; y < image->height; y++) {
         const uint32_t stride = image->width * 4;
         uint8_t *row;
         if (decoder->flip_y) {
@@ -1303,8 +1303,8 @@ static void decode_jpg2(jpg_decoder *decoder) {
         }
         
         component *c = decoder->components;
-        int y1 = y;
-        int y2 = y;
+        uint32_t y1 = y;
+        uint32_t y2 = y;
         
         if ((c+1)->upsample_v == 2) {
             y1 = y/2;
