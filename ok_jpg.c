@@ -11,6 +11,9 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <errno.h>
+#ifdef EMSCRIPTEN
+#include <stddef.h> // For ptrdiff_t
+#endif
 
 #ifndef min
 #define min(a, b) ((a) < (b) ? (a) : (b))
