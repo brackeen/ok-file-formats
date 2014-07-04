@@ -9,11 +9,9 @@
 #include "ok_jpg.h"
 #include <memory.h>
 #include <stdarg.h>
+#include <stddef.h> // For ptrdiff_t
 #include <stdlib.h>
 #include <errno.h>
-#ifdef EMSCRIPTEN
-#include <stddef.h> // For ptrdiff_t
-#endif
 
 #ifndef min
 #define min(a, b) ((a) < (b) ? (a) : (b))
@@ -1309,10 +1307,9 @@ static void decode_jpg2(jpg_decoder *decoder) {
         uint32_t y1 = y;
         uint32_t y2 = y;
         
-        if ((c+1)->upsample_v == 2) {
+        if ((c+1)->upsample_v == 2 && y > 0) {
             y1 = y/2;
             y2 = (y + 1) / 2 - ((y + 1) & 1);
-            y2 = max(0, y2);
             y2 = min(y2, (c+1)->height - 1);
         }
         const uint8_t *Y = c->data + y * c->stride;
