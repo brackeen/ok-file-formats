@@ -756,10 +756,6 @@ static inline int extend(const int v, const uint8_t t) {
     }
 }
 
-static inline int receive(jpg_decoder *decoder, const int ssss) {
-    return ssss == 0 ? 0 : load_next_bits(decoder, ssss);
-}
-
 static bool decode_data_unit(jpg_decoder *decoder, component *c, uint8_t *out) {
 
     int block[8*8];
@@ -773,11 +769,17 @@ static bool decode_data_unit(jpg_decoder *decoder, component *c, uint8_t *out) {
     if (t < 0) {
         return false;
     }
-    int diff = receive(decoder, t);
-    if (diff < 0) {
-        return false;
+    int diff;
+    if (t == 0) {
+        diff = 0;
     }
-    diff = extend(diff, t);
+    else {
+        diff = load_next_bits(decoder, t);
+        if (diff < 0) {
+            return false;
+        }
+        diff = extend(diff, t);
+    }
     
     c->pred += diff;
     block[0] = c->pred * q_table[0];
@@ -804,7 +806,7 @@ static bool decode_data_unit(jpg_decoder *decoder, component *c, uint8_t *out) {
                 ok_image_error(decoder->image, "Invalid block index");
                 return false;
             }
-            int zzk = receive(decoder, s);
+            int zzk = load_next_bits(decoder, s);
             if (zzk < 0) {
                 return false;
             }

@@ -411,23 +411,22 @@ static void decode_pcm(ok_audio *audio, void* reader_data,
     decoder->convert_to_system_endian = convert_to_system_endian;
     
     uint8_t header[4];
-    if (!ok_read(decoder, header, sizeof(header))) {
-        return;
-    }
-    //printf("File '%.4s'\n", header);
-    if (memcmp("RIFF", header, 4) == 0) {
-        audio->little_endian = true;
-        decode_wav(decoder);
-    }
-    else if (memcmp("RIFX", header, 4) == 0) {
-        audio->little_endian = false;
-        decode_wav(decoder);
-    }
-    else if (memcmp("caff", header, 4) == 0) {
-        decode_caf(decoder);
-    }
-    else {
-        ok_audio_error(audio, "Not a PCM WAV or CAF file.");
+    if (ok_read(decoder, header, sizeof(header))) {
+        //printf("File '%.4s'\n", header);
+        if (memcmp("RIFF", header, 4) == 0) {
+            audio->little_endian = true;
+            decode_wav(decoder);
+        }
+        else if (memcmp("RIFX", header, 4) == 0) {
+            audio->little_endian = false;
+            decode_wav(decoder);
+        }
+        else if (memcmp("caff", header, 4) == 0) {
+            decode_caf(decoder);
+        }
+        else {
+            ok_audio_error(audio, "Not a PCM WAV or CAF file.");
+        }
     }
     free(decoder);
 }
