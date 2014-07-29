@@ -2,6 +2,7 @@
 #import "AppDelegate.h"
 #include "png_suite_test.h"
 #include "jpg_test.h"
+#include "csv_test.h"
 
 @interface AppDelegate ()
 
@@ -18,6 +19,7 @@
     const char *path = [[NSBundle mainBundle].bundlePath UTF8String];
     png_suite_test(path, path);
     jpg_test(path, path);
+    csv_test(path);
     
     return YES;
 }

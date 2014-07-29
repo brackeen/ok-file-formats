@@ -9,7 +9,8 @@ export SHELL := $(shell echo $$SHELL)
 	
 emscripten_build: gen
 	emcc -Wall -O2 -std=c99 -o $(BIN)/$(OUT_NAME).html -s TOTAL_MEMORY=33554432 \
-	--preload-file PngSuite/ --preload-file jpg/ --preload-file gen/ $(INCLUDES) $(FILES)
+	--preload-file PngSuite/ --preload-file jpg/ \
+	--preload-file gen/ --preload-file csv/ $(INCLUDES) $(FILES)
 	
 -include Makefile
 	

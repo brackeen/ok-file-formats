@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		E337120519834EF0001F4DBF /* ok_csv.c in Sources */ = {isa = PBXBuildFile; fileRef = E337120319834EF0001F4DBF /* ok_csv.c */; };
+		E3371208198707C9001F4DBF /* csv_test.c in Sources */ = {isa = PBXBuildFile; fileRef = E3371206198707C9001F4DBF /* csv_test.c */; };
+		E337120B19870B34001F4DBF /* test1.csv in Resources */ = {isa = PBXBuildFile; fileRef = E337120A19870B34001F4DBF /* test1.csv */; };
 		E33C00C3195A11650003201B /* creek-after.jpg in Resources */ = {isa = PBXBuildFile; fileRef = E33C00A7195A11650003201B /* creek-after.jpg */; };
 		E33C00C4195A11650003201B /* mandril_color.jpg in Resources */ = {isa = PBXBuildFile; fileRef = E33C00A8195A11650003201B /* mandril_color.jpg */; };
 		E33C00C5195A11650003201B /* magritte.jpg in Resources */ = {isa = PBXBuildFile; fileRef = E33C00A9195A11650003201B /* magritte.jpg */; };
@@ -398,6 +401,11 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		E337120319834EF0001F4DBF /* ok_csv.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = ok_csv.c; path = ../../ok_csv.c; sourceTree = "<group>"; };
+		E337120419834EF0001F4DBF /* ok_csv.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ok_csv.h; path = ../../ok_csv.h; sourceTree = "<group>"; };
+		E3371206198707C9001F4DBF /* csv_test.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = csv_test.c; sourceTree = "<group>"; };
+		E3371207198707C9001F4DBF /* csv_test.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = csv_test.h; sourceTree = "<group>"; };
+		E337120A19870B34001F4DBF /* test1.csv */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = test1.csv; sourceTree = "<group>"; };
 		E33C00A7195A11650003201B /* creek-after.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = "creek-after.jpg"; sourceTree = "<group>"; };
 		E33C00A8195A11650003201B /* mandril_color.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = mandril_color.jpg; sourceTree = "<group>"; };
 		E33C00A9195A11650003201B /* magritte.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = magritte.jpg; sourceTree = "<group>"; };
@@ -812,6 +820,14 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		E337120919870B34001F4DBF /* csv */ = {
+			isa = PBXGroup;
+			children = (
+				E337120A19870B34001F4DBF /* test1.csv */,
+			);
+			path = csv;
+			sourceTree = "<group>";
+		};
 		E33C00DF195A12DF0003201B /* gen */ = {
 			isa = PBXGroup;
 			children = (
@@ -1048,6 +1064,8 @@
 		E35A636C1948F5A400CEBD42 /* ok-file-formats */ = {
 			isa = PBXGroup;
 			children = (
+				E337120419834EF0001F4DBF /* ok_csv.h */,
+				E337120319834EF0001F4DBF /* ok_csv.c */,
 				E35A636D1948F5D500CEBD42 /* ok_fnt.h */,
 				E35A63711948F5D500CEBD42 /* ok_fnt.c */,
 				E35A6A68194A7EB700CEBD42 /* ok_jpg.h */,
@@ -1067,10 +1085,13 @@
 				E3F35E121950F8F0004E7952 /* main.c */,
 				E3F35E151950FD48004E7952 /* test_common.c */,
 				E3F35E141950FCA4004E7952 /* test_common.h */,
+				E3371206198707C9001F4DBF /* csv_test.c */,
+				E3371207198707C9001F4DBF /* csv_test.h */,
 				E3F35E0F1950F8C4004E7952 /* jpg_test.c */,
 				E3F35E111950F8D7004E7952 /* jpg_test.h */,
 				E35A64291948F5D500CEBD42 /* png_suite_test.c */,
 				E35A642A1948F5D500CEBD42 /* png_suite_test.h */,
+				E337120919870B34001F4DBF /* csv */,
 				E3F35E4119511DFF004E7952 /* jpg */,
 				E33C00DF195A12DF0003201B /* gen */,
 				E35A642B1948F5D500CEBD42 /* PngSuite */,
@@ -1552,6 +1573,7 @@
 				E35A66921948F5D600CEBD42 /* g05n2c08.png in Resources */,
 				E35A66DB1948F5D600CEBD42 /* tm3n3p02.png in Resources */,
 				E33C01BA195A12DF0003201B /* basn4a16.rgba in Resources */,
+				E337120B19870B34001F4DBF /* test1.csv in Resources */,
 				E33C00CC195A11650003201B /* 2001-stargate.jpg in Resources */,
 				E33C024F195A12DF0003201B /* tm3n3p02.rgba in Resources */,
 				E35A666E1948F5D600CEBD42 /* ch2n3p08.png in Resources */,
@@ -1733,8 +1755,10 @@
 				E35A63511948F54900CEBD42 /* AppDelegate.m in Sources */,
 				E35A634E1948F54900CEBD42 /* main.m in Sources */,
 				E35A65951948F5D600CEBD42 /* ok_wav.c in Sources */,
+				E337120519834EF0001F4DBF /* ok_csv.c in Sources */,
 				E35A6A69194A7EB700CEBD42 /* ok_jpg.c in Sources */,
 				E35A65921948F5D600CEBD42 /* ok_fnt.c in Sources */,
+				E3371208198707C9001F4DBF /* csv_test.c in Sources */,
 				E35A65941948F5D600CEBD42 /* ok_png.c in Sources */,
 				E3F35E101950F8C4004E7952 /* jpg_test.c in Sources */,
 				E35A66401948F5D600CEBD42 /* png_suite_test.c in Sources */,
