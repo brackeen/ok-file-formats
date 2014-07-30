@@ -3,6 +3,7 @@
 #include "test_common.h"
 #include "ok_csv.h"
 #include <string.h>
+#include <stdlib.h>
 
 void csv_test(const char *path) {
 
@@ -23,9 +24,15 @@ void csv_test(const char *path) {
         return;
     }
     
-    unsigned char hello[] = { 0xe4, 0xbd, 0xa0, 0xe5, 0xa5, 0xbd, 0 };
+    char hello_utf8[] = { 0xe4, 0xbd, 0xa0, 0xe5, 0xa5, 0xbd, 0 };
+    uint32_t *hello = ok_utf8_to_unicode(hello_utf8);
+    if (hello[0] != 0x4f60 || hello[1] != 0x597d || hello[2] != 0) {
+        printf("Failure: Couldn't convert UTF-8 to unicode\n");
+        return;
+    }
+    free(hello);
     
-    if (memcmp(hello, csv->fields[2][2], 7)) {
+    if (memcmp(hello_utf8, csv->fields[2][2], 7)) {
         printf("Failure: Couldn't read UTF-8 field\n");
         return;
     }
