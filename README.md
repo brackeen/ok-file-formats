@@ -1,10 +1,11 @@
 #ok-file-formats
-A few file format decoders:
+A few file format decoders. No external dependencies.
 
 * **PNG** - Reads any PNG format, including all color formats, all bit depths, all transparency types, interlacing, multiple `IDAT` chunks, and Apple's proprietary `CgBI` chunk for iOS devices. Ignores `gAMA` chunks. Option to get the image dimensions without decoding. Options to premultiply alpha and flip the image vertically. 
 * **JPG** - Baseline JPEG only (no progressive JPEGs).
 * **WAV** - Reads WAV or CAF files. PCM format only. 
 * **FNT** - Reads AngelCode bitmap font files. Binary format, version 3, from AngelCode Bitmap Font Generator v1.10 or newer.
+* **CSV** - Reads a CSV (Comma-Separated Values) file. Properly handles escaped fields. Provides an utility function to convert UTF-8 to 32-bit Unicode.
 
 All decoders allow reading from a `stdio` file, from a memory buffer, or from callback functions.
 
