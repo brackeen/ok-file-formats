@@ -30,9 +30,9 @@
 
 typedef struct {
     uint8_t *data;
-    int capacity;
-    int start;
-    int length;
+    size_t capacity;
+    size_t start;
+    size_t length;
 } circular_buffer;
 
 bool circular_buffer_init(circular_buffer *buffer, const int capacity) {
@@ -50,26 +50,26 @@ bool circular_buffer_init(circular_buffer *buffer, const int capacity) {
 }
 
 // Number of writable elements until edge of buffer
-int circular_buffer_writable(circular_buffer *buffer) {
-    int total_writable = buffer->capacity - buffer->length;
+size_t circular_buffer_writable(circular_buffer *buffer) {
+    size_t total_writable = buffer->capacity - buffer->length;
     return min(total_writable, buffer->capacity - ((buffer->start + buffer->length) % buffer->capacity));
 }
 
 // Number of readable elements until edge of buffer
-int circular_buffer_readable(circular_buffer *buffer) {
+size_t circular_buffer_readable(circular_buffer *buffer) {
     return min(buffer->length, buffer->capacity - buffer->start);
 }
 
 // Doubles the size of the buffer
 bool circular_buffer_expand(circular_buffer *buffer) {
-    int new_capacity = buffer->capacity * 2;
+    size_t new_capacity = buffer->capacity * 2;
     uint8_t *new_data = malloc(new_capacity);
     if (new_data == NULL) {
         return false;
     }
     else {
-        const int readable1 = circular_buffer_readable(buffer);
-        const int readable2 = buffer->length - readable1;
+        const size_t readable1 = circular_buffer_readable(buffer);
+        const size_t readable2 = buffer->length - readable1;
         memcpy(new_data, buffer->data + buffer->start, readable1);
         memcpy(new_data + readable1, buffer->data, readable2);
         free(buffer->data);
@@ -80,17 +80,17 @@ bool circular_buffer_expand(circular_buffer *buffer) {
     }
 }
 
-bool circular_buffer_read(circular_buffer *buffer, uint8_t *dst, const int length) {
+bool circular_buffer_read(circular_buffer *buffer, uint8_t *dst, const size_t length) {
     if (length > buffer->length) {
         return false;
     }
     else {
-        const int readable1 = circular_buffer_readable(buffer);
+        const size_t readable1 = circular_buffer_readable(buffer);
         if (length <= readable1) {
             memcpy(dst, buffer->data + buffer->start, length);
         }
         else {
-            const int readable2 = buffer->length - readable1;
+            const size_t readable2 = buffer->length - readable1;
             memcpy(dst, buffer->data + buffer->start, readable1);
             memcpy(dst + readable1, buffer->data, readable2);
         }
@@ -100,8 +100,7 @@ bool circular_buffer_read(circular_buffer *buffer, uint8_t *dst, const int lengt
     }
 }
 
-
-bool circular_buffer_skip(circular_buffer *buffer, const int length) {
+bool circular_buffer_skip(circular_buffer *buffer, const size_t length) {
     if (length > buffer->length) {
         return false;
     }
@@ -387,21 +386,21 @@ static void decode_csv2(csv_decoder *decoder) {
     while (true) {
         // Read data if needed
         if (decoder->input_buffer.length - peek == 0) {
-            int writeable = circular_buffer_writable(&decoder->input_buffer);
+            size_t writeable = circular_buffer_writable(&decoder->input_buffer);
             if (writeable == 0) {
                 circular_buffer_expand(&decoder->input_buffer);
                 writeable = circular_buffer_writable(&decoder->input_buffer);
             }
             uint8_t *end = decoder->input_buffer.data +
             ((decoder->input_buffer.start + decoder->input_buffer.length) % decoder->input_buffer.capacity);
-            int bytesRead = decoder->read_func(decoder->reader_data, end, writeable);
+            size_t bytesRead = decoder->read_func(decoder->reader_data, end, writeable);
             decoder->input_buffer.length += bytesRead;
         }
         
         // Peek current char (0 if EOF)
         uint8_t curr_char = 0;
         if (decoder->input_buffer.length - peek > 0) {
-            int offset = (decoder->input_buffer.start + peek) % decoder->input_buffer.capacity;
+            size_t offset = (decoder->input_buffer.start + peek) % decoder->input_buffer.capacity;
             curr_char = decoder->input_buffer.data[offset];
             peek++;
         }
