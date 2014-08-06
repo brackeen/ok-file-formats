@@ -28,7 +28,7 @@ extern "C" {
 #endif
     
     /**
-     Reads CSV (Comma-seprated values) files.
+     Reads CSV (Comma-Separated Values) files.
      Properly handles escaped fields.
      Same as RFC 4180, with the addition of allowing UTF-8 strings (as exported from Apple Numbers and Google Docs).
      On success, num_records will be > 0.
@@ -56,11 +56,6 @@ extern "C" {
     ok_csv *ok_csv_read_from_callbacks(void *user_data, ok_read_func read_func, ok_seek_func seek_func);
 
     void ok_csv_free(ok_csv *csv);
-    
-    /// Converts a UTF-8 string to 32-bit Unicode.
-    /// If the input string is NULL, returns NULL.
-    /// Otherwise, returns a newly allocated, NULL-terminated string with 32-bit chars.
-    uint32_t* ok_utf8_to_unicode(const char *utf8);
     
 #ifdef __cplusplus
 }

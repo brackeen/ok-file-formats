@@ -3,6 +3,7 @@
 #include "png_suite_test.h"
 #include "jpg_test.h"
 #include "csv_test.h"
+#include "mo_test.h"
 
 @interface AppDelegate ()
 
@@ -20,6 +21,7 @@
     png_suite_test(path, path);
     jpg_test(path, path);
     csv_test(path);
+    gettext_test(path);
     
     return YES;
 }

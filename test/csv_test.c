@@ -2,6 +2,7 @@
 #include "csv_test.h"
 #include "test_common.h"
 #include "ok_csv.h"
+#include "ok_mo.h" // for UTF-8 code
 #include <string.h>
 #include <stdlib.h>
 
@@ -25,8 +26,10 @@ void csv_test(const char *path) {
     }
     
     char hello_utf8[] = { 0xe4, 0xbd, 0xa0, 0xe5, 0xa5, 0xbd, 0 };
-    uint32_t *hello = ok_utf8_to_unicode(hello_utf8);
-    if (hello[0] != 0x4f60 || hello[1] != 0x597d || hello[2] != 0) {
+    size_t hello_len = ok_utf8_strlen(hello_utf8);
+    uint32_t *hello = malloc(sizeof(uint32_t) * (hello_len+1));
+    ok_utf8_to_unicode(hello_utf8, hello, hello_len);
+    if (hello == NULL || hello[0] != 0x4f60 || hello[1] != 0x597d || hello[2] != 0) {
         printf("Failure: Couldn't convert UTF-8 to unicode\n");
         return;
     }

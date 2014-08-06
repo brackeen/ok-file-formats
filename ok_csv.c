@@ -9,11 +9,11 @@
  redistribute it freely, subject to the following restrictions:
  
  1. The origin of this software must not be misrepresented; you must not
- claim that you wrote the original software. If you use this software in a
- product, an acknowledgment in the product documentation would be appreciated
- but is not required.
+    claim that you wrote the original software. If you use this software in a
+    product, an acknowledgment in the product documentation would be appreciated
+    but is not required.
  2. Altered source versions must be plainly marked as such, and must not be
- misrepresented as being the original software.
+    misrepresented as being the original software.
  3. This notice may not be removed or altered from any source distribution.
  */
 #include "ok_csv.h"
@@ -140,6 +140,8 @@ static void ok_csv_cleanup(ok_csv *csv) {
             }
             free(csv->fields);
             free(csv->num_fields);
+            csv->fields = NULL;
+            csv->num_fields = NULL;
         }
         csv->num_records = 0;
     }
@@ -597,66 +599,4 @@ static void decode_csv2(csv_decoder *decoder) {
             return;
         }
     }
-}
-
-// MARK: Unicode
-
-uint32_t* ok_utf8_to_unicode(const char *utf8) {
-    if (utf8 == NULL) {
-        return NULL;
-    }
-    
-    // Get length
-    size_t len = 0;
-    const unsigned char *in = (const unsigned char *)utf8;
-    while (*in != 0) {
-        int skip;
-        if (*in < 192) {
-            skip = 0;
-        }
-        else if (*in < 224) {
-            skip = 1;
-        }
-        else if (*in < 240) {
-            skip = 2;
-        }
-        else {
-            skip = 3;
-        }
-        // Sanity check: check for malformed string
-        for (int i = 0; i < skip; i++) {
-            in++;
-            if (*in < 128) {
-                break;
-            }
-        }
-        len++;
-        in++;
-    }
-    
-    uint32_t* out = malloc(sizeof(uint32_t) * (len + 1));
-    if (out == NULL) {
-        return NULL;
-    }
-    in = (const unsigned char *)utf8;
-    for (size_t i = 0; i < len; i++) {
-        if (*in < 192) {
-            out[i] = in[0];
-            in++;
-        }
-        else if (*in < 224) {
-            out[i] = ((in[0] & 0x1f) << 6) | (in[1] & 0x3f);
-            in += 2;
-        }
-        else if (*in < 240) {
-            out[i] = ((in[0] & 0x0f) << 12) | ((in[1] & 0x3f) << 6) | (in[2] & 0x3f);
-            in += 3;
-        }
-        else {
-            out[i] = ((in[0] & 0x07) << 18) | ((in[1] & 0x3f) << 6) | ((in[2] & 0x3f) << 6) | (in[3] & 0x3f);
-            in += 4;
-        }
-    }
-    out[len] = 0;
-    return out;
 }
