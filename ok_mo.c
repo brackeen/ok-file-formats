@@ -384,7 +384,7 @@ static int bsearch_strcmp(const void *s1, const void *s2) {
 }
 
 static struct ok_mo_string *find_value(ok_mo *mo, const char *context, const char *key) {
-    if (key == NULL) {
+    if (mo == NULL || key == NULL) {
         return NULL;
     }
     else if (context == NULL) {
