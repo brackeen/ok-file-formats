@@ -329,22 +329,12 @@ static bool csv_ensure_record_capcity(ok_csv *csv) {
     }
     
     if (csv->num_fields == NULL || curr_capacity < new_capacity) {
-        int *new_num_fields = malloc(sizeof(int) * new_capacity);
-        char ***new_fields = malloc(sizeof(char**) * new_capacity);
-        if (new_num_fields == NULL || new_fields == NULL) {
+        csv->num_fields = realloc(csv->num_fields, sizeof(int) * new_capacity);
+        csv->fields = realloc(csv->fields, sizeof(char**) * new_capacity);
+        if (csv->num_fields == NULL || csv->fields == NULL) {
             ok_csv_error(csv, "Couldn't allocate fields array");
             return false;
         }
-        if (csv->num_fields != NULL) {
-            memcpy(new_num_fields, csv->num_fields, sizeof(int) * csv->num_records);
-            free(csv->num_fields);
-        }
-        csv->num_fields = new_num_fields;
-        if (csv->fields != NULL) {
-            memcpy(new_fields, csv->fields, sizeof(char**) * csv->num_records);
-            free(csv->fields);
-        }
-        csv->fields = new_fields;
     }
     return true;
 }
@@ -364,16 +354,11 @@ static bool csv_ensure_field_capcity(ok_csv *csv, const int record) {
     }
     
     if (csv->fields[record] == NULL || curr_capacity < new_capacity) {
-        char **new_fields = malloc(sizeof(char*) * new_capacity);
-        if (new_fields == NULL) {
+        csv->fields[record] = realloc(csv->fields[record], sizeof(char*) * new_capacity);
+        if (csv->fields[record] == NULL) {
             ok_csv_error(csv, "Couldn't allocate fields array");
             return false;
         }
-        if (csv->fields[record] != NULL) {
-            memcpy(new_fields, csv->fields[record], sizeof(char*) * csv->num_fields[record]);
-            free(csv->fields[record]);
-        }
-        csv->fields[record] = new_fields;
     }
     return true;
 }
