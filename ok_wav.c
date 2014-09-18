@@ -210,9 +210,19 @@ static inline uint32_t readLE32(const uint8_t *data) {
     return (data[3] << 24) | (data[2] << 16) | (data[1] << 8) | data[0];
 }
 
+static bool valid_bit_depth(const ok_audio *audio) {
+    if (audio->is_float) {
+        return (audio->bit_depth == 32 || audio->bit_depth == 64);
+    }
+    else {
+        return (audio->bit_depth == 8 || audio->bit_depth == 16 ||
+                audio->bit_depth == 24 || audio->bit_depth == 32 ||
+                audio->bit_depth == 48 || audio->bit_depth == 64);
+    }
+}
 static void decode_pcm_data(pcm_decoder *decoder) {
     ok_audio *audio = decoder->audio;
-    uint64_t data_length = audio->num_frames * audio->num_channels * 2;
+    uint64_t data_length = audio->num_frames * audio->num_channels * (audio->bit_depth/8);
     size_t platform_data_length = (size_t)data_length;
     if (platform_data_length == data_length) {
         audio->data = malloc(platform_data_length);
@@ -228,15 +238,67 @@ static void decode_pcm_data(pcm_decoder *decoder) {
     
     const int n = 1;
     const bool system_is_little_endian = *(char *)&n == 1;
-    if (decoder->convert_to_system_endian && audio->little_endian != system_is_little_endian) {
+    if (decoder->convert_to_system_endian && audio->little_endian != system_is_little_endian && audio->bit_depth > 8) {
         // Swap data
         uint8_t *data = audio->data;
         const uint8_t *data_end = audio->data + platform_data_length;
-        while (data < data_end) {
-            const uint8_t t = data[0];
-            data[0] = data[1];
-            data[1] = t;
-            data += 2;
+        if (audio->bit_depth == 16) {
+            while (data < data_end) {
+                const uint8_t t = data[0];
+                data[0] = data[1];
+                data[1] = t;
+                data += 2;
+            }
+        }
+        else if (audio->bit_depth == 24) {
+            while (data < data_end) {
+                const uint8_t t = data[0];
+                data[0] = data[2];
+                data[2] = t;
+                data += 3;
+            }
+        }
+        else if (audio->bit_depth == 32) {
+            while (data < data_end) {
+                const uint8_t t0 = data[0];
+                data[0] = data[3];
+                data[3] = t0;
+                const uint8_t t1 = data[1];
+                data[1] = data[2];
+                data[2] = t1;
+                data += 4;
+            }
+        }
+        else if (audio->bit_depth == 48) {
+            while (data < data_end) {
+                const uint8_t t0 = data[0];
+                data[0] = data[5];
+                data[5] = t0;
+                const uint8_t t1 = data[1];
+                data[1] = data[4];
+                data[4] = t1;
+                const uint8_t t2 = data[2];
+                data[2] = data[3];
+                data[3] = t2;
+                data += 6;
+            }
+        }
+        else if (audio->bit_depth == 64) {
+            while (data < data_end) {
+                const uint8_t t0 = data[0];
+                data[0] = data[7];
+                data[7] = t0;
+                const uint8_t t1 = data[1];
+                data[1] = data[6];
+                data[6] = t1;
+                const uint8_t t2 = data[2];
+                data[2] = data[5];
+                data[5] = t2;
+                const uint8_t t3 = data[3];
+                data[3] = data[4];
+                data[4] = t3;
+                data += 8;
+            }
         }
         audio->little_endian = system_is_little_endian;
     }
@@ -266,7 +328,7 @@ static void decode_wav(pcm_decoder *decoder) {
         
         if (memcmp("fmt ", chunk_header, 4) == 0) {
             if (chunk_length != 16) {
-                ok_audio_error(audio, "Corrupt WAV file (bad fmt)");
+                ok_audio_error(audio, "Invalid WAV file (not PCM)");
                 return;
             }
             uint8_t chunk_data[16];
@@ -276,12 +338,13 @@ static void decode_wav(pcm_decoder *decoder) {
             uint16_t format = readLE16(chunk_data);
             audio->num_channels = readLE16(chunk_data + 2);
             audio->sample_rate = readLE32(chunk_data + 4);
-            int bits_per_sample = readLE16(chunk_data + 14);
-            
-            bool validFormat = (format == 1 && bits_per_sample == 16 &&
-                                (audio->num_channels == 1 || audio->num_channels == 2));
+            audio->bit_depth = readLE16(chunk_data + 14);
+            audio->is_float = format == 3;
+
+            bool validFormat = ((format == 1 || format == 3) && valid_bit_depth(audio) && audio->num_channels > 0);
             if (!validFormat) {
-                ok_audio_error(audio, "Invalid WAV format (only PCM, 16-bit, integer, mono or stereo supported)");
+                ok_audio_error(audio, "Invalid WAV format. "
+                               "Must be PCM, and a bit depth of 8, 16, 32, 48, or 64-bit.");
                 return;
             }
         }
@@ -290,7 +353,7 @@ static void decode_wav(pcm_decoder *decoder) {
                 ok_audio_error(audio, "Invalid WAV file (fmt not found)");
                 return;
             }
-            audio->num_frames = chunk_length / (2 * audio->num_channels);
+            audio->num_frames = chunk_length / ((audio->bit_depth/8) * audio->num_channels);
             decode_pcm_data(decoder);
             return;
         }
@@ -350,21 +413,23 @@ static void decode_caf(pcm_decoder *decoder) {
             uint32_t channels_per_frame = readBE32(chunk_data + 24);
             uint32_t bits_per_channel = readBE32(chunk_data + 28);
             
-            bool validFormat = (memcmp("lpcm", format_id, 4) == 0 &&
-                                (sample_rate.value > 0) &&
-                                (format_flags == 0 || format_flags == 2) &&
-                                (channels_per_frame == 1 || channels_per_frame == 2) &&
-                                (bytes_per_packet == 2 * channels_per_frame) &&
-                                (frames_per_packet == 1) &&
-                                (bits_per_channel == 16));
-            if (!validFormat) {
-                ok_audio_error(audio, "Invalid CAF format (only PCM, 16-bit, integer, mono or stereo supported)");
-                return;
-            }
-
             audio->sample_rate = sample_rate.value;
             audio->num_channels = channels_per_frame;
+            audio->is_float = format_flags & 1;
             audio->little_endian = (format_flags & 2) != 0;
+            audio->bit_depth = bits_per_channel;
+            
+            bool valid_format = (memcmp("lpcm", format_id, 4) == 0 &&
+                                 (sample_rate.value > 0) &&
+                                 (channels_per_frame > 0) &&
+                                 (bytes_per_packet == (bits_per_channel/8) * channels_per_frame) &&
+                                 (frames_per_packet == 1) &&
+                                 (valid_bit_depth(audio)));
+            if (!valid_format) {
+                ok_audio_error(audio, "Invalid CAF format. "
+                               "Must be PCM, mono or stereo, and 8-, 16-, 24- or 32-bit.)");
+                return;
+            }
         }
         else if (memcmp("data", chunk_header, 4) == 0) {
             // Read data chunk
@@ -378,7 +443,7 @@ static void decode_caf(pcm_decoder *decoder) {
             }
             // Read the data and return (skip any remaining chunks)
             uint64_t data_length = chunk_length - 4;
-            audio->num_frames = data_length / (2 * audio->num_channels);
+            audio->num_frames = data_length / ((audio->bit_depth/8) * audio->num_channels);
             decode_pcm_data(decoder);
             return;
         }
@@ -430,4 +495,3 @@ static void decode_pcm(ok_audio *audio, void* reader_data,
     }
     free(decoder);
 }
-

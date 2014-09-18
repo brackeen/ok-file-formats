@@ -27,13 +27,15 @@
 extern "C" {
 #endif
     
-    /** 16-bit PCM audio data. The length of the data is (num_channels * num_frames * 2) */
+    /** PCM audio data. The length of the data is (num_channels * num_frames * (bit_depth/8)) */
     typedef struct {
         float sample_rate;
         uint8_t num_channels;
-        uint64_t num_frames;
+        uint8_t bit_depth;
+        bool is_float;
         bool little_endian;
-        uint8_t *data;
+        uint64_t num_frames;
+        void *data;
         char error_message[80];
     } ok_audio;
 
