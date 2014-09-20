@@ -30,7 +30,7 @@ void gettext_test(const char *path) {
     ok_mo_free(mo_en);
     
     ok_mo *mo_es = ok_mo_read(es_file);
-    if (strcmp("Archivo", ok_mo_value_in_context(mo_en, "Menu", "File")) != 0) {
+    if (strcmp("Archivo", ok_mo_value_in_context(mo_es, "Menu", "File")) != 0) {
         printf("Failure: context\n");
         return;
     }
@@ -38,7 +38,7 @@ void gettext_test(const char *path) {
     
     ok_mo *mo_zh = ok_mo_read(zh_file);
     char hello_utf8[] = { 0xe4, 0xbd, 0xa0, 0xe5, 0xa5, 0xbd, 0 };
-    if (strcmp(hello_utf8, ok_mo_value(mo_en, "Hello")) != 0) {
+    if (strcmp(hello_utf8, ok_mo_value(mo_zh, "Hello")) != 0) {
         printf("Failure: utf8\n");
         return;
     }
