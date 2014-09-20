@@ -35,7 +35,7 @@ typedef struct {
     size_t length;
 } circular_buffer;
 
-bool circular_buffer_init(circular_buffer *buffer, const int capacity) {
+static bool circular_buffer_init(circular_buffer *buffer, const int capacity) {
     buffer->start = 0;
     buffer->length = 0;
     buffer->data = malloc(capacity);
@@ -50,18 +50,18 @@ bool circular_buffer_init(circular_buffer *buffer, const int capacity) {
 }
 
 // Number of writable elements until edge of buffer
-size_t circular_buffer_writable(circular_buffer *buffer) {
+static size_t circular_buffer_writable(circular_buffer *buffer) {
     size_t total_writable = buffer->capacity - buffer->length;
     return min(total_writable, buffer->capacity - ((buffer->start + buffer->length) % buffer->capacity));
 }
 
 // Number of readable elements until edge of buffer
-size_t circular_buffer_readable(circular_buffer *buffer) {
+static size_t circular_buffer_readable(circular_buffer *buffer) {
     return min(buffer->length, buffer->capacity - buffer->start);
 }
 
 // Doubles the size of the buffer
-bool circular_buffer_expand(circular_buffer *buffer) {
+static bool circular_buffer_expand(circular_buffer *buffer) {
     size_t new_capacity = buffer->capacity * 2;
     uint8_t *new_data = malloc(new_capacity);
     if (new_data == NULL) {
@@ -80,7 +80,7 @@ bool circular_buffer_expand(circular_buffer *buffer) {
     }
 }
 
-bool circular_buffer_read(circular_buffer *buffer, uint8_t *dst, const size_t length) {
+static bool circular_buffer_read(circular_buffer *buffer, uint8_t *dst, const size_t length) {
     if (length > buffer->length) {
         return false;
     }
@@ -100,7 +100,7 @@ bool circular_buffer_read(circular_buffer *buffer, uint8_t *dst, const size_t le
     }
 }
 
-bool circular_buffer_skip(circular_buffer *buffer, const size_t length) {
+static bool circular_buffer_skip(circular_buffer *buffer, const size_t length) {
     if (length > buffer->length) {
         return false;
     }

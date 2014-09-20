@@ -1,6 +1,7 @@
 #include <stdlib.h>
 #include <time.h>
 #include "test_common.h"
+#include "jpg_test.h"
 
 const char *filenames[] = {
     "2001-stargate",

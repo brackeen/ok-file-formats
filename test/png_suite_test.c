@@ -4,6 +4,7 @@
 #include <string.h>
 #include <time.h>
 #include "test_common.h"
+#include "png_suite_test.h"
 #include "ok_png.h"
 #ifdef __APPLE__
 #include <TargetConditionals.h>
