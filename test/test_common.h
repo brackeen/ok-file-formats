@@ -3,7 +3,7 @@
 
 char *get_full_path(const char *path, const char *name, const char *ext);
 
-uint8_t *read_file(const char *filename, size_t *length);
+uint8_t *read_file(const char *filename, long *length);
 
 typedef enum {
     READ_TYPE_FILE = 0,
@@ -11,8 +11,7 @@ typedef enum {
     READ_TYPE_COUNT
 } read_type;
 
-size_t file_read_func(void *user_data, uint8_t *buffer, const size_t count);
-int file_seek_func(void *user_data, const int count);
+int file_input_func(void *user_data, unsigned char *buffer, const int count);
 
 ok_image *read_image(const char *path, const char *name, const char *ext, const read_type type, const bool info_only,
                       const ok_color_format color_format, const bool flip_y);

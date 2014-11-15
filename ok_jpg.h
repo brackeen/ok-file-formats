@@ -50,18 +50,16 @@ extern "C" {
     
 #endif
     
-#ifndef _OK_READ_FUNC_
-#define _OK_READ_FUNC_
-    /// Reads 'count' bytes into buffer. Returns number of bytes read.
-    typedef size_t (*ok_read_func)(void *user_data, uint8_t *buffer, const size_t count);
+    /**
+     Input function provided to the ok_jpg_read function.
+     Reads 'count' bytes into buffer. Returns number of bytes actually read.
+     If buffer is NULL or 'count' is negative, this function should perform a relative seek.
+     */
+    typedef int (*ok_jpg_input_func)(void *user_data, unsigned char *buffer, const int count);
     
-    /// Seek function. Should return 0 on success.
-    typedef int (*ok_seek_func)(void *user_data, const int count);
-#endif
+    ok_image *ok_jpg_read_info(void *user_data, ok_jpg_input_func input_func);
     
-    ok_image *ok_jpg_read_info(void *user_data, ok_read_func read_func, ok_seek_func seek_func);
-    
-    ok_image *ok_jpg_read(void *user_data, ok_read_func read_func, ok_seek_func seek_func,
+    ok_image *ok_jpg_read(void *user_data, ok_jpg_input_func input_func,
                           const ok_color_format color_format, const bool flip_y);
     
     /**

@@ -65,9 +65,8 @@ typedef struct {
     bool info_only;
     
     // Input
-    void *reader_data;
-    ok_read_func read_func;
-    ok_seek_func seek_func;
+    void *input_data;
+    ok_jpg_input_func input_func;
 
     // State
     bool eoi_found;
@@ -108,40 +107,34 @@ static void ok_image_error(ok_image *image, const char *format, ... ) {
     }
 }
 
-static bool ok_read(jpg_decoder *decoder, uint8_t *data, const size_t length) {
-    if (decoder->read_func(decoder->reader_data, data, length) == length) {
+static bool ok_read(jpg_decoder *decoder, uint8_t *data, const int length) {
+    if (decoder->input_func(decoder->input_data, data, length) == length) {
         return true;
     }
     else {
-        ok_image_error(decoder->image, "Read error: error calling read function.");
+        ok_image_error(decoder->image, "Read error: error calling input function.");
         return false;
     }
 }
 
 static bool ok_seek(jpg_decoder *decoder, const int length) {
-    if (decoder->seek_func(decoder->reader_data, length) == 0) {
-        return true;
-    }
-    else {
-        ok_image_error(decoder->image, "Read error: error calling seek function.");
-        return false;
-    }
+    return ok_read(decoder, NULL, length);
 }
 
-static ok_image *decode_jpg(void *user_data, ok_read_func read_func, ok_seek_func seek_func,
+static ok_image *decode_jpg(void *user_data, ok_jpg_input_func input_func,
                             const ok_color_format color_format, const bool flip_y, const bool info_only);
 
 //
 // Public API
 //
 
-ok_image *ok_jpg_read_info(void *user_data, ok_read_func read_func, ok_seek_func seek_func) {
-    return decode_jpg(user_data, read_func, seek_func, OK_COLOR_FORMAT_RGBA, false, true);
+ok_image *ok_jpg_read_info(void *user_data, ok_jpg_input_func input_func) {
+    return decode_jpg(user_data, input_func, OK_COLOR_FORMAT_RGBA, false, true);
 }
 
-ok_image *ok_jpg_read(void *user_data, ok_read_func read_func, ok_seek_func seek_func,
+ok_image *ok_jpg_read(void *user_data, ok_jpg_input_func input_func,
                       const ok_color_format color_format, const bool flip_y) {
-    return decode_jpg(user_data, read_func, seek_func, color_format, flip_y, false);
+    return decode_jpg(user_data, input_func, color_format, flip_y, false);
 }
 
 void ok_jpg_image_free(ok_image *image) {
@@ -1191,14 +1184,14 @@ static void decode_jpg2(jpg_decoder *decoder) {
     }
 }
 
-static ok_image *decode_jpg(void *user_data, ok_read_func read_func, ok_seek_func seek_func,
+static ok_image *decode_jpg(void *user_data, ok_jpg_input_func input_func,
                             const ok_color_format color_format, const bool flip_y, const bool info_only) {
     ok_image *image = calloc(1, sizeof(ok_image));
     if (image == NULL) {
         return NULL;
     }
-    if (read_func == NULL || seek_func == NULL) {
-        ok_image_error(image, "Invalid argument: read_func or seek_func is NULL");
+    if (input_func == NULL) {
+        ok_image_error(image, "Invalid argument: input_func is NULL");
         return image;
     }
 
@@ -1209,9 +1202,8 @@ static ok_image *decode_jpg(void *user_data, ok_read_func read_func, ok_seek_fun
     }
     
     decoder->image = image;
-    decoder->reader_data = user_data;
-    decoder->read_func = read_func;
-    decoder->seek_func = seek_func;
+    decoder->input_data = user_data;
+    decoder->input_func = input_func;
     decoder->color_format = color_format;
     decoder->flip_y = flip_y;
     decoder->info_only = info_only;

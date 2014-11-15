@@ -59,20 +59,18 @@ extern "C" {
     
 #endif
     
-#ifndef _OK_READ_FUNC_
-#define _OK_READ_FUNC_
-    /// Reads 'count' bytes into buffer. Returns number of bytes read.
-    typedef size_t (*ok_read_func)(void *user_data, uint8_t *buffer, const size_t count);
-    
-    /// Seek function. Should return 0 on success.
-    typedef int (*ok_seek_func)(void *user_data, const int count);
-#endif
-    
+    /**
+     Input function provided to the ok_png_read function.
+     Reads 'count' bytes into buffer. Returns number of bytes actually read.
+     If buffer is NULL or 'count' is negative, this function should perform a relative seek.
+     */
+    typedef int (*ok_png_input_func)(void *user_data, unsigned char *buffer, const int count);
+
     /**
      Gets a PNG image's dimensions and color format without reading the image data. 
      On failure, width and height are both zero. 
      */
-    ok_image *ok_png_read_info(void *user_data, ok_read_func read_func, ok_seek_func seek_func);
+    ok_image *ok_png_read_info(void *user_data, ok_png_input_func input_func);
     
     /**
      Reads a PNG image.
@@ -85,7 +83,7 @@ extern "C" {
      If flip_y is true, the returned image data is flipped along the vertical axis, so that the first row of data
      is the last row in the image.
      */
-    ok_image *ok_png_read(void *user_data, ok_read_func read_func, ok_seek_func seek_func,
+    ok_image *ok_png_read(void *user_data, ok_png_input_func input_func,
                           const ok_color_format color_format, const bool flip_y);
     
     /**

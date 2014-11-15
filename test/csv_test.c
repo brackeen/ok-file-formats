@@ -12,7 +12,7 @@ void csv_test(const char *path) {
     char *test1_file = get_full_path(path, "test1", "csv");
 
     FILE *fp = fopen(test1_file, "rb");
-    ok_csv *csv = ok_csv_read(fp, file_read_func, file_seek_func);
+    ok_csv *csv = ok_csv_read(fp, file_input_func);
     fclose(fp);
     
     if (csv == NULL) {

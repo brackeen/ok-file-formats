@@ -19,19 +19,9 @@
 #ifndef _OK_CSV_H_
 #define _OK_CSV_H_
 
-#include <stdbool.h>
-#include <stdint.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif
-    
-    /**
-     Reads CSV (Comma-Separated Values) files.
-     Properly handles escaped fields.
-     Same as RFC 4180, with the addition of allowing UTF-8 strings (as exported from Apple Numbers and Google Docs).
-     On success, num_records will be > 0.
-     */
     
     typedef struct {
         int num_records;         /// Number of records (rows)
@@ -40,16 +30,20 @@ extern "C" {
         char error_message[80];  /// Error message (if num_records is 0)
     } ok_csv;
     
-#ifndef _OK_READ_FUNC_
-#define _OK_READ_FUNC_
-    /// Reads 'count' bytes into buffer. Returns number of bytes read.
-    typedef size_t (*ok_read_func)(void *user_data, uint8_t *buffer, const size_t count);
+    /**
+     Input function provided to the ok_csv_read function.
+     Reads 'count' bytes into buffer. Returns number of bytes actually read.
+     If buffer is NULL or 'count' is negative, this function should perform a relative seek.
+     */
+    typedef int (*ok_csv_input_func)(void *user_data, unsigned char *buffer, const int count);
     
-    /// Seek function. Should return 0 on success.
-    typedef int (*ok_seek_func)(void *user_data, const int count);
-#endif
-    
-    ok_csv *ok_csv_read(void *user_data, ok_read_func read_func, ok_seek_func seek_func);
+    /**
+     Reads CSV (Comma-Separated Values) files.
+     Properly handles escaped fields.
+     Same as RFC 4180, with the addition of allowing UTF-8 strings (as exported from Apple Numbers and Google Docs).
+     On success, num_records will be > 0.
+     */
+    ok_csv *ok_csv_read(void *user_data, ok_csv_input_func input_func);
 
     void ok_csv_free(ok_csv *csv);
     

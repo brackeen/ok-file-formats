@@ -7,7 +7,7 @@
 
 static ok_mo *mo_read(const char *filename) {
     FILE *fp = fopen(filename, "rb");
-    ok_mo *mo = ok_mo_read(fp, file_read_func, file_seek_func);
+    ok_mo *mo = ok_mo_read(fp, file_input_func);
     fclose(fp);
     return mo;
 }

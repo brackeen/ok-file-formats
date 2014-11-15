@@ -25,11 +25,6 @@
 extern "C" {
 #endif
     
-    /**
-     Reads GNU gettext MO files.
-     On success, num_strings will be > 0.
-     */
-    
     struct ok_mo_string;
     
     typedef struct {
@@ -38,16 +33,18 @@ extern "C" {
         char error_message[80];
     } ok_mo;
     
-#ifndef _OK_READ_FUNC_
-#define _OK_READ_FUNC_
-    /// Reads 'count' bytes into buffer. Returns number of bytes read.
-    typedef size_t (*ok_read_func)(void *user_data, uint8_t *buffer, const size_t count);
+    /**
+     Input function provided to the ok_mo_read function.
+     Reads 'count' bytes into buffer. Returns number of bytes actually read.
+     If buffer is NULL or 'count' is negative, this function should perform a relative seek.
+     */
+    typedef int (*ok_mo_input_func)(void *user_data, unsigned char *buffer, const int count);
     
-    /// Seek function. Should return 0 on success.
-    typedef int (*ok_seek_func)(void *user_data, const int count);
-#endif
-        
-    ok_mo *ok_mo_read(void *user_data, ok_read_func read_func, ok_seek_func seek_func);
+    /**
+     Reads GNU gettext MO files.
+     On success, num_strings will be > 0.
+     */
+    ok_mo *ok_mo_read(void *user_data, ok_mo_input_func input_func);
     
     /// Gets the value for the specified key. If there is no value for the key, the key is returned.
     const char *ok_mo_value(ok_mo *mo, const char *key);
@@ -64,7 +61,7 @@ extern "C" {
     const char *ok_mo_plural_value_in_context(ok_mo *mo, const char *context, const char *key, const char *plural_key,
                                               const int n);
 
-    void ok_mo_free(ok_mo *csv);
+    void ok_mo_free(ok_mo *mo);
     
     /// Gets the character length (as opposed to the byte length) of an UTF-8 string.
     size_t ok_utf8_strlen(const char *utf8);

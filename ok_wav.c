@@ -16,9 +16,8 @@ typedef struct {
     bool convert_to_system_endian;
     
     // Input
-    void *reader_data;
-    ok_read_func read_func;
-    ok_seek_func seek_func;
+    void *input_data;
+    ok_wav_input_func input_func;
     
 } pcm_decoder;
 
@@ -38,40 +37,32 @@ static void ok_audio_error(ok_audio *audio, const char *format, ... ) {
     }
 }
 
-static bool ok_read(pcm_decoder *decoder, uint8_t *data, const size_t length) {
-    if (decoder->read_func(decoder->reader_data, data, length) == length) {
+static bool ok_read(pcm_decoder *decoder, uint8_t *data, const int length) {
+    if (decoder->input_func(decoder->input_data, data, length) == length) {
         return true;
     }
     else {
-        ok_audio_error(decoder->audio, "Read error: error calling read function.");
+        ok_audio_error(decoder->audio, "Read error: error calling input function.");
         return false;
     }
 }
 
 static bool ok_seek(pcm_decoder *decoder, const int length) {
-    if (decoder->seek_func(decoder->reader_data, length) == 0) {
-        return true;
-    }
-    else {
-        ok_audio_error(decoder->audio, "Read error: error calling seek function.");
-        return false;
-    }
+    return ok_read(decoder, NULL, length);
 }
 
-static void decode_pcm(ok_audio *audio, void* reader_data,
-                       ok_read_func read_func, ok_seek_func seek_func,
+static void decode_pcm(ok_audio *audio, void *input_data, ok_wav_input_func input_func,
                        const bool convert_to_system_endian);
 
 // Public API
 
-ok_audio *ok_wav_read(void *user_data, ok_read_func read_func, ok_seek_func seek_func,
-                      const bool convert_to_system_endian) {
+ok_audio *ok_wav_read(void *user_data, ok_wav_input_func input_func, const bool convert_to_system_endian) {
     ok_audio *audio = calloc(1, sizeof(ok_audio));
-    if (user_data != NULL && read_func != NULL && seek_func != NULL) {
-        decode_pcm(audio, user_data, read_func, seek_func, convert_to_system_endian);
+    if (input_func != NULL) {
+        decode_pcm(audio, user_data, input_func, convert_to_system_endian);
     }
     else {
-        ok_audio_error(audio, "Invalid argument: read_func or seek_func is NULL");
+        ok_audio_error(audio, "Invalid argument: input_func is NULL");
     }
     return audio;
 }
@@ -129,8 +120,8 @@ static bool valid_bit_depth(const ok_audio *audio) {
 static void decode_pcm_data(pcm_decoder *decoder) {
     ok_audio *audio = decoder->audio;
     uint64_t data_length = audio->num_frames * audio->num_channels * (audio->bit_depth/8);
-    size_t platform_data_length = (size_t)data_length;
-    if (platform_data_length == data_length) {
+    int platform_data_length = (int)data_length;
+    if (platform_data_length > 0 && (unsigned int)platform_data_length == data_length) {
         audio->data = malloc(platform_data_length);
     }
     if (audio->data == NULL) {
@@ -363,8 +354,7 @@ static void decode_caf(pcm_decoder *decoder) {
     }
 }
 
-static void decode_pcm(ok_audio *audio, void* reader_data,
-                       ok_read_func read_func, ok_seek_func seek_func,
+static void decode_pcm(ok_audio *audio, void *input_data, ok_wav_input_func input_func,
                        const bool convert_to_system_endian) {
     if (audio == NULL) {
         return;
@@ -376,9 +366,8 @@ static void decode_pcm(ok_audio *audio, void* reader_data,
     }
     
     decoder->audio = audio;
-    decoder->reader_data = reader_data;
-    decoder->read_func = read_func;
-    decoder->seek_func = seek_func;
+    decoder->input_data = input_data;
+    decoder->input_func = input_func;
     decoder->convert_to_system_endian = convert_to_system_endian;
     
     uint8_t header[4];

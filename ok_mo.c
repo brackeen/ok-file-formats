@@ -45,9 +45,8 @@ typedef struct {
     uint8_t *value_offset_buffer;
     
     // Input
-    void *reader_data;
-    ok_read_func read_func;
-    ok_seek_func seek_func;
+    void *input_data;
+    ok_mo_input_func input_func;
     
 } mo_decoder;
 
@@ -80,7 +79,7 @@ static void ok_mo_error(ok_mo *mo, const char *format, ... ) {
     }
 }
 
-static void decode_mo(ok_mo *mo, void *reader_data, ok_read_func read_func, ok_seek_func seek_func) {
+static void decode_mo(ok_mo *mo, void *input_data, ok_mo_input_func input_func) {
     if (mo == NULL) {
         return;
     }
@@ -90,9 +89,8 @@ static void decode_mo(ok_mo *mo, void *reader_data, ok_read_func read_func, ok_s
         return;
     }
     decoder->mo = mo;
-    decoder->reader_data = reader_data;
-    decoder->read_func = read_func;
-    decoder->seek_func = seek_func;
+    decoder->input_data = input_data;
+    decoder->input_func = input_func;
     
     decode_mo2(decoder);
     
@@ -105,35 +103,29 @@ static void decode_mo(ok_mo *mo, void *reader_data, ok_read_func read_func, ok_s
     free(decoder);
 }
 
-static bool ok_read(mo_decoder *decoder, uint8_t *data, const size_t length) {
-    if (decoder->read_func(decoder->reader_data, data, length) == length) {
+static bool ok_read(mo_decoder *decoder, uint8_t *data, const int length) {
+    if (decoder->input_func(decoder->input_data, data, length) == length) {
         return true;
     }
     else {
-        ok_mo_error(decoder->mo, "Read error: error calling read function.");
+        ok_mo_error(decoder->mo, "Read error: error calling input function.");
         return false;
     }
 }
 
 static bool ok_seek(mo_decoder *decoder, const int length) {
-    if (decoder->seek_func(decoder->reader_data, length) == 0) {
-        return true;
-    }
-    else {
-        ok_mo_error(decoder->mo, "Read error: error calling seek function.");
-        return false;
-    }
+    return ok_read(decoder, NULL, length);
 }
 
 // MARK: Public API
 
-ok_mo *ok_mo_read(void *user_data, ok_read_func read_func, ok_seek_func seek_func) {
+ok_mo *ok_mo_read(void *user_data, ok_mo_input_func input_func) {
     ok_mo *mo = calloc(1, sizeof(ok_mo));
-    if (read_func != NULL && seek_func != NULL) {
-        decode_mo(mo, user_data, read_func, seek_func);
+    if (input_func != NULL) {
+        decode_mo(mo, user_data, input_func);
     }
     else {
-        ok_mo_error(mo, "Invalid argument: read_func or seek_func is NULL");
+        ok_mo_error(mo, "Invalid argument: input_func is NULL");
     }
     return mo;
 }

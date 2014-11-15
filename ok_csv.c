@@ -19,6 +19,7 @@
 #include "ok_csv.h"
 #include <memory.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stdio.h> // For vsnprintf
 #include <stdlib.h>
 #include <errno.h>
@@ -31,9 +32,9 @@
 
 typedef struct {
     uint8_t *data;
-    size_t capacity;
-    size_t start;
-    size_t length;
+    int capacity;
+    int start;
+    int length;
 } circular_buffer;
 
 static bool circular_buffer_init(circular_buffer *buffer, const int capacity) {
@@ -51,26 +52,26 @@ static bool circular_buffer_init(circular_buffer *buffer, const int capacity) {
 }
 
 // Number of writable elements until edge of buffer
-static size_t circular_buffer_writable(circular_buffer *buffer) {
-    size_t total_writable = buffer->capacity - buffer->length;
+static int circular_buffer_writable(circular_buffer *buffer) {
+    int total_writable = buffer->capacity - buffer->length;
     return min(total_writable, buffer->capacity - ((buffer->start + buffer->length) % buffer->capacity));
 }
 
 // Number of readable elements until edge of buffer
-static size_t circular_buffer_readable(circular_buffer *buffer) {
+static int circular_buffer_readable(circular_buffer *buffer) {
     return min(buffer->length, buffer->capacity - buffer->start);
 }
 
 // Doubles the size of the buffer
 static bool circular_buffer_expand(circular_buffer *buffer) {
-    size_t new_capacity = buffer->capacity * 2;
+    int new_capacity = buffer->capacity * 2;
     uint8_t *new_data = malloc(new_capacity);
     if (new_data == NULL) {
         return false;
     }
     else {
-        const size_t readable1 = circular_buffer_readable(buffer);
-        const size_t readable2 = buffer->length - readable1;
+        const int readable1 = circular_buffer_readable(buffer);
+        const int readable2 = buffer->length - readable1;
         memcpy(new_data, buffer->data + buffer->start, readable1);
         memcpy(new_data + readable1, buffer->data, readable2);
         free(buffer->data);
@@ -81,17 +82,17 @@ static bool circular_buffer_expand(circular_buffer *buffer) {
     }
 }
 
-static bool circular_buffer_read(circular_buffer *buffer, uint8_t *dst, const size_t length) {
+static bool circular_buffer_read(circular_buffer *buffer, uint8_t *dst, const int length) {
     if (length > buffer->length) {
         return false;
     }
     else {
-        const size_t readable1 = circular_buffer_readable(buffer);
+        const int readable1 = circular_buffer_readable(buffer);
         if (length <= readable1) {
             memcpy(dst, buffer->data + buffer->start, length);
         }
         else {
-            const size_t readable2 = buffer->length - readable1;
+            const int readable2 = buffer->length - readable1;
             memcpy(dst, buffer->data + buffer->start, readable1);
             memcpy(dst + readable1, buffer->data, readable2);
         }
@@ -101,7 +102,7 @@ static bool circular_buffer_read(circular_buffer *buffer, uint8_t *dst, const si
     }
 }
 
-static bool circular_buffer_skip(circular_buffer *buffer, const size_t length) {
+static bool circular_buffer_skip(circular_buffer *buffer, const int length) {
     if (length > buffer->length) {
         return false;
     }
@@ -121,13 +122,12 @@ typedef struct {
     circular_buffer input_buffer;
     
     // Input
-    void *reader_data;
-    ok_read_func read_func;
-    ok_seek_func seek_func;
+    void *input_data;
+    ok_csv_input_func input_func;
     
 } csv_decoder;
 
-static void decode_csv(ok_csv *csv, void *reader_data, ok_read_func read_func, ok_seek_func seek_func);
+static void decode_csv(ok_csv *csv, void *input_data, ok_csv_input_func input_func);
 static void decode_csv2(csv_decoder *decoder);
 
 static void ok_csv_cleanup(ok_csv *csv) {
@@ -163,13 +163,13 @@ static void ok_csv_error(ok_csv *csv, const char *format, ... ) {
 
 // MARK: Public API
 
-ok_csv *ok_csv_read(void *user_data, ok_read_func read_func, ok_seek_func seek_func) {
+ok_csv *ok_csv_read(void *user_data, ok_csv_input_func input_func) {
     ok_csv *csv = calloc(1, sizeof(ok_csv));
-    if (read_func != NULL && seek_func != NULL) {
-        decode_csv(csv, user_data, read_func, seek_func);
+    if (input_func != NULL) {
+        decode_csv(csv, user_data, input_func);
     }
     else {
-        ok_csv_error(csv, "Invalid argument: read_func or seek_func is NULL");
+        ok_csv_error(csv, "Invalid argument: input_func is NULL");
     }
     return csv;
 }
@@ -194,7 +194,7 @@ typedef enum {
     NONESCAPED_FIELD, // Parsing a non-escaped field (stop when a comma, cr, lf, or eof is found)
 } csv_decoder_state;
 
-static void decode_csv(ok_csv *csv, void *reader_data, ok_read_func read_func, ok_seek_func seek_func) {
+static void decode_csv(ok_csv *csv, void *input_data, ok_csv_input_func input_func) {
     if (csv == NULL) {
         return;
     }
@@ -209,9 +209,8 @@ static void decode_csv(ok_csv *csv, void *reader_data, ok_read_func read_func, o
         return;
     }
     decoder->csv = csv;
-    decoder->reader_data = reader_data;
-    decoder->read_func = read_func;
-    decoder->seek_func = seek_func;
+    decoder->input_data = input_data;
+    decoder->input_func = input_func;
     
     decode_csv2(decoder);
     
@@ -278,21 +277,21 @@ static void decode_csv2(csv_decoder *decoder) {
     while (true) {
         // Read data if needed
         if (decoder->input_buffer.length - peek == 0) {
-            size_t writeable = circular_buffer_writable(&decoder->input_buffer);
+            int writeable = circular_buffer_writable(&decoder->input_buffer);
             if (writeable == 0) {
                 circular_buffer_expand(&decoder->input_buffer);
                 writeable = circular_buffer_writable(&decoder->input_buffer);
             }
             uint8_t *end = decoder->input_buffer.data +
             ((decoder->input_buffer.start + decoder->input_buffer.length) % decoder->input_buffer.capacity);
-            size_t bytesRead = decoder->read_func(decoder->reader_data, end, writeable);
+            int bytesRead = decoder->input_func(decoder->input_data, end, writeable);
             decoder->input_buffer.length += bytesRead;
         }
         
         // Peek current char (0 if EOF)
         uint8_t curr_char = 0;
         if (decoder->input_buffer.length - peek > 0) {
-            size_t offset = (decoder->input_buffer.start + peek) % decoder->input_buffer.capacity;
+            int offset = (decoder->input_buffer.start + peek) % decoder->input_buffer.capacity;
             curr_char = decoder->input_buffer.data[offset];
             peek++;
         }

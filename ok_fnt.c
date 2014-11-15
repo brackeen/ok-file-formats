@@ -9,9 +9,8 @@ typedef struct {
     ok_font *font;
     
     // Input
-    void *reader_data;
-    ok_read_func read_func;
-    ok_seek_func seek_func;
+    void *input_data;
+    ok_fnt_input_func input_func;
     
 } fnt_decoder;
 
@@ -27,8 +26,9 @@ static void ok_font_error(ok_font *font, const char *format, ... ) {
         }
     }
 }
-static bool ok_read(fnt_decoder *decoder, uint8_t *data, const size_t length) {
-    if (decoder->read_func(decoder->reader_data, data, length) == length) {
+
+static bool ok_read(fnt_decoder *decoder, uint8_t *data, const int length) {
+    if (decoder->input_func(decoder->input_data, data, length) == length) {
         return true;
     }
     else {
@@ -37,17 +37,17 @@ static bool ok_read(fnt_decoder *decoder, uint8_t *data, const size_t length) {
     }
 }
 
-static void decode_fnt(ok_font *font, void *reader_data, ok_read_func read_func, ok_seek_func seek_func);
+static void decode_fnt(ok_font *font, void *input_data, ok_fnt_input_func input_func);
 
 // Public API
 
-ok_font *ok_fnt_read(void *user_data, ok_read_func read_func, ok_seek_func seek_func) {
+ok_font *ok_fnt_read(void *user_data, ok_fnt_input_func input_func) {
     ok_font *font = calloc(1, sizeof(ok_font));
-    if (read_func != NULL && seek_func != NULL) {
-        decode_fnt(font, user_data, read_func, seek_func);
+    if (input_func != NULL) {
+        decode_fnt(font, user_data, input_func);
     }
     else {
-        ok_font_error(font, "Invalid argument: read_func or seek_func is NULL");
+        ok_font_error(font, "Invalid argument: input_func is NULL");
     }
     return font;
 }
@@ -114,7 +114,7 @@ static void decode_fnt2(fnt_decoder *decoder) {
     while (true) {
         
         uint8_t block_header[5];
-        if (decoder->read_func(decoder->reader_data, block_header, sizeof(block_header)) != sizeof(block_header)) {
+        if (decoder->input_func(decoder->input_data, block_header, sizeof(block_header)) != sizeof(block_header)) {
             // Don't give an error if all required blocks have been found.
             const bool all_required_blocks_found = (block_types_found & 0x1E) == 0x1E;
             if (!all_required_blocks_found) {
@@ -276,7 +276,7 @@ static void decode_fnt2(fnt_decoder *decoder) {
     }
 }
 
-static void decode_fnt(ok_font *font, void *reader_data, ok_read_func read_func, ok_seek_func seek_func) {
+static void decode_fnt(ok_font *font, void *input_data, ok_fnt_input_func input_func) {
     if (font == NULL) {
         return;
     }
@@ -286,9 +286,8 @@ static void decode_fnt(ok_font *font, void *reader_data, ok_read_func read_func,
         return;
     }
     decoder->font = font;
-    decoder->reader_data = reader_data;
-    decoder->read_func = read_func;
-    decoder->seek_func = seek_func;
+    decoder->input_data = input_data;
+    decoder->input_func = input_func;
 
     decode_fnt2(decoder);
     

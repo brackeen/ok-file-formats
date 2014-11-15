@@ -38,14 +38,12 @@ extern "C" {
         char error_message[80];
     } ok_audio;
 
-#ifndef _OK_READ_FUNC_
-#define _OK_READ_FUNC_
-    /// Reads 'count' bytes into buffer. Returns number of bytes read.
-    typedef size_t (*ok_read_func)(void *user_data, uint8_t *buffer, const size_t count);
-    
-    /// Seek function. Should return 0 on success.
-    typedef int (*ok_seek_func)(void *user_data, const int count);
-#endif
+    /**
+     Input function provided to the ok_wav_read function.
+     Reads 'count' bytes into buffer. Returns number of bytes actually read.
+     If buffer is NULL or 'count' is negative, this function should perform a relative seek.
+     */
+    typedef int (*ok_wav_input_func)(void *user_data, unsigned char *buffer, const int count);
     
     /**
      Reads a WAV (or CAF) audio file (PCM format only). If convert_to_system_endian is true, the data is converted
@@ -53,8 +51,7 @@ extern "C" {
      
      If an error occurs, data is NULL.
      */
-    ok_audio *ok_wav_read(void *user_data, ok_read_func read_func, ok_seek_func seek_func,
-                          const bool convert_to_system_endian);
+    ok_audio *ok_wav_read(void *user_data, ok_wav_input_func input_func, const bool convert_to_system_endian);
     
     /**
      Frees the audio. This function should always be called when done with the audio, even if reading failed.

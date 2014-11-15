@@ -37,7 +37,7 @@ char *get_full_path(const char *path, const char *name, const char *ext) {
     return file_name;
 }
 
-uint8_t *read_file(const char *filename, size_t *length) {
+uint8_t *read_file(const char *filename, long *length) {
     uint8_t *buffer;
     FILE *fp = fopen(filename, "rb");
     
@@ -59,20 +59,13 @@ uint8_t *read_file(const char *filename, size_t *length) {
     return buffer;
 }
 
-size_t file_read_func(void *user_data, uint8_t *buffer, const size_t count) {
-    if (count > 0) {
-        FILE *fp = (FILE *)user_data;
-        return fread(buffer, 1, count, fp);
+int file_input_func(void *user_data, unsigned char *buffer, const int count) {
+    FILE *fp = (FILE *)user_data;
+    if (buffer && count > 0) {
+        return (int)fread(buffer, 1, count, fp);
     }
-    else {
-        return 0;
-    }
-}
-
-int file_seek_func(void *user_data, const int count) {
-    if (count != 0) {
-        FILE *fp = (FILE *)user_data;
-        return fseek(fp, count, SEEK_CUR);
+    else if (fseek(fp, count, SEEK_CUR) == 0) {
+        return count;
     }
     else {
         return 0;
@@ -81,33 +74,18 @@ int file_seek_func(void *user_data, const int count) {
 
 typedef struct {
     uint8_t *buffer;
-    size_t remaining_bytes;
+    int remaining_bytes;
 } buffer_source;
 
-static size_t buffer_read_func(void *user_data, uint8_t *buffer, const size_t count) {
+static int buffer_read_func(void *user_data, unsigned char *buffer, const int count) {
     buffer_source *source = (buffer_source *)user_data;
-    const size_t len = min(count, source->remaining_bytes);
-    if (len > 0) {
+    const int len = min(count, source->remaining_bytes);
+    if (buffer && len > 0) {
         memcpy(buffer, source->buffer, len);
-        source->buffer += len;
-        source->remaining_bytes -= len;
-        return len;
     }
-    else {
-        return 0;
-    }
-}
-
-static int buffer_seek_func(void *user_data, const int count) {
-    buffer_source *source = (buffer_source *)user_data;
-    if ((size_t)count <= source->remaining_bytes) {
-        source->buffer += count;
-        source->remaining_bytes -= count;
-        return 0;
-    }
-    else {
-        return -1;
-    }
+    source->buffer += len;
+    source->remaining_bytes -= len;
+    return len;
 }
 
 ok_image *read_image(const char *path, const char *name, const char *ext, const read_type type, const bool info_only,
@@ -120,25 +98,26 @@ ok_image *read_image(const char *path, const char *name, const char *ext, const 
     uint8_t *png_data = NULL;
     buffer_source source;
     void *user_data;
-    ok_read_func read_func;
-    ok_seek_func seek_func;
+    ok_png_input_func input_func;
 
     // Open
     switch (type) {
-        case READ_TYPE_FILE:
+        case READ_TYPE_FILE: {
             fp = fopen(in_filename, "rb");
             user_data = fp;
-            read_func = file_read_func;
-            seek_func = file_seek_func;
+            input_func = file_input_func;
             break;
+        }
             
-        case READ_TYPE_BUFFER:
-            png_data = read_file(in_filename, &source.remaining_bytes);
+        case READ_TYPE_BUFFER: {
+            long length;
+            png_data = read_file(in_filename, &length);
             source.buffer = png_data;
+            source.remaining_bytes = (int)length;
             user_data = &source;
-            read_func = buffer_read_func;
-            seek_func = buffer_seek_func;
+            input_func = buffer_read_func;
             break;
+        }
             
         default:
             free(in_filename);
@@ -148,18 +127,18 @@ ok_image *read_image(const char *path, const char *name, const char *ext, const 
     // Read
     if (is_png) {
         if (info_only) {
-            image = ok_png_read_info(user_data, read_func, seek_func);
+            image = ok_png_read_info(user_data, input_func);
         }
         else {
-            image = ok_png_read(user_data, read_func, seek_func, color_format, flip_y);
+            image = ok_png_read(user_data, input_func, color_format, flip_y);
         }
     }
     else {
         if (info_only) {
-            image = ok_jpg_read_info(user_data, read_func, seek_func);
+            image = ok_jpg_read_info(user_data, input_func);
         }
         else {
-            image = ok_jpg_read(user_data, read_func, seek_func, color_format, flip_y);
+            image = ok_jpg_read(user_data, input_func, color_format, flip_y);
         }
     }
     
