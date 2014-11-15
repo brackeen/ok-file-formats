@@ -209,7 +209,7 @@ static bool test_image(read_type input_read_type,
     const bool print_image_on_error = false;
     
     char *rgba_filename = get_full_path(path_to_rgba_files, name, "rgba");
-    long rgba_data_length;
+    unsigned long rgba_data_length;
     uint8_t *rgba_data = read_file(rgba_filename, &rgba_data_length);
     free(rgba_filename);
 

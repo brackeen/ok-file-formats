@@ -37,7 +37,7 @@ char *get_full_path(const char *path, const char *name, const char *ext) {
     return file_name;
 }
 
-uint8_t *read_file(const char *filename, long *length) {
+uint8_t *read_file(const char *filename, unsigned long *length) {
     uint8_t *buffer;
     FILE *fp = fopen(filename, "rb");
     
@@ -110,7 +110,7 @@ ok_image *read_image(const char *path, const char *name, const char *ext, const 
         }
             
         case READ_TYPE_BUFFER: {
-            long length;
+            unsigned long length;
             png_data = read_file(in_filename, &length);
             source.buffer = png_data;
             source.remaining_bytes = (int)length;
@@ -183,14 +183,14 @@ static bool fuzzy_memcmp(const uint8_t *data1, const uint8_t *data2, const size_
 }
 
 bool compare(const char *name, const char *ext, const ok_image *image,
-             const uint8_t *rgba_data, const size_t rgba_data_length,
+             const uint8_t *rgba_data, const unsigned long rgba_data_length,
              const bool info_only, const uint8_t fuzziness, const bool print_image_on_error) {
     float p_identical;
     int peak_diff;
     bool success = false;
     if (info_only) {
         if (image->width * image->height * 4 != rgba_data_length) {
-            printf("Failure: Incorrect dimensions for %s.%s (%u x %u - data length should be %u but is %zu)\n",
+            printf("Failure: Incorrect dimensions for %s.%s (%u x %u - data length should be %u but is %lu)\n",
                    name, ext, image->width, image->height, (image->width * image->height * 4), rgba_data_length);
         }
         else {
@@ -209,7 +209,7 @@ bool compare(const char *name, const char *ext, const ok_image *image,
         printf("Failure: Couldn't load %s (raw rgba data)\n", name);
     }
     else if (image->width * image->height * 4 != rgba_data_length) {
-        printf("Failure: Incorrect dimensions for %s.%s (%u x %u - data length should be %u but is %zu)\n", name, ext,
+        printf("Failure: Incorrect dimensions for %s.%s (%u x %u - data length should be %u but is %lu)\n", name, ext,
                image->width, image->height, (image->width * image->height * 4), rgba_data_length);
     }
     else if (!fuzzy_memcmp(image->data, rgba_data, rgba_data_length, fuzziness, &p_identical, &peak_diff)) {

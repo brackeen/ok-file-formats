@@ -3,7 +3,7 @@
 
 char *get_full_path(const char *path, const char *name, const char *ext);
 
-uint8_t *read_file(const char *filename, long *length);
+uint8_t *read_file(const char *filename, unsigned long *length);
 
 typedef enum {
     READ_TYPE_FILE = 0,
@@ -18,5 +18,5 @@ ok_image *read_image(const char *path, const char *name, const char *ext, const 
 
 // Tests if two images are the same. If fuzziness > 0, then the diff of the pixel values have to be within (fuzziness).
 bool compare(const char *name, const char *ext, const ok_image *image,
-             const uint8_t *rgba_data, const size_t rgba_data_length,
+             const uint8_t *rgba_data, const unsigned long rgba_data_length,
              const bool info_only, const uint8_t fuzziness, const bool print_image_on_error);

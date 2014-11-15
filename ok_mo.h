@@ -64,12 +64,12 @@ extern "C" {
     void ok_mo_free(ok_mo *mo);
     
     /// Gets the character length (as opposed to the byte length) of an UTF-8 string.
-    size_t ok_utf8_strlen(const char *utf8);
+    unsigned int ok_utf8_strlen(const char *utf8);
     
     /// Converts the first n characters of a UTF-8 string to a 32-bit Unicode (UCS-4) string.
     /// The dest string must have a length of at least (n + 1) to accommodate the NULL terminator.
     /// Returns the number of characters copied.
-    size_t ok_utf8_to_unicode(const char *utf8, uint32_t *dest, const size_t n);
+    unsigned int ok_utf8_to_unicode(const char *utf8, uint32_t *dest, const unsigned int n);
     
 #ifdef __cplusplus
 }

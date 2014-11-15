@@ -353,10 +353,10 @@ const char *ok_mo_plural_value_in_context(ok_mo *mo, const char *context, const 
 
 // MARK: Unicode
 
-size_t ok_utf8_strlen(const char *utf8) {
+unsigned int ok_utf8_strlen(const char *utf8) {
     // Might consider faster version of this if needed.
     // See http://www.daemonology.net/blog/2008-06-05-faster-utf8-strlen.html
-    size_t len = 0;
+    unsigned int len = 0;
     if (utf8 != NULL) {
         const unsigned char *in = (const unsigned char *)utf8;
         while (*in != 0) {
@@ -387,13 +387,13 @@ size_t ok_utf8_strlen(const char *utf8) {
     return len;
 }
 
-size_t ok_utf8_to_unicode(const char *utf8, uint32_t *dest, const size_t n) {
+unsigned int ok_utf8_to_unicode(const char *utf8, uint32_t *dest, const unsigned int n) {
     if (utf8 == NULL || dest == NULL || n == 0) {
         return 0;
     }
     
     const unsigned char *in = (const unsigned char *)utf8;
-    size_t len = 0;
+    unsigned int len = 0;
     while (len < n && *in != 0) {
         if (*in < 0xc0) {
             dest[len] = in[0];

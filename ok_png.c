@@ -1245,8 +1245,8 @@ inline static uint16_t can_flush(const ok_inflater *inflater) {
     }
 }
 
-inline static size_t flush(ok_inflater *inflater, uint8_t *dst, const size_t len) {
-    size_t bytes_remaining = len;
+inline static int flush(ok_inflater *inflater, uint8_t *dst, const unsigned int len) {
+    int bytes_remaining = len;
     while (bytes_remaining > 0) {
         size_t n = min(bytes_remaining, can_flush(inflater));
         if (n == 0) {
@@ -1927,7 +1927,7 @@ bool ok_inflater_needs_input(const ok_inflater *inflater) {
     inflater->input == inflater->input_end;
 }
 
-void ok_inflater_set_input(ok_inflater *inflater, const void *buffer, const size_t buffer_length) {
+void ok_inflater_set_input(ok_inflater *inflater, const void *buffer, const unsigned int buffer_length) {
     if (inflater != NULL) {
         if (inflater->input == inflater->input_end) {
             inflater->input = (uint8_t*)buffer;
@@ -1939,7 +1939,7 @@ void ok_inflater_set_input(ok_inflater *inflater, const void *buffer, const size
     }
 }
 
-intptr_t ok_inflater_inflate(ok_inflater *inflater, uint8_t *dst, const size_t dst_len) {
+int ok_inflater_inflate(ok_inflater *inflater, uint8_t *dst, const unsigned int dst_len) {
     if (inflater == NULL || inflater->state == STATE_ERROR) {
         return -1;
     }

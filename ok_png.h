@@ -110,10 +110,10 @@ extern "C" {
     
     /// Sets the input for the inflater. Only call this function if ok_inflater_needs_input() returns true, otherwise,
     /// an error may occur.
-    void ok_inflater_set_input(ok_inflater *inflater, const void *buffer, const size_t buffer_length);
+    void ok_inflater_set_input(ok_inflater *inflater, const void *buffer, const unsigned int buffer_length);
     
     /// Inflates at most dst_length bytes. Returns number of bytes inflated, or a negative value if an error occured.
-    intptr_t ok_inflater_inflate(ok_inflater *inflater, uint8_t *dst, const size_t dst_length);
+    int ok_inflater_inflate(ok_inflater *inflater, uint8_t *dst, const unsigned int dst_length);
     
     /// Gets the error message, if any. Returns a zero-length string if no error.
     /// The string is owned by the inflater and should not be freed.
