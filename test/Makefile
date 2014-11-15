@@ -28,10 +28,12 @@ build:
 # There will be warnings for files "oi9n0g16.png" and "oi9n2c16.png" but
 # they will convert successfully.
 $(GEN)/%.rgba: $(PNG_SUITE)/%.png
-	convert -define png:exclude-chunk=gAMA $< temp.png
-	convert -depth 8 -intensity Average temp.png $@
-	@rm temp.png
-	
+	-convert -define png:exclude-chunk=gAMA $< temp.png
+	@if test -f temp.png; then \
+		convert -depth 8 -intensity Average temp.png $@; \
+		rm temp.png; \
+	fi
+
 # ImageMagick uses some fancy chroma upsampling that I couldn't figure out how 
 # to turn off. So instead use sips to convert the jpg to png, then use
 # ImageMagick to convert to raw rgba.

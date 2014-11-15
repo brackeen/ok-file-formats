@@ -104,6 +104,10 @@ ok_image *read_image(const char *path, const char *name, const char *ext, const 
     switch (type) {
         case READ_TYPE_FILE: {
             fp = fopen(in_filename, "rb");
+            if (!fp) {
+                free(in_filename);
+                return NULL;
+            }
             user_data = fp;
             input_func = file_input_func;
             break;
@@ -112,6 +116,10 @@ ok_image *read_image(const char *path, const char *name, const char *ext, const 
         case READ_TYPE_BUFFER: {
             unsigned long length;
             png_data = read_file(in_filename, &length);
+            if (!png_data) {
+                free(in_filename);
+                return NULL;
+            }
             source.buffer = png_data;
             source.remaining_bytes = (int)length;
             user_data = &source;
@@ -188,8 +196,12 @@ bool compare(const char *name, const char *ext, const ok_image *image,
     float p_identical;
     int peak_diff;
     bool success = false;
-    if (info_only) {
-        if (image->width * image->height * 4 != rgba_data_length) {
+    if (image == NULL && rgba_data == NULL) {
+        printf("Success (Couldn't open file): %s.%s.\n", name, ext);
+        success = true;
+    }
+    else if (info_only) {
+        if (rgba_data_length > 0 && image->width * image->height * 4 != rgba_data_length) {
             printf("Failure: Incorrect dimensions for %s.%s (%u x %u - data length should be %u but is %lu)\n",
                    name, ext, image->width, image->height, (image->width * image->height * 4), rgba_data_length);
         }
@@ -206,7 +218,8 @@ bool compare(const char *name, const char *ext, const ok_image *image,
         printf("Failure: Couldn't load %s.%s. %s\n", name, ext, image->error_message);
     }
     else if (rgba_data == NULL) {
-        printf("Failure: Couldn't load %s (raw rgba data)\n", name);
+        printf("Warning: Couldn't load %s.rgba. Possibly invalid file.\n", name);
+        success = true;
     }
     else if (image->width * image->height * 4 != rgba_data_length) {
         printf("Failure: Incorrect dimensions for %s.%s (%u x %u - data length should be %u but is %lu)\n", name, ext,
