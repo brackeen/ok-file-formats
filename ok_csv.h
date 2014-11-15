@@ -21,7 +21,6 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdio.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -50,10 +49,7 @@ extern "C" {
     typedef int (*ok_seek_func)(void *user_data, const int count);
 #endif
     
-    ok_csv *ok_csv_read(const char *file_name);
-    ok_csv *ok_csv_read_from_file(FILE *file);
-    ok_csv *ok_csv_read_from_memory(const void *buffer, const size_t buffer_length);
-    ok_csv *ok_csv_read_from_callbacks(void *user_data, ok_read_func read_func, ok_seek_func seek_func);
+    ok_csv *ok_csv_read(void *user_data, ok_read_func read_func, ok_seek_func seek_func);
 
     void ok_csv_free(ok_csv *csv);
     

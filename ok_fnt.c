@@ -1,12 +1,9 @@
 #include "ok_fnt.h"
 #include <memory.h>
-#include <stdlib.h>
 #include <stdarg.h>
+#include <stdio.h> // For vsnprintf
+#include <stdlib.h>
 #include <errno.h>
-
-#ifndef min
-#define min(a, b) ((a) < (b) ? (a) : (b))
-#endif
 
 typedef struct {
     ok_font *font;
@@ -40,105 +37,11 @@ static bool ok_read(fnt_decoder *decoder, uint8_t *data, const size_t length) {
     }
 }
 
-typedef struct {
-    uint8_t *buffer;
-    size_t remaining_bytes;
-} ok_memory_source;
-
-static size_t ok_memory_read_func(void *user_data, uint8_t *buffer, const size_t count) {
-    ok_memory_source *memory = (ok_memory_source*)user_data;
-    const size_t len = min(count, memory->remaining_bytes);
-    if (len > 0) {
-        memcpy(buffer, memory->buffer, len);
-        memory->buffer += len;
-        memory->remaining_bytes -= len;
-        return len;
-    }
-    else {
-        return 0;
-    }
-}
-
-static int ok_memory_seek_func(void *user_data, const int count) {
-    ok_memory_source *memory = (ok_memory_source*)user_data;
-    if ((size_t)count <= memory->remaining_bytes) {
-        memory->buffer += count;
-        memory->remaining_bytes -= count;
-        return 0;
-    }
-    else {
-        return -1;
-    }
-}
-
-static size_t ok_file_read_func(void *user_data, uint8_t *buffer, const size_t count) {
-    if (count > 0) {
-        FILE *fp = (FILE *)user_data;
-        return fread(buffer, 1, count, fp);
-    }
-    else {
-        return 0;
-    }
-}
-
-static int ok_file_seek_func(void *user_data, const int count) {
-    if (count != 0) {
-        FILE *fp = (FILE *)user_data;
-        return fseek(fp, count, SEEK_CUR);
-    }
-    else {
-        return 0;
-    }
-}
-
 static void decode_fnt(ok_font *font, void *reader_data, ok_read_func read_func, ok_seek_func seek_func);
 
 // Public API
 
-ok_font *ok_fnt_read(const char *file_name) {
-    ok_font *font = calloc(1, sizeof(ok_font));
-    if (file_name != NULL) {
-        FILE *fp = fopen(file_name, "rb");
-        if (fp != NULL) {
-            decode_fnt(font, fp, ok_file_read_func, ok_file_seek_func);
-            fclose(fp);
-        }
-        else {
-            ok_font_error(font, "%s", strerror(errno));
-        }
-    }
-    else {
-        ok_font_error(font, "Invalid argument: file_name is NULL");
-    }
-    return font;
-}
-
-ok_font *ok_fnt_read_from_file(FILE *fp) {
-    ok_font *font = calloc(1, sizeof(ok_font));
-    if (fp != NULL) {
-        decode_fnt(font, fp, ok_file_read_func, ok_file_seek_func);
-    }
-    else {
-        ok_font_error(font, "Invalid argument: file is NULL");
-    }
-    return font;
-}
-
-ok_font *ok_fnt_read_from_memory(const void *buffer, const size_t buffer_length) {
-    ok_font *font = calloc(1, sizeof(ok_font));
-    if (buffer != NULL) {
-        ok_memory_source memory;
-        memory.buffer = (uint8_t *)buffer;
-        memory.remaining_bytes = buffer_length;
-        decode_fnt(font, &memory, ok_memory_read_func, ok_memory_seek_func);
-    }
-    else {
-        ok_font_error(font, "Invalid argument: buffer is NULL");
-    }
-    return font;
-}
-
-ok_font *ok_fnt_read_from_callbacks(void *user_data, ok_read_func read_func, ok_seek_func seek_func) {
+ok_font *ok_fnt_read(void *user_data, ok_read_func read_func, ok_seek_func seek_func) {
     ok_font *font = calloc(1, sizeof(ok_font));
     if (read_func != NULL && seek_func != NULL) {
         decode_fnt(font, user_data, read_func, seek_func);

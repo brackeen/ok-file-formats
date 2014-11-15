@@ -1,8 +1,13 @@
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include "test_common.h"
 #include "ok_png.h"
 #include "ok_jpg.h"
+
+#ifndef min
+#define min(a, b) ((a) < (b) ? (a) : (b))
+#endif
 
 static void print_image(const uint8_t *data, const uint32_t width, const uint32_t height) {
     if (data != NULL) {
@@ -54,77 +59,118 @@ uint8_t *read_file(const char *filename, size_t *length) {
     return buffer;
 }
 
-static size_t file_read_func(void *user_data, uint8_t *buffer, const size_t count) {
+size_t file_read_func(void *user_data, uint8_t *buffer, const size_t count) {
     if (count > 0) {
         FILE *fp = (FILE *)user_data;
         return fread(buffer, 1, count, fp);
     }
-    return 0;
+    else {
+        return 0;
+    }
 }
 
-static int file_seek_func(void *user_data, const int count) {
+int file_seek_func(void *user_data, const int count) {
     if (count != 0) {
         FILE *fp = (FILE *)user_data;
         return fseek(fp, count, SEEK_CUR);
     }
-    return 0;
+    else {
+        return 0;
+    }
 }
 
-ok_image *read_image(const char *path, const char *name, const char *ext, const read_type type,
+typedef struct {
+    uint8_t *buffer;
+    size_t remaining_bytes;
+} buffer_source;
+
+static size_t buffer_read_func(void *user_data, uint8_t *buffer, const size_t count) {
+    buffer_source *source = (buffer_source *)user_data;
+    const size_t len = min(count, source->remaining_bytes);
+    if (len > 0) {
+        memcpy(buffer, source->buffer, len);
+        source->buffer += len;
+        source->remaining_bytes -= len;
+        return len;
+    }
+    else {
+        return 0;
+    }
+}
+
+static int buffer_seek_func(void *user_data, const int count) {
+    buffer_source *source = (buffer_source *)user_data;
+    if ((size_t)count <= source->remaining_bytes) {
+        source->buffer += count;
+        source->remaining_bytes -= count;
+        return 0;
+    }
+    else {
+        return -1;
+    }
+}
+
+ok_image *read_image(const char *path, const char *name, const char *ext, const read_type type, const bool info_only,
                      const ok_color_format color_format, const bool flip_y) {
+    ok_image *image = NULL;
     char *in_filename = get_full_path(path, name, ext);
     bool is_png = strcmp("PNG", ext) == 0 || strcmp("png", ext) == 0;
     
-    ok_image *image;
-    switch(type) {
-        case READ_TYPE_FILE: {
-            if (is_png) {
-                image = ok_png_read(in_filename, color_format, flip_y);
-            }
-            else {
-                image = ok_jpg_read(in_filename, color_format, flip_y);
-            }
+    FILE *fp = NULL;
+    uint8_t *png_data = NULL;
+    buffer_source source;
+    void *user_data;
+    ok_read_func read_func;
+    ok_seek_func seek_func;
+
+    // Open
+    switch (type) {
+        case READ_TYPE_FILE:
+            fp = fopen(in_filename, "rb");
+            user_data = fp;
+            read_func = file_read_func;
+            seek_func = file_seek_func;
             break;
-        }
-        case READ_TYPE_MEMORY: {
-            size_t length;
-            uint8_t *png_data = read_file(in_filename, &length);
-            if (is_png) {
-                image = ok_png_read_from_memory(png_data, length, color_format, flip_y);
-            }
-            else {
-                image = ok_jpg_read_from_memory(png_data, length, color_format, flip_y);
-            }
-            free(png_data);
+            
+        case READ_TYPE_BUFFER:
+            png_data = read_file(in_filename, &source.remaining_bytes);
+            source.buffer = png_data;
+            user_data = &source;
+            read_func = buffer_read_func;
+            seek_func = buffer_seek_func;
             break;
-        }
-        case READ_TYPE_CALLBACKS: {
-            FILE *fp = fopen(in_filename, "rb");
-            if (is_png) {
-                image = ok_png_read_from_callbacks(fp, file_read_func, file_seek_func, color_format, flip_y);
-            }
-            else {
-                image = ok_jpg_read_from_callbacks(fp, file_read_func, file_seek_func, color_format, flip_y);
-            }
-            fclose(fp);
-            break;
-        }
-        case READ_TYPE_INFO_ONLY: {
-            if (is_png) {
-                image = ok_png_read_info(in_filename);
-            }
-            else {
-                image = ok_jpg_read_info(in_filename);
-            }
-            break;
-        }
+            
         default:
-            image = NULL;
-            break;
+            free(in_filename);
+            return NULL;
     }
     
-    free(in_filename);
+    // Read
+    if (is_png) {
+        if (info_only) {
+            image = ok_png_read_info(user_data, read_func, seek_func);
+        }
+        else {
+            image = ok_png_read(user_data, read_func, seek_func, color_format, flip_y);
+        }
+    }
+    else {
+        if (info_only) {
+            image = ok_jpg_read_info(user_data, read_func, seek_func);
+        }
+        else {
+            image = ok_jpg_read(user_data, read_func, seek_func, color_format, flip_y);
+        }
+    }
     
+    // Close
+    free(in_filename);
+    if (fp) {
+        fclose(fp);
+    }
+    if (png_data) {
+        free(png_data);
+    }
     return image;
 }
 

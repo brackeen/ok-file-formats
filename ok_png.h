@@ -34,7 +34,6 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdio.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -73,10 +72,7 @@ extern "C" {
      Gets a PNG image's dimensions and color format without reading the image data. 
      On failure, width and height are both zero. 
      */
-    ok_image *ok_png_read_info(const char *file_name);
-    ok_image *ok_png_read_info_from_file(FILE *file);
-    ok_image *ok_png_read_info_from_memory(const void *buffer, const size_t buffer_length);
-    ok_image *ok_png_read_info_from_callbacks(void *user_data, ok_read_func read_func, ok_seek_func seek_func);
+    ok_image *ok_png_read_info(void *user_data, ok_read_func read_func, ok_seek_func seek_func);
     
     /**
      Reads a PNG image.
@@ -89,12 +85,8 @@ extern "C" {
      If flip_y is true, the returned image data is flipped along the vertical axis, so that the first row of data
      is the last row in the image.
      */
-    ok_image *ok_png_read(const char *file_name, const ok_color_format color_format, const bool flip_y);
-    ok_image *ok_png_read_from_file(FILE *file, const ok_color_format color_format, const bool flip_y);
-    ok_image *ok_png_read_from_memory(const void *buffer, const size_t buffer_length,
-                                      const ok_color_format color_format, const bool flip_y);
-    ok_image *ok_png_read_from_callbacks(void *user_data, ok_read_func read_func, ok_seek_func seek_func,
-                                         const ok_color_format color_format, const bool flip_y);
+    ok_image *ok_png_read(void *user_data, ok_read_func read_func, ok_seek_func seek_func,
+                          const ok_color_format color_format, const bool flip_y);
     
     /**
      Frees the image. This function should always be called when done with the image, even if reading failed.

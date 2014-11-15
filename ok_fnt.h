@@ -21,7 +21,6 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdio.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -74,10 +73,8 @@ extern "C" {
      
      If an error occurs, the num_glyphs will be 0.
      */
-    ok_font *ok_fnt_read(const char *file_name);
-    ok_font *ok_fnt_read_from_file(FILE *file);
-    ok_font *ok_fnt_read_from_memory(const void *buffer, const size_t buffer_length);
-    ok_font *ok_fnt_read_from_callbacks(void *user_data, ok_read_func read_func, ok_seek_func seek_func);
+    ok_font *ok_fnt_read(void *user_data, ok_read_func read_func, ok_seek_func seek_func);
+    
     /**
      Frees the font. This function should always be called when done with the font, even if reading failed.
      */

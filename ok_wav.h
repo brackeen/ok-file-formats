@@ -21,7 +21,6 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdio.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -54,12 +53,8 @@ extern "C" {
      
      If an error occurs, data is NULL.
      */
-    ok_audio *ok_wav_read(const char *file_name, const bool convert_to_system_endian);
-    ok_audio *ok_wav_read_from_file(FILE *file, const bool convert_to_system_endian);
-    ok_audio *ok_wav_read_from_memory(const void *buffer, const size_t buffer_length,
-                                      const bool convert_to_system_endian);
-    ok_audio *ok_wav_read_from_callbacks(void *user_data, ok_read_func read_func, ok_seek_func seek_func,
-                                         const bool convert_to_system_endian);
+    ok_audio *ok_wav_read(void *user_data, ok_read_func read_func, ok_seek_func seek_func,
+                          const bool convert_to_system_endian);
     
     /**
      Frees the audio. This function should always be called when done with the audio, even if reading failed.

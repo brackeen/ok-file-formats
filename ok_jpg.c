@@ -10,6 +10,7 @@
 #include <memory.h>
 #include <stdarg.h>
 #include <stddef.h> // For ptrdiff_t
+#include <stdio.h> // For vsnprintf
 #include <stdlib.h>
 #include <errno.h>
 
@@ -107,61 +108,6 @@ static void ok_image_error(ok_image *image, const char *format, ... ) {
     }
 }
 
-//
-// Helper functions
-//
-
-typedef struct {
-    uint8_t *buffer;
-    size_t remaining_bytes;
-} ok_memory_source;
-
-static size_t ok_memory_read_func(void *user_data, uint8_t *buffer, const size_t count) {
-    ok_memory_source *memory = (ok_memory_source*)user_data;
-    const size_t len = min(count, memory->remaining_bytes);
-    if (len > 0) {
-        memcpy(buffer, memory->buffer, len);
-        memory->buffer += len;
-        memory->remaining_bytes -= len;
-        return len;
-    }
-    else {
-        return 0;
-    }
-}
-
-static int ok_memory_seek_func(void *user_data, const int count) {
-    ok_memory_source *memory = (ok_memory_source*)user_data;
-    if ((size_t)count <= memory->remaining_bytes) {
-        memory->buffer += count;
-        memory->remaining_bytes -= count;
-        return 0;
-    }
-    else {
-        return -1;
-    }
-}
-
-static size_t ok_file_read_func(void *user_data, uint8_t *buffer, const size_t count) {
-    if (count > 0) {
-        FILE *fp = (FILE *)user_data;
-        return fread(buffer, 1, count, fp);
-    }
-    else {
-        return 0;
-    }
-}
-
-static int ok_file_seek_func(void *user_data, const int count) {
-    if (count != 0) {
-        FILE *fp = (FILE *)user_data;
-        return fseek(fp, count, SEEK_CUR);
-    }
-    else {
-        return 0;
-    }
-}
-
 static bool ok_read(jpg_decoder *decoder, uint8_t *data, const size_t length) {
     if (decoder->read_func(decoder->reader_data, data, length) == length) {
         return true;
@@ -182,104 +128,20 @@ static bool ok_seek(jpg_decoder *decoder, const int length) {
     }
 }
 
-static void decode_jpg(ok_image *image, void *reader_data,
-                       ok_read_func read_func, ok_seek_func seek_func,
-                       const ok_color_format color_format, const bool flip_y, const bool info_only);
-
-static ok_image *read_jpg(const char *file_name, const ok_color_format color_format, const bool flip_y,
-                          const bool info_only) {
-    ok_image *image = calloc(1, sizeof(ok_image));
-    if (file_name != NULL) {
-        FILE *fp = fopen(file_name, "rb");
-        if (fp != NULL) {
-            decode_jpg(image, fp, ok_file_read_func, ok_file_seek_func, color_format, flip_y, info_only);
-            fclose(fp);
-        }
-        else {
-            ok_image_error(image, "%s", strerror(errno));
-        }
-    }
-    else {
-        ok_image_error(image, "Invalid argument: file_name is NULL");
-    }
-    return image;
-}
-
-static ok_image *read_jpg_from_file(FILE *fp, const ok_color_format color_format, const bool flip_y,
-                                    const bool info_only) {
-    ok_image *image = calloc(1, sizeof(ok_image));
-    if (fp != NULL) {
-        decode_jpg(image, fp, ok_file_read_func, ok_file_seek_func, color_format, flip_y, info_only);
-    }
-    else {
-        ok_image_error(image, "Invalid argument: file is NULL");
-    }
-    return image;
-}
-
-static ok_image *read_jpg_from_memory(const void *buffer, const size_t buffer_length,
-                                      const ok_color_format color_format, const bool flip_y, const bool info_only) {
-    ok_image *image = calloc(1, sizeof(ok_image));
-    if (buffer != NULL) {
-        ok_memory_source memory;
-        memory.buffer = (uint8_t *)buffer;
-        memory.remaining_bytes = buffer_length;
-        decode_jpg(image, &memory, ok_memory_read_func, ok_memory_seek_func, color_format, flip_y, info_only);
-    }
-    else {
-        ok_image_error(image, "Invalid argument: buffer is NULL");
-    }
-    return image;
-}
-
-static ok_image *read_jpg_from_callbacks(void *user_data, ok_read_func read_func, ok_seek_func seek_func,
-                                         const ok_color_format color_format, const bool flip_y, const bool info_only) {
-    ok_image *image = calloc(1, sizeof(ok_image));
-    if (read_func != NULL && seek_func != NULL) {
-        decode_jpg(image, user_data, read_func, seek_func, color_format, flip_y, info_only);
-    }
-    else {
-        ok_image_error(image, "Invalid argument: read_func or seek_func is NULL");
-    }
-    return image;
-}
+static ok_image *decode_jpg(void *user_data, ok_read_func read_func, ok_seek_func seek_func,
+                            const ok_color_format color_format, const bool flip_y, const bool info_only);
 
 //
 // Public API
 //
 
-ok_image *ok_jpg_read_info(const char *file_name) {
-    return read_jpg(file_name, OK_COLOR_FORMAT_RGBA, false, true);
+ok_image *ok_jpg_read_info(void *user_data, ok_read_func read_func, ok_seek_func seek_func) {
+    return decode_jpg(user_data, read_func, seek_func, OK_COLOR_FORMAT_RGBA, false, true);
 }
 
-ok_image *ok_jpg_read_info_from_file(FILE *file) {
-    return read_jpg_from_file(file, OK_COLOR_FORMAT_RGBA, false, true);
-}
-
-ok_image *ok_jpg_read_info_from_memory(const void *buffer, const size_t buffer_length) {
-    return read_jpg_from_memory(buffer, buffer_length, OK_COLOR_FORMAT_RGBA, false, true);
-}
-
-ok_image *ok_jpg_read_info_from_callbacks(void *user_data, ok_read_func read_func, ok_seek_func seek_func) {
-    return read_jpg_from_callbacks(user_data, read_func, seek_func, OK_COLOR_FORMAT_RGBA, false, true);
-}
-
-ok_image *ok_jpg_read(const char *file_name, const ok_color_format color_format, const bool flip_y) {
-    return read_jpg(file_name, color_format, flip_y, false);
-}
-
-ok_image *ok_jpg_read_from_file(FILE *file, const ok_color_format color_format, const bool flip_y) {
-    return read_jpg_from_file(file, color_format, flip_y, false);
-}
-
-ok_image *ok_jpg_read_from_memory(const void *buffer, const size_t buffer_length,
-                                  const ok_color_format color_format, const bool flip_y) {
-    return read_jpg_from_memory(buffer, buffer_length, color_format, flip_y, false);
-}
-
-ok_image *ok_jpg_read_from_callbacks(void *user_data, ok_read_func read_func, ok_seek_func seek_func,
-                                     const ok_color_format color_format, const bool flip_y) {
-    return read_jpg_from_callbacks(user_data, read_func, seek_func, color_format, flip_y, false);
+ok_image *ok_jpg_read(void *user_data, ok_read_func read_func, ok_seek_func seek_func,
+                      const ok_color_format color_format, const bool flip_y) {
+    return decode_jpg(user_data, read_func, seek_func, color_format, flip_y, false);
 }
 
 void ok_jpg_image_free(ok_image *image) {
@@ -1329,20 +1191,25 @@ static void decode_jpg2(jpg_decoder *decoder) {
     }
 }
 
-static void decode_jpg(ok_image *image, void *reader_data,
-                       ok_read_func read_func, ok_seek_func seek_func,
-                       const ok_color_format color_format, const bool flip_y, const bool info_only) {
+static ok_image *decode_jpg(void *user_data, ok_read_func read_func, ok_seek_func seek_func,
+                            const ok_color_format color_format, const bool flip_y, const bool info_only) {
+    ok_image *image = calloc(1, sizeof(ok_image));
     if (image == NULL) {
-        return;
+        return NULL;
     }
+    if (read_func == NULL || seek_func == NULL) {
+        ok_image_error(image, "Invalid argument: read_func or seek_func is NULL");
+        return image;
+    }
+
     jpg_decoder *decoder = calloc(1, sizeof(jpg_decoder));
     if (decoder == NULL) {
         ok_image_error(image, "Couldn't allocate decoder.");
-        return;
+        return image;
     }
     
     decoder->image = image;
-    decoder->reader_data = reader_data;
+    decoder->reader_data = user_data;
     decoder->read_func = read_func;
     decoder->seek_func = seek_func;
     decoder->color_format = color_format;
@@ -1360,4 +1227,6 @@ static void decode_jpg(ok_image *image, void *reader_data,
         }
     }
     free(decoder);
+    
+    return image;
 }

@@ -19,6 +19,7 @@
 #include "ok_csv.h"
 #include <memory.h>
 #include <stdarg.h>
+#include <stdio.h> // For vsnprintf
 #include <stdlib.h>
 #include <errno.h>
 
@@ -160,105 +161,9 @@ static void ok_csv_error(ok_csv *csv, const char *format, ... ) {
     }
 }
 
-// MARK: Input helper functions
-
-typedef struct {
-    uint8_t *buffer;
-    size_t remaining_bytes;
-} ok_memory_source;
-
-static size_t ok_memory_read_func(void *user_data, uint8_t *buffer, const size_t count) {
-    ok_memory_source *memory = (ok_memory_source*)user_data;
-    const size_t len = min(count, memory->remaining_bytes);
-    if (len > 0) {
-        memcpy(buffer, memory->buffer, len);
-        memory->buffer += len;
-        memory->remaining_bytes -= len;
-        return len;
-    }
-    else {
-        return 0;
-    }
-}
-
-static int ok_memory_seek_func(void *user_data, const int count) {
-    ok_memory_source *memory = (ok_memory_source*)user_data;
-    if ((size_t)count <= memory->remaining_bytes) {
-        memory->buffer += count;
-        memory->remaining_bytes -= count;
-        return 0;
-    }
-    else {
-        return -1;
-    }
-}
-
-static size_t ok_file_read_func(void *user_data, uint8_t *buffer, const size_t count) {
-    if (count > 0) {
-        FILE *fp = (FILE *)user_data;
-        return fread(buffer, 1, count, fp);
-    }
-    else {
-        return 0;
-    }
-}
-
-static int ok_file_seek_func(void *user_data, const int count) {
-    if (count != 0) {
-        FILE *fp = (FILE *)user_data;
-        return fseek(fp, count, SEEK_CUR);
-    }
-    else {
-        return 0;
-    }
-}
-
 // MARK: Public API
 
-ok_csv *ok_csv_read(const char *file_name) {
-    ok_csv *csv = calloc(1, sizeof(ok_csv));
-    if (file_name != NULL) {
-        FILE *fp = fopen(file_name, "rb");
-        if (fp != NULL) {
-            decode_csv(csv, fp, ok_file_read_func, ok_file_seek_func);
-            fclose(fp);
-        }
-        else {
-            ok_csv_error(csv, "%s", strerror(errno));
-        }
-    }
-    else {
-        ok_csv_error(csv, "Invalid argument: file_name is NULL");
-    }
-    return csv;
-}
-
-ok_csv *ok_csv_read_from_file(FILE *fp) {
-    ok_csv *csv = calloc(1, sizeof(ok_csv));
-    if (fp != NULL) {
-        decode_csv(csv, fp, ok_file_read_func, ok_file_seek_func);
-    }
-    else {
-        ok_csv_error(csv, "Invalid argument: file is NULL");
-    }
-    return csv;
-}
-
-ok_csv *ok_csv_read_from_memory(const void *buffer, const size_t buffer_length) {
-    ok_csv *csv = calloc(1, sizeof(ok_csv));
-    if (buffer != NULL) {
-        ok_memory_source memory;
-        memory.buffer = (uint8_t *)buffer;
-        memory.remaining_bytes = buffer_length;
-        decode_csv(csv, &memory, ok_memory_read_func, ok_memory_seek_func);
-    }
-    else {
-        ok_csv_error(csv, "Invalid argument: buffer is NULL");
-    }
-    return csv;
-}
-
-ok_csv *ok_csv_read_from_callbacks(void *user_data, ok_read_func read_func, ok_seek_func seek_func) {
+ok_csv *ok_csv_read(void *user_data, ok_read_func read_func, ok_seek_func seek_func) {
     ok_csv *csv = calloc(1, sizeof(ok_csv));
     if (read_func != NULL && seek_func != NULL) {
         decode_csv(csv, user_data, read_func, seek_func);

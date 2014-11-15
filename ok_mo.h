@@ -19,7 +19,6 @@
 #ifndef _OK_MO_H_
 #define _OK_MO_H_
 
-#include <stdio.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -48,10 +47,7 @@ extern "C" {
     typedef int (*ok_seek_func)(void *user_data, const int count);
 #endif
         
-    ok_mo *ok_mo_read(const char *file_name);
-    ok_mo *ok_mo_read_from_file(FILE *file);
-    ok_mo *ok_mo_read_from_memory(const void *buffer, const size_t buffer_length);
-    ok_mo *ok_mo_read_from_callbacks(void *user_data, ok_read_func read_func, ok_seek_func seek_func);
+    ok_mo *ok_mo_read(void *user_data, ok_read_func read_func, ok_seek_func seek_func);
     
     /// Gets the value for the specified key. If there is no value for the key, the key is returned.
     const char *ok_mo_value(ok_mo *mo, const char *key);

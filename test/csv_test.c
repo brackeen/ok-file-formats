@@ -3,14 +3,17 @@
 #include "test_common.h"
 #include "ok_csv.h"
 #include "ok_mo.h" // for UTF-8 code
-#include <string.h>
+#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 void csv_test(const char *path) {
 
     char *test1_file = get_full_path(path, "test1", "csv");
 
-    ok_csv *csv = ok_csv_read(test1_file);
+    FILE *fp = fopen(test1_file, "rb");
+    ok_csv *csv = ok_csv_read(fp, file_read_func, file_seek_func);
+    fclose(fp);
     
     if (csv == NULL) {
         printf("Failure: ok_csv is NULL\n");
