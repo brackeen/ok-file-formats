@@ -112,7 +112,7 @@ static bool ok_read(png_decoder *decoder, uint8_t *data, const int length) {
         return true;
     }
     else {
-        ok_image_error(decoder->image, "Read error: error calling read function.");
+        ok_image_error(decoder->image, "Read error: error calling input function.");
         return false;
     }
 }

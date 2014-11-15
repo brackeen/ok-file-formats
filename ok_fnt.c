@@ -32,7 +32,7 @@ static bool ok_read(fnt_decoder *decoder, uint8_t *data, const int length) {
         return true;
     }
     else {
-        ok_font_error(decoder->font, "Read error: error calling read function.");
+        ok_font_error(decoder->font, "Read error: error calling input function.");
         return false;
     }
 }
@@ -118,7 +118,7 @@ static void decode_fnt2(fnt_decoder *decoder) {
             // Don't give an error if all required blocks have been found.
             const bool all_required_blocks_found = (block_types_found & 0x1E) == 0x1E;
             if (!all_required_blocks_found) {
-                ok_font_error(decoder->font, "Read error: error calling read function.");
+                ok_font_error(decoder->font, "Read error: error calling input function.");
             }
             return;
         }
