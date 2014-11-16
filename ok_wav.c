@@ -23,12 +23,12 @@ typedef struct {
 
 __attribute__((__format__ (__printf__, 2, 3)))
 static void ok_audio_error(ok_audio *audio, const char *format, ... ) {
-    if (audio != NULL) {
-        if (audio->data != NULL) {
+    if (audio) {
+        if (audio->data) {
             free(audio->data);
             audio->data = NULL;
         }
-        if (format != NULL) {
+        if (format) {
             va_list args;
             va_start(args, format);
             vsnprintf(audio->error_message, sizeof(audio->error_message), format, args);
@@ -58,7 +58,7 @@ static void decode_pcm(ok_audio *audio, void *input_data, ok_wav_input_func inpu
 
 ok_audio *ok_wav_read(void *user_data, ok_wav_input_func input_func, const bool convert_to_system_endian) {
     ok_audio *audio = calloc(1, sizeof(ok_audio));
-    if (input_func != NULL) {
+    if (input_func) {
         decode_pcm(audio, user_data, input_func, convert_to_system_endian);
     }
     else {
@@ -68,8 +68,8 @@ ok_audio *ok_wav_read(void *user_data, ok_wav_input_func input_func, const bool 
 }
 
 void ok_audio_free(ok_audio *audio) {
-    if (audio != NULL) {
-        if (audio->data != NULL) {
+    if (audio) {
+        if (audio->data) {
             free(audio->data);
             audio->data = NULL;
         }
@@ -124,7 +124,7 @@ static void decode_pcm_data(pcm_decoder *decoder) {
     if (platform_data_length > 0 && (unsigned int)platform_data_length == data_length) {
         audio->data = malloc(platform_data_length);
     }
-    if (audio->data == NULL) {
+    if (!audio->data) {
         ok_audio_error(audio, "Couldn't allocate memory for audio with %llu frames", audio->num_frames);
         return;
     }
@@ -356,11 +356,11 @@ static void decode_caf(pcm_decoder *decoder) {
 
 static void decode_pcm(ok_audio *audio, void *input_data, ok_wav_input_func input_func,
                        const bool convert_to_system_endian) {
-    if (audio == NULL) {
+    if (!audio) {
         return;
     }
     pcm_decoder *decoder = calloc(1, sizeof(pcm_decoder));
-    if (decoder == NULL) {
+    if (!decoder) {
         ok_audio_error(audio, "Couldn't allocate decoder.");
         return;
     }

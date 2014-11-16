@@ -91,14 +91,14 @@ typedef struct {
 
 __attribute__((__format__ (__printf__, 2, 3)))
 static void ok_image_error(ok_image *image, const char *format, ... ) {
-    if (image != NULL) {
+    if (image) {
         image->width = 0;
         image->height = 0;
-        if (image->data != NULL) {
+        if (image->data) {
             free(image->data);
             image->data = NULL;
         }
-        if (format != NULL) {
+        if (format) {
             va_list args;
             va_start(args, format);
             vsnprintf(image->error_message, sizeof(image->error_message), format, args);
@@ -136,8 +136,8 @@ ok_image *ok_png_read(void *user_data, ok_png_input_func input_func,
 }
 
 void ok_image_free(ok_image *image) {
-    if (image != NULL) {
-        if (image->data != NULL) {
+    if (image) {
+        if (image->data) {
             free(image->data);
         }
         free(image);
@@ -739,32 +739,32 @@ static bool read_data(png_decoder *decoder, uint32_t bytes_remaining) {
     const int max_bytes_per_scanline = 1 + (image->width * bits_per_pixel + 7) / 8;
     
     // Create buffers
-    if (image->data == NULL) {
+    if (!image->data) {
         uint64_t size = (uint64_t)image->width * image->height * 4;
         size_t platform_size = (size_t)size;
         if (platform_size == size) {
             image->data = malloc(platform_size);
         }
-        if (image->data == NULL) {
+        if (!image->data) {
             ok_image_error(image, "Couldn't allocate memory for %u x %u image",
                         image->width, image->height);
             return false;
         }
     }
-    if (decoder->prev_scanline == NULL) {
+    if (!decoder->prev_scanline) {
         decoder->prev_scanline = malloc(max_bytes_per_scanline);
     }
-    if (decoder->curr_scanline == NULL) {
+    if (!decoder->curr_scanline) {
         decoder->curr_scanline = malloc(max_bytes_per_scanline);
     }
-    if (decoder->inflate_buffer == NULL) {
+    if (!decoder->inflate_buffer) {
         decoder->inflate_buffer = malloc(inflate_buffer_size);
     }
-    if (decoder->interlace_method == 1 && decoder->temp_data_row == NULL) {
+    if (decoder->interlace_method == 1 && !decoder->temp_data_row) {
         decoder->temp_data_row = malloc(image->width * 4);
     }
-    if (decoder->curr_scanline == NULL || decoder->prev_scanline == NULL || decoder->inflate_buffer == NULL ||
-        (decoder->interlace_method == 1 && decoder->temp_data_row == NULL)) {
+    if (!decoder->curr_scanline || !decoder->prev_scanline || !decoder->inflate_buffer ||
+        (decoder->interlace_method == 1 && !decoder->temp_data_row)) {
         ok_image_error(image, "Couldn't allocate buffers");
         return false;
     }
@@ -779,9 +779,9 @@ static bool read_data(png_decoder *decoder, uint32_t bytes_remaining) {
         decoder->zlib_initialized = true;
     }
 #else
-    if (decoder->inflater == NULL) {
+    if (!decoder->inflater) {
         decoder->inflater = ok_inflater_init(decoder->is_ios_format);
-        if (decoder->inflater == NULL) {
+        if (!decoder->inflater) {
             ok_image_error(image, "Couldn't init inflater");
             return false;
         }
@@ -1007,16 +1007,16 @@ static ok_image *decode_png(void *user_data, ok_png_input_func input_func,
                             const ok_color_format color_format, const bool flip_y, const bool info_only) {
     
     ok_image *image = calloc(1, sizeof(ok_image));
-    if (image == NULL) {
+    if (!image) {
         return NULL;
     }
-    if (input_func == NULL) {
+    if (!input_func) {
         ok_image_error(image, "Invalid argument: input_func is NULL");
         return image;
     }
     
     png_decoder *decoder = calloc(1, sizeof(png_decoder));
-    if (decoder == NULL) {
+    if (!decoder) {
         ok_image_error(image, "Couldn't allocate decoder.");
         return image;
     }
@@ -1038,16 +1038,16 @@ static ok_image *decode_png(void *user_data, ok_png_input_func input_func,
 #else
     ok_inflater_free(decoder->inflater);
 #endif
-    if (decoder->curr_scanline != NULL) {
+    if (decoder->curr_scanline) {
         free(decoder->curr_scanline);
     }
-    if (decoder->prev_scanline != NULL) {
+    if (decoder->prev_scanline) {
         free(decoder->prev_scanline);
     }
-    if (decoder->inflate_buffer != NULL) {
+    if (decoder->inflate_buffer) {
         free(decoder->inflate_buffer);
     }
-    if (decoder->temp_data_row != NULL) {
+    if (decoder->temp_data_row) {
         free(decoder->temp_data_row);
     }
     free(decoder);
@@ -1161,9 +1161,9 @@ struct ok_inflater {
 
 __attribute__((__format__ (__printf__, 2, 3)))
 static void inflater_error(ok_inflater *inflater, const char *format, ... ) {
-    if (inflater != NULL) {
+    if (inflater) {
         inflater->state = STATE_ERROR;
-        if (format != NULL) {
+        if (format) {
             va_list args;
             va_start(args, format);
             vsnprintf(inflater->error_message, sizeof(inflater->error_message), format, args);
@@ -1484,9 +1484,9 @@ static bool inflate_zlib_header(ok_inflater *inflater) {
 }
 
 static bool inflate_init_fixed_huffman(ok_inflater *inflater) {
-    if (inflater->fixed_literal_huffman == NULL) {
+    if (!inflater->fixed_literal_huffman) {
         huffman_tree *tree = malloc(sizeof(huffman_tree));
-        if (tree != NULL) {
+        if (tree) {
             const int num_codes = 288;
             uint8_t code_length[num_codes];
             int i;
@@ -1506,9 +1506,9 @@ static bool inflate_init_fixed_huffman(ok_inflater *inflater) {
             inflater->fixed_literal_huffman = tree;
         }
     }
-    if (inflater->fixed_distance_huffman == NULL) {
+    if (!inflater->fixed_distance_huffman) {
         huffman_tree *tree = malloc(sizeof(huffman_tree));
-        if (tree != NULL) {
+        if (tree) {
             uint8_t distance_code_length[32];
             for (int i = 0; i < 32; i++) {
                 distance_code_length[i] = 5;
@@ -1517,7 +1517,7 @@ static bool inflate_init_fixed_huffman(ok_inflater *inflater) {
             inflater->fixed_distance_huffman = tree;
         }
     }
-    return inflater->fixed_literal_huffman != NULL && inflater->fixed_distance_huffman != NULL;
+    return inflater->fixed_literal_huffman && inflater->fixed_distance_huffman;
 }
 
 static bool inflate_next_block(ok_inflater *inflater) {
@@ -1852,7 +1852,7 @@ ok_inflater *ok_inflater_init(const bool nowrap) {
     STATE_FUNCTIONS[STATE_ERROR] = inflate_noop;
     
     ok_inflater *inflater = calloc(1, sizeof(ok_inflater));
-    if (inflater != NULL) {
+    if (inflater) {
         inflater->nowrap = nowrap;
         inflater->state = nowrap ? STATE_READY_FOR_NEXT_BLOCK : STATE_READY_FOR_HEAD;
         inflater->buffer = malloc(BUFFER_SIZE);
@@ -1860,10 +1860,10 @@ ok_inflater *ok_inflater_init(const bool nowrap) {
         inflater->literal_huffman = malloc(sizeof(huffman_tree));
         inflater->distance_huffman = malloc(sizeof(huffman_tree));
         
-        if (inflater->buffer == NULL ||
-            inflater->code_length_huffman == NULL ||
-            inflater->literal_huffman == NULL ||
-            inflater->distance_huffman == NULL) {
+        if (!inflater->buffer ||
+            !inflater->code_length_huffman ||
+            !inflater->literal_huffman ||
+            !inflater->distance_huffman) {
             ok_inflater_free(inflater);
             inflater = NULL;
         }
@@ -1872,7 +1872,7 @@ ok_inflater *ok_inflater_init(const bool nowrap) {
 }
 
 void ok_inflater_reset(ok_inflater *inflater) {
-    if (inflater != NULL) {
+    if (inflater) {
         inflater->input = NULL;
         inflater->input_end = NULL;
         inflater->input_buffer = 0;
@@ -1888,23 +1888,23 @@ void ok_inflater_reset(ok_inflater *inflater) {
 }
 
 void ok_inflater_free(ok_inflater *inflater) {
-    if (inflater != NULL) {
-        if (inflater->buffer != NULL) {
+    if (inflater) {
+        if (inflater->buffer) {
             free(inflater->buffer);
         }
-        if (inflater->code_length_huffman != NULL) {
+        if (inflater->code_length_huffman) {
             free(inflater->code_length_huffman);
         }
-        if (inflater->literal_huffman != NULL) {
+        if (inflater->literal_huffman) {
             free(inflater->literal_huffman);
         }
-        if (inflater->distance_huffman != NULL) {
+        if (inflater->distance_huffman) {
             free(inflater->distance_huffman);
         }
-        if (inflater->fixed_literal_huffman != NULL) {
+        if (inflater->fixed_literal_huffman) {
             free(inflater->fixed_literal_huffman);
         }
-        if (inflater->fixed_distance_huffman != NULL) {
+        if (inflater->fixed_distance_huffman) {
             free(inflater->fixed_distance_huffman);
         }
         free(inflater);
@@ -1912,23 +1912,18 @@ void ok_inflater_free(ok_inflater *inflater) {
 }
 
 const char *ok_inflater_error_message(const struct ok_inflater *inflater) {
-    if (inflater == NULL) {
-        return "";
-    }
-    else {
-        return inflater->error_message;
-    }
+    return inflater ? inflater->error_message : "";
 }
 
 bool ok_inflater_needs_input(const ok_inflater *inflater) {
-    return inflater != NULL &&
+    return inflater &&
     inflater->state != STATE_ERROR &&
     can_flush_total(inflater) == 0 &&
     inflater->input == inflater->input_end;
 }
 
 void ok_inflater_set_input(ok_inflater *inflater, const void *buffer, const unsigned int buffer_length) {
-    if (inflater != NULL) {
+    if (inflater) {
         if (inflater->input == inflater->input_end) {
             inflater->input = (uint8_t*)buffer;
             inflater->input_end = inflater->input + buffer_length;
@@ -1940,7 +1935,7 @@ void ok_inflater_set_input(ok_inflater *inflater, const void *buffer, const unsi
 }
 
 int ok_inflater_inflate(ok_inflater *inflater, uint8_t *dst, const unsigned int dst_len) {
-    if (inflater == NULL || inflater->state == STATE_ERROR) {
+    if (!inflater || inflater->state == STATE_ERROR) {
         return -1;
     }
 

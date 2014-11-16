@@ -16,9 +16,9 @@ typedef struct {
 
  __attribute__((__format__ (__printf__, 2, 3)))
 static void ok_font_error(ok_font *font, const char *format, ... ) {
-    if (font != NULL) {
+    if (font) {
         font->num_glyphs = 0;
-        if (format != NULL) {
+        if (format) {
             va_list args;
             va_start(args, format);
             vsnprintf(font->error_message, sizeof(font->error_message), format, args);
@@ -43,7 +43,7 @@ static void decode_fnt(ok_font *font, void *input_data, ok_fnt_input_func input_
 
 ok_font *ok_fnt_read(void *user_data, ok_fnt_input_func input_func) {
     ok_font *font = calloc(1, sizeof(ok_font));
-    if (input_func != NULL) {
+    if (input_func) {
         decode_fnt(font, user_data, input_func);
     }
     else {
@@ -53,22 +53,22 @@ ok_font *ok_fnt_read(void *user_data, ok_fnt_input_func input_func) {
 }
 
 void ok_font_free(ok_font *font) {
-    if (font != NULL) {
-        if (font->name != NULL) {
+    if (font) {
+        if (font->name) {
             free(font->name);
         }
-        if (font->page_names != NULL) {
+        if (font->page_names) {
             // The memory was only allocated for the first item;
             // the remaining items are pointers within the first, so they shouldn't be freed.
-            if (font->page_names[0] != NULL) {
+            if (font->page_names[0]) {
                 free(font->page_names[0]);
             }
             free(font->page_names);
         }
-        if (font->glyphs != NULL) {
+        if (font->glyphs) {
             free(font->glyphs);
         }
-        if (font->kerning_pairs != NULL) {
+        if (font->kerning_pairs) {
             free(font->kerning_pairs);
         }
         free(font);
@@ -144,7 +144,7 @@ static void decode_fnt2(fnt_decoder *decoder) {
                 
                 // Get the font name
                 font->name = malloc(name_buffer_length);
-                if (font->name == NULL) {
+                if (!font->name) {
                     ok_font_error(font, "Couldn't allocate font name");
                     return;
                 }
@@ -179,14 +179,14 @@ static void decode_fnt2(fnt_decoder *decoder) {
                 }
                 else {
                     font->page_names = calloc(font->num_pages, sizeof(char *));
-                    if (font->page_names == NULL) {
+                    if (!font->page_names) {
                         font->num_pages = 0;
                         ok_font_error(font, "Couldn't allocate memory for page name array");
                         return;
                     }
                     // Load everything into the first item; setup pointers below.
                     font->page_names[0] = malloc(block_length);
-                    if (font->page_names[0] == NULL) {
+                    if (!font->page_names[0]) {
                         font->num_pages = 0;
                         ok_font_error(font, "Couldn't allocate memory for page names");
                         return;
@@ -220,7 +220,7 @@ static void decode_fnt2(fnt_decoder *decoder) {
                 uint8_t data[20];
                 font->num_glyphs = block_length / sizeof(data);
                 font->glyphs = malloc(font->num_glyphs * sizeof(ok_font_glyph));
-                if (font->glyphs == NULL) {
+                if (!font->glyphs) {
                     font->num_glyphs = 0;
                     ok_font_error(font, "Couldn't allocate memory for glyphs");
                     return;
@@ -250,7 +250,7 @@ static void decode_fnt2(fnt_decoder *decoder) {
                 uint8_t data[10];
                 font->num_kerning_pairs = block_length / sizeof(data);
                 font->kerning_pairs = malloc(font->num_kerning_pairs * sizeof(ok_font_kerning));
-                if (font->kerning_pairs == NULL) {
+                if (!font->kerning_pairs) {
                     font->num_kerning_pairs = 0;
                     ok_font_error(font, "Couldn't allocate memory for kerning");
                     return;
@@ -277,20 +277,19 @@ static void decode_fnt2(fnt_decoder *decoder) {
 }
 
 static void decode_fnt(ok_font *font, void *input_data, ok_fnt_input_func input_func) {
-    if (font == NULL) {
-        return;
+    if (font) {
+        fnt_decoder *decoder = calloc(1, sizeof(fnt_decoder));
+        if (!decoder) {
+            ok_font_error(font, "Couldn't allocate decoder.");
+            return;
+        }
+        decoder->font = font;
+        decoder->input_data = input_data;
+        decoder->input_func = input_func;
+        
+        decode_fnt2(decoder);
+        
+        free(decoder);
     }
-    fnt_decoder *decoder = calloc(1, sizeof(fnt_decoder));
-    if (decoder == NULL) {
-        ok_font_error(font, "Couldn't allocate decoder.");
-        return;
-    }
-    decoder->font = font;
-    decoder->input_data = input_data;
-    decoder->input_func = input_func;
-
-    decode_fnt2(decoder);
-    
-    free(decoder);
 }
 

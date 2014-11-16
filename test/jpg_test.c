@@ -65,7 +65,7 @@ static bool test_image(read_type input_read_type,
     bool success = compare(name, "jpg", image, rgba_data, rgba_data_length, info_only, 4, print_image_on_error);
     
     // Cleanup
-    if (rgba_data != NULL) {
+    if (rgba_data) {
         free(rgba_data);
     }
     ok_image_free(image);

@@ -15,7 +15,7 @@ void csv_test(const char *path) {
     ok_csv *csv = ok_csv_read(fp, file_input_func);
     fclose(fp);
     
-    if (csv == NULL) {
+    if (!csv) {
         printf("Failure: ok_csv is NULL\n");
         return;
     }
@@ -32,7 +32,7 @@ void csv_test(const char *path) {
     unsigned int hello_len = ok_utf8_strlen(hello_utf8);
     uint32_t *hello = malloc(sizeof(uint32_t) * (hello_len+1));
     ok_utf8_to_unicode(hello_utf8, hello, hello_len);
-    if (hello == NULL || hello[0] != 0x4f60 || hello[1] != 0x597d || hello[2] != 0) {
+    if (!hello || hello[0] != 0x4f60 || hello[1] != 0x597d || hello[2] != 0) {
         printf("Failure: Couldn't convert UTF-8 to unicode\n");
         return;
     }

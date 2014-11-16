@@ -62,12 +62,12 @@ uint8_t *read_file(const char *filename, unsigned long *length) {
     uint8_t *buffer;
     FILE *fp = fopen(filename, "rb");
     
-    if (fp != NULL) {
+    if (fp) {
         fseek(fp, 0, SEEK_END);
         *length = ftell(fp);
         fseek(fp, 0, SEEK_SET);
         buffer = malloc(*length);
-        if (buffer != NULL) {
+        if (buffer) {
             fread(buffer, 1, *length, fp);
         }
         fclose(fp);
@@ -217,7 +217,7 @@ bool compare(const char *name, const char *ext, const ok_image *image,
     float p_identical;
     int peak_diff;
     bool success = false;
-    if (image == NULL && rgba_data == NULL) {
+    if (!image && !rgba_data) {
         printf("Success (Couldn't open file): %s.%s.\n", name, ext);
         success = true;
     }
@@ -231,14 +231,14 @@ bool compare(const char *name, const char *ext, const ok_image *image,
             success = true;
         }
     }
-    else if (image->data == NULL && rgba_data == NULL) {
+    else if (!image->data && !rgba_data) {
         printf("Success (invalid file correctly detected): %s.%s. Error: %s\n", name, ext, image->error_message);
         success = true;
     }
-    else if (image->data == NULL) {
+    else if (!image->data) {
         printf("Failure: Couldn't load %s.%s. %s\n", name, ext, image->error_message);
     }
-    else if (rgba_data == NULL) {
+    else if (!rgba_data) {
         printf("Warning: Couldn't load %s.rgba. Possibly invalid file.\n", name);
         success = true;
     }

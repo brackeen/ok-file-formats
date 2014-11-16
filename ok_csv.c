@@ -42,7 +42,7 @@ static bool circular_buffer_init(circular_buffer *buffer, const int capacity) {
     buffer->start = 0;
     buffer->length = 0;
     buffer->data = malloc(capacity);
-    if (buffer->data != NULL) {
+    if (buffer->data) {
         buffer->capacity = capacity;
         return true;
     }
@@ -67,7 +67,7 @@ static int circular_buffer_readable(circular_buffer *buffer) {
 static bool circular_buffer_expand(circular_buffer *buffer) {
     int new_capacity = buffer->capacity * 2;
     uint8_t *new_data = malloc(new_capacity);
-    if (new_data == NULL) {
+    if (!new_data) {
         return false;
     }
     else {
@@ -132,8 +132,8 @@ static void decode_csv(ok_csv *csv, void *input_data, ok_csv_input_func input_fu
 static void decode_csv2(csv_decoder *decoder);
 
 static void ok_csv_cleanup(ok_csv *csv) {
-    if (csv != NULL) {
-        if (csv->fields != NULL && csv->num_fields != NULL) {
+    if (csv) {
+        if (csv->fields && csv->num_fields) {
             for (int i = 0; i < csv->num_records; i++) {
                 for (int j = 0; j < csv->num_fields[i]; j++) {
                     free(csv->fields[i][j]);
@@ -151,9 +151,9 @@ static void ok_csv_cleanup(ok_csv *csv) {
 
 __attribute__((__format__ (__printf__, 2, 3)))
 static void ok_csv_error(ok_csv *csv, const char *format, ... ) {
-    if (csv != NULL) {
+    if (csv) {
         ok_csv_cleanup(csv);
-        if (format != NULL) {
+        if (format) {
             va_list args;
             va_start(args, format);
             vsnprintf(csv->error_message, sizeof(csv->error_message), format, args);
@@ -166,7 +166,7 @@ static void ok_csv_error(ok_csv *csv, const char *format, ... ) {
 
 ok_csv *ok_csv_read(void *user_data, ok_csv_input_func input_func) {
     ok_csv *csv = calloc(1, sizeof(ok_csv));
-    if (input_func != NULL) {
+    if (input_func) {
         decode_csv(csv, user_data, input_func);
     }
     else {
@@ -176,7 +176,7 @@ ok_csv *ok_csv_read(void *user_data, ok_csv_input_func input_func) {
 }
 
 void ok_csv_free(ok_csv *csv) {
-    if (csv != NULL) {
+    if (csv) {
         ok_csv_cleanup(csv);
         free(csv);
     }
@@ -196,11 +196,11 @@ typedef enum {
 } csv_decoder_state;
 
 static void decode_csv(ok_csv *csv, void *input_data, ok_csv_input_func input_func) {
-    if (csv == NULL) {
+    if (!csv) {
         return;
     }
     csv_decoder *decoder = calloc(1, sizeof(csv_decoder));
-    if (decoder == NULL) {
+    if (!decoder) {
         ok_csv_error(csv, "Couldn't allocate decoder.");
         return;
     }
@@ -233,10 +233,10 @@ static bool csv_ensure_record_capcity(ok_csv *csv) {
         new_capacity <<= 1;
     }
     
-    if (csv->num_fields == NULL || curr_capacity < new_capacity) {
+    if (!csv->num_fields || curr_capacity < new_capacity) {
         csv->num_fields = realloc(csv->num_fields, sizeof(int) * new_capacity);
         csv->fields = realloc(csv->fields, sizeof(char**) * new_capacity);
-        if (csv->num_fields == NULL || csv->fields == NULL) {
+        if (!csv->num_fields || !csv->fields) {
             ok_csv_error(csv, "Couldn't allocate fields array");
             return false;
         }
@@ -258,9 +258,9 @@ static bool csv_ensure_field_capcity(ok_csv *csv, const int record) {
         new_capacity <<= 1;
     }
     
-    if (csv->fields[record] == NULL || curr_capacity < new_capacity) {
+    if (!csv->fields[record] || curr_capacity < new_capacity) {
         csv->fields[record] = realloc(csv->fields[record], sizeof(char*) * new_capacity);
-        if (csv->fields[record] == NULL) {
+        if (!csv->fields[record]) {
             ok_csv_error(csv, "Couldn't allocate fields array");
             return false;
         }
@@ -334,7 +334,7 @@ static void decode_csv2(csv_decoder *decoder) {
                     
                     // Add blank field
                     char *blank_field = malloc(1);
-                    if (blank_field == NULL) {
+                    if (!blank_field) {
                         ok_csv_error(csv, "Couldn't allocate field");
                         return;
                     }
@@ -369,7 +369,7 @@ static void decode_csv2(csv_decoder *decoder) {
                 if (curr_char == ',' || curr_char == '\r' || curr_char == '\n' || is_eof) {
                     // Add blank field
                     char *blank_field = malloc(1);
-                    if (blank_field == NULL) {
+                    if (!blank_field) {
                         ok_csv_error(csv, "Couldn't allocate field");
                         return;
                     }
@@ -404,7 +404,7 @@ static void decode_csv2(csv_decoder *decoder) {
                         peek--;
                     }
                     char *field = malloc(peek + 1);
-                    if (field == NULL) {
+                    if (!field) {
                         ok_csv_error(csv, "Couldn't allocate field");
                         return;
                     }
@@ -459,7 +459,7 @@ static void decode_csv2(csv_decoder *decoder) {
             {
                 if (curr_char == ',' || curr_char == '\r' || curr_char == '\n' || is_eof) {
                     char *field = malloc(peek);
-                    if (field == NULL) {
+                    if (!field) {
                         ok_csv_error(csv, "Couldn't allocate field");
                         return;
                     }

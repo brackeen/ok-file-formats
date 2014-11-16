@@ -53,8 +53,8 @@ typedef struct {
 static void decode_mo2(mo_decoder *decoder);
 
 static void ok_mo_cleanup(ok_mo *mo) {
-    if (mo != NULL) {
-        if (mo->strings != NULL) {
+    if (mo) {
+        if (mo->strings) {
             for (uint32_t i = 0; i < mo->num_strings; i++) {
                 free(mo->strings[i].key);
                 free(mo->strings[i].value);
@@ -68,9 +68,9 @@ static void ok_mo_cleanup(ok_mo *mo) {
 
 __attribute__((__format__ (__printf__, 2, 3)))
 static void ok_mo_error(ok_mo *mo, const char *format, ... ) {
-    if (mo != NULL) {
+    if (mo) {
         ok_mo_cleanup(mo);
-        if (format != NULL) {
+        if (format) {
             va_list args;
             va_start(args, format);
             vsnprintf(mo->error_message, sizeof(mo->error_message), format, args);
@@ -80,27 +80,26 @@ static void ok_mo_error(ok_mo *mo, const char *format, ... ) {
 }
 
 static void decode_mo(ok_mo *mo, void *input_data, ok_mo_input_func input_func) {
-    if (mo == NULL) {
-        return;
+    if (mo) {
+        mo_decoder *decoder = calloc(1, sizeof(mo_decoder));
+        if (!decoder) {
+            ok_mo_error(mo, "Couldn't allocate decoder.");
+            return;
+        }
+        decoder->mo = mo;
+        decoder->input_data = input_data;
+        decoder->input_func = input_func;
+        
+        decode_mo2(decoder);
+        
+        if (decoder->key_offset_buffer) {
+            free(decoder->key_offset_buffer);
+        }
+        if (decoder->value_offset_buffer) {
+            free(decoder->value_offset_buffer);
+        }
+        free(decoder);
     }
-    mo_decoder *decoder = calloc(1, sizeof(mo_decoder));
-    if (decoder == NULL) {
-        ok_mo_error(mo, "Couldn't allocate decoder.");
-        return;
-    }
-    decoder->mo = mo;
-    decoder->input_data = input_data;
-    decoder->input_func = input_func;
-    
-    decode_mo2(decoder);
-    
-    if (decoder->key_offset_buffer != NULL) {
-        free(decoder->key_offset_buffer);
-    }
-    if (decoder->value_offset_buffer != NULL) {
-        free(decoder->value_offset_buffer);
-    }
-    free(decoder);
 }
 
 static bool ok_read(mo_decoder *decoder, uint8_t *data, const int length) {
@@ -121,7 +120,7 @@ static bool ok_seek(mo_decoder *decoder, const int length) {
 
 ok_mo *ok_mo_read(void *user_data, ok_mo_input_func input_func) {
     ok_mo *mo = calloc(1, sizeof(ok_mo));
-    if (input_func != NULL) {
+    if (input_func) {
         decode_mo(mo, user_data, input_func);
     }
     else {
@@ -131,7 +130,7 @@ ok_mo *ok_mo_read(void *user_data, ok_mo_input_func input_func) {
 }
 
 void ok_mo_free(ok_mo *mo) {
-    if (mo != NULL) {
+    if (mo) {
         ok_mo_cleanup(mo);
         free(mo);
     }
@@ -198,7 +197,7 @@ static void decode_mo2(mo_decoder *decoder) {
     mo->strings = calloc(mo->num_strings, sizeof(struct ok_mo_string));
     decoder->key_offset_buffer = malloc(8 * mo->num_strings);
     decoder->value_offset_buffer = malloc(8 * mo->num_strings);
-    if (mo->strings == NULL || decoder->key_offset_buffer == NULL || decoder->value_offset_buffer == NULL) {
+    if (!mo->strings || !decoder->key_offset_buffer || !decoder->value_offset_buffer) {
         ok_mo_error(mo, "Couldn't allocate arrays");
         return;
     }
@@ -230,7 +229,7 @@ static void decode_mo2(mo_decoder *decoder) {
         uint32_t offset = read32(decoder->key_offset_buffer + 8 * i + 4, little_endian);
         
         mo->strings[i].key = malloc(length + 1);
-        if (mo->strings[i].key == NULL) {
+        if (!mo->strings[i].key) {
             ok_mo_error(mo, "Couldn't allocate strings");
             return;
         }
@@ -249,7 +248,7 @@ static void decode_mo2(mo_decoder *decoder) {
         uint32_t offset = read32(decoder->value_offset_buffer + 8 * i + 4, little_endian);
         
         mo->strings[i].value = malloc(length + 1);
-        if (mo->strings[i].value == NULL) {
+        if (!mo->strings[i].value) {
             ok_mo_error(mo, "Couldn't allocate strings");
             return;
         }
@@ -281,10 +280,10 @@ static int bsearch_strcmp(const void *s1, const void *s2) {
 }
 
 static struct ok_mo_string *find_value(ok_mo *mo, const char *context, const char *key) {
-    if (mo == NULL || key == NULL) {
+    if (!mo || !key) {
         return NULL;
     }
-    else if (context == NULL) {
+    else if (!context) {
         return bsearch(key, mo->strings, mo->num_strings, sizeof(mo->strings[0]), bsearch_strcmp);
     }
     else {
@@ -292,7 +291,7 @@ static struct ok_mo_string *find_value(ok_mo *mo, const char *context, const cha
         const size_t context_length = strlen(context);
         const size_t complete_key_length = context_length + 1 + strlen(key) + 1;
         char * complete_key = malloc(complete_key_length);
-        if (complete_key == NULL) {
+        if (!complete_key) {
             return NULL;
         }
         strcpy(complete_key, context);
@@ -316,12 +315,7 @@ const char *ok_mo_plural_value(ok_mo *mo, const char *key, const char *plural_ke
 
 const char *ok_mo_value_in_context(ok_mo *mo, const char *context, const char *key) {
     struct ok_mo_string *s = find_value(mo, context, key);
-    if (s == NULL) {
-        return key;
-    }
-    else {
-        return s->value;
-    }
+    return s ? s->value : key;
 }
 
 static int get_plural_index(const int num_variants, const int n) {
@@ -332,15 +326,7 @@ static int get_plural_index(const int num_variants, const int n) {
 const char *ok_mo_plural_value_in_context(ok_mo *mo, const char *context, const char *key, const char *plural_key,
                                           const int n) {
     struct ok_mo_string *s = find_value(mo, context, key);
-    if (s == NULL) {
-        if (get_plural_index(1, n) == 0) {
-            return key;
-        }
-        else {
-            return plural_key;
-        }
-    }
-    else {
+    if (s) {
         // This is probably too simple for some languages
         const int plural_index = get_plural_index(s->num_plural_variants, n);
         const char *v = s->value;
@@ -348,6 +334,14 @@ const char *ok_mo_plural_value_in_context(ok_mo *mo, const char *context, const 
             while (*v++ != 0) { }
         }
         return v;
+    }
+    else {
+        if (get_plural_index(1, n) == 0) {
+            return key;
+        }
+        else {
+            return plural_key;
+        }
     }
 }
 
@@ -357,7 +351,7 @@ unsigned int ok_utf8_strlen(const char *utf8) {
     // Might consider faster version of this if needed.
     // See http://www.daemonology.net/blog/2008-06-05-faster-utf8-strlen.html
     unsigned int len = 0;
-    if (utf8 != NULL) {
+    if (utf8) {
         const unsigned char *in = (const unsigned char *)utf8;
         while (*in != 0) {
             int skip;
@@ -388,7 +382,7 @@ unsigned int ok_utf8_strlen(const char *utf8) {
 }
 
 unsigned int ok_utf8_to_unicode(const char *utf8, uint32_t *dest, const unsigned int n) {
-    if (utf8 == NULL || dest == NULL || n == 0) {
+    if (!utf8 || !dest || n == 0) {
         return 0;
     }
     
