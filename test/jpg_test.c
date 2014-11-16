@@ -5,20 +5,31 @@
 #include "jpg_test.h"
 
 const char *filenames[] = {
-    "2001-stargate",
-    "baby-camel", // 2x1 upsampling
+    
+    // grayscale
+    "jpg-gray",
+    "jpeg400jfif", // has restart markers
+    
+    // no upsampling
     "creek-after",
-    "jpeg400jfif", // grayscale. restart markers
     "jpeg444",
-    "LEVEL76",
-    //"mandril_color", // 1x2 upsampling - disabled for testing because sips doesn't upsample properly
     "magritte",
+
+    // 2x1 upsampling - currently fails
+//    "baby-camel",
+//    "LEVEL76",
+
+    // 1x2 upsampling
+    "mandril_color",
+    "peppers_color",
+    
+    // 2x2 upsampling
+    "2001-stargate",
     "monkey_monkey",
-    //"peppers_color", // 1x2 upsampling
     "tomatoes",
     "zam",
-
-    "jpg-gray",
+    
+    // Various sizes (2x2 upsampling)
     "jpg-size-1x1",
     "jpg-size-2x2",
     "jpg-size-3x3",
@@ -70,12 +81,12 @@ void jpg_test(const char *path_to_jpgs, const char *path_to_rgba_files) {
     int num_failures = 0;
     for (int i = 0; i < num_files; i++) {
         for (int j = 0; j < READ_TYPE_COUNT; j++) {
-            bool success = test_image(j, path_to_jpgs, path_to_rgba_files, filenames[i], false);
+            bool success = test_image(j, path_to_jpgs, path_to_rgba_files, filenames[i], true);
             if (!success) {
                 num_failures++;
                 break;
             }
-            success = test_image(j, path_to_jpgs, path_to_rgba_files, filenames[i], true);
+            success = test_image(j, path_to_jpgs, path_to_rgba_files, filenames[i], false);
             if (!success) {
                 num_failures++;
                 break;

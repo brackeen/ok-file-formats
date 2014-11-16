@@ -9,8 +9,12 @@
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
+#ifndef max
+#define max(a, b) ((a) > (b) ? (a) : (b))
+#endif
+
 static void print_image(const uint8_t *data, const uint32_t width, const uint32_t height) {
-    if (data != NULL) {
+    if (data) {
         for (uint32_t y = 0; y < height; y++) {
             for (uint32_t x = 0; x < width * 4; x++) {
                 if ((x & 3) == 0) {
@@ -23,6 +27,23 @@ static void print_image(const uint8_t *data, const uint32_t width, const uint32_
         }
     }
 }
+
+static void print_image_diff(const uint8_t *data, const uint32_t width, const uint32_t height) {
+    if (data) {
+        for (uint32_t y = 0; y < height; y++) {
+            int max_diff = 0;
+            for (uint32_t x = 0; x < width * 4; x++) {
+                max_diff = max(max_diff, data[y * (width*4) + x]);
+                if (((x + 1) & 3) == 0) {
+                    printf("%01x", min(15, max_diff));
+                    max_diff = 0;
+                }
+            }
+            printf("\n");
+        }
+    }
+}
+
 
 char *get_full_path(const char *path, const char *name, const char *ext) {
     size_t path_len = strlen(path);
@@ -238,6 +259,13 @@ bool compare(const char *name, const char *ext, const ok_image *image,
             print_image(rgba_data, image->width, image->height);
             printf("as decoded:\n");
             print_image(image->data, image->width, image->height);
+            uint8_t *diff_data = malloc(rgba_data_length);
+            for (unsigned long i = 0; i < rgba_data_length; i++) {
+                diff_data[i] = abs(rgba_data[i] - image->data[i]);
+            }
+            printf("diff:\n");
+            print_image_diff(diff_data, image->width, image->height);
+            free(diff_data);
         }
     }
     else if (fuzziness > 0) {

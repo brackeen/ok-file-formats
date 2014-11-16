@@ -38,6 +38,7 @@ $(GEN)/%.rgba: $(PNG_SUITE)/%.png
 # to turn off. So instead use sips to convert the jpg to png, then use
 # ImageMagick to convert to raw rgba.
 # Downside is sips doesn't handle 1x2 upsampling properly.
+# Tested with sips 10.4.4 on Mac OS X Yosemite
 $(GEN)/%.rgba: $(JPG_SUITE)/%.jpg
 	#convert $< $@
 	sips -s format png $< --out temp.png
