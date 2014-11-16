@@ -15,7 +15,7 @@ const char *filenames[] = {
     "jpeg444",
     "magritte",
 
-    // 2x1 upsampling - currently fails
+    // 2x1 upsampling - currently fails in comparison to sips.
 //    "baby-camel",
 //    "LEVEL76",
 

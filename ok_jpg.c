@@ -118,9 +118,7 @@ static bool ok_seek(jpg_decoder *decoder, const int length) {
 static ok_image *decode_jpg(void *user_data, ok_jpg_input_func input_func,
                             const ok_color_format color_format, const bool flip_y, const bool info_only);
 
-//
-// Public API
-//
+// MARK: Public API
 
 ok_image *ok_jpg_read_info(void *user_data, ok_jpg_input_func input_func) {
     return decode_jpg(user_data, input_func, OK_COLOR_FORMAT_RGBA, false, true);
@@ -435,7 +433,6 @@ static void convert_data_unit_h2v1(const component *Y, const component *Cb, cons
             else {
                 convert_YCbCr_to_RGB(*y_data, *cb_data, *cr_data, r, g, b);
             }
-
             *a = 0xff;
             r += 4; g += 4; b += 4; a += 4;
         }
@@ -606,8 +603,8 @@ static inline void idct_1d(int *out, const int v0, const int v1, const int v2, c
     static const int c6_sqrt2 = 2217; // cos(6*pi/16) * sqrt(2)
     static const int c7_sqrt2 = 1130; // cos(7*pi/16) * sqrt(2)
     
-    int a0 = (v0 << 12) + (1 << (out_shift - 1));
-    int a1 = (v4 << 12);
+    const int a0 = (v0 << 12) + (1 << (out_shift - 1));
+    const int a1 = (v4 << 12);
     int a2 = a0 + a1;
     int a3 = a0 - a1;
 
@@ -624,30 +621,30 @@ static inline void idct_1d(int *out, const int v0, const int v1, const int v2, c
         out[5] = a3;
         out[6] = a3;
         out[7] = a2;
-        return;
     }
-    
-    // 20 mults, 18 adds
-    int a4 = v2 * c2_sqrt2 + v6 * c6_sqrt2;
-    int a5 = v2 * c6_sqrt2 - v6 * c2_sqrt2;
-    const int p1 = a2 + a4;
-    const int p2 = a3 + a5;
-    const int p3 = a3 - a5;
-    const int p4 = a2 - a4;
-    const int q1 = v1 * c1_sqrt2 + v3 * c3_sqrt2 + v5 * c5_sqrt2 + v7 * c7_sqrt2;
-    const int q2 = v1 * c3_sqrt2 - v3 * c7_sqrt2 - v5 * c1_sqrt2 - v7 * c5_sqrt2;
-    const int q3 = v1 * c5_sqrt2 - v3 * c1_sqrt2 + v5 * c7_sqrt2 + v7 * c3_sqrt2;
-    const int q4 = v1 * c7_sqrt2 - v3 * c5_sqrt2 + v5 * c3_sqrt2 - v7 * c1_sqrt2;
-    
-    // 8 adds, 8 shifts
-    out[0] = (p1 + q1) >> out_shift;
-    out[1] = (p2 + q2) >> out_shift;
-    out[2] = (p3 + q3) >> out_shift;
-    out[3] = (p4 + q4) >> out_shift;
-    out[4] = (p4 - q4) >> out_shift;
-    out[5] = (p3 - q3) >> out_shift;
-    out[6] = (p2 - q2) >> out_shift;
-    out[7] = (p1 - q1) >> out_shift;
+    else {
+        // 20 mults, 18 adds
+        const int a4 = v2 * c2_sqrt2 + v6 * c6_sqrt2;
+        const int a5 = v2 * c6_sqrt2 - v6 * c2_sqrt2;
+        const int p1 = a2 + a4;
+        const int p2 = a3 + a5;
+        const int p3 = a3 - a5;
+        const int p4 = a2 - a4;
+        const int q1 = v1 * c1_sqrt2 + v3 * c3_sqrt2 + v5 * c5_sqrt2 + v7 * c7_sqrt2;
+        const int q2 = v1 * c3_sqrt2 - v3 * c7_sqrt2 - v5 * c1_sqrt2 - v7 * c5_sqrt2;
+        const int q3 = v1 * c5_sqrt2 - v3 * c1_sqrt2 + v5 * c7_sqrt2 + v7 * c3_sqrt2;
+        const int q4 = v1 * c7_sqrt2 - v3 * c5_sqrt2 + v5 * c3_sqrt2 - v7 * c1_sqrt2;
+        
+        // 8 adds, 8 shifts
+        out[0] = (p1 + q1) >> out_shift;
+        out[1] = (p2 + q2) >> out_shift;
+        out[2] = (p3 + q3) >> out_shift;
+        out[3] = (p4 + q4) >> out_shift;
+        out[4] = (p4 - q4) >> out_shift;
+        out[5] = (p3 - q3) >> out_shift;
+        out[6] = (p2 - q2) >> out_shift;
+        out[7] = (p1 - q1) >> out_shift;
+    }
 }
 
 // From JPEG spec, "A.3.3"
@@ -715,19 +712,15 @@ static bool decode_data_unit(jpg_decoder *decoder, component *c, uint8_t *out) {
     if (t < 0) {
         return false;
     }
-    int diff;
-    if (t == 0) {
-        diff = 0;
-    }
-    else {
-        diff = load_next_bits(decoder, t);
+    if (t > 0) {
+        int diff = load_next_bits(decoder, t);
         if (diff < 0) {
             return false;
         }
         diff = extend(diff, t);
+        c->pred += diff;
     }
     
-    c->pred += diff;
     block[0] = c->pred * q_table[0];
     
     // Decode AC coefficients - Figure F.13 and F.14
@@ -912,24 +905,16 @@ static bool read_sof(jpg_decoder *decoder) {
     if (decoder->num_components == 1) {
         decoder->convert_data_unit = convert_data_unit_grayscale;
     }
-    else if (c[0].H == 1 && c[0].V == 1 &&
-             c[1].H == 1 && c[1].V == 1 &&
-             c[2].H == 1 && c[2].V == 1) {
+    else if (c[0].H == 1 && c[0].V == 1 && c[1].H == 1 && c[1].V == 1 && c[2].H == 1 && c[2].V == 1) {
         decoder->convert_data_unit = convert_data_unit_h1v1;
     }
-    else if (c[0].H == 2 && c[0].V == 1 &&
-             c[1].H == 1 && c[1].V == 1 &&
-             c[2].H == 1 && c[2].V == 1) {
+    else if (c[0].H == 2 && c[0].V == 1 && c[1].H == 1 && c[1].V == 1 && c[2].H == 1 && c[2].V == 1) {
         decoder->convert_data_unit = convert_data_unit_h2v1;
     }
-    else if (c[0].H == 1 && c[0].V == 2 &&
-             c[1].H == 1 && c[1].V == 1 &&
-             c[2].H == 1 && c[2].V == 1) {
+    else if (c[0].H == 1 && c[0].V == 2 && c[1].H == 1 && c[1].V == 1 && c[2].H == 1 && c[2].V == 1) {
         decoder->convert_data_unit = convert_data_unit_h1v2;
     }
-    else if (c[0].H == 2 && c[0].V == 2 &&
-             c[1].H == 1 && c[1].V == 1 &&
-             c[2].H == 1 && c[2].V == 1) {
+    else if (c[0].H == 2 && c[0].V == 2 && c[1].H == 1 && c[1].V == 1 && c[2].H == 1 && c[2].V == 1) {
         decoder->convert_data_unit = convert_data_unit_h2v2;
     }
     else {
