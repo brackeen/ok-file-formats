@@ -34,16 +34,13 @@ $(GEN)/%.rgba: $(PNG_SUITE)/%.png
 		rm temp.png; \
 	fi
 
-# ImageMagick uses some fancy chroma upsampling that I couldn't figure out how 
-# to turn off. So instead use sips to convert the jpg to png, then use
-# ImageMagick to convert to raw rgba.
-# Downside is sips doesn't handle 1x2 upsampling properly.
-# Tested with sips 10.4.4 on Mac OS X Yosemite
+# Convert jpg files to raw RGBA8888 format.
+# Tested against jpeg 8d via ImageMagick
 $(GEN)/%.rgba: $(JPG_SUITE)/%.jpg
-	#convert $< $@
-	sips -s format png $< --out temp.png
-	convert -intensity Average temp.png $@
-	@rm temp.png
+	convert $< $@
+	#sips -s format png $< --out temp.png
+	#convert -intensity Average temp.png $@
+	#@@rm temp.png
 
 gen: init $(RGBA_FILES)
 

@@ -3,7 +3,6 @@
 #include <stdarg.h>
 #include <stdio.h> // For vsnprintf
 #include <stdlib.h>
-#include <errno.h>
 
 typedef struct {
     ok_font *font;

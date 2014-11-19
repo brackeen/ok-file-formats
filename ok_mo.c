@@ -17,7 +17,6 @@
  3. This notice may not be removed or altered from any source distribution.
  */
 #include "ok_mo.h"
-#include <errno.h>
 #include <memory.h>
 #include <stdarg.h>
 #include <stdbool.h>

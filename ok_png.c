@@ -3,7 +3,6 @@
 #include <stdarg.h>
 #include <stdio.h> // For vsnprintf
 #include <stdlib.h>
-#include <errno.h>
 
 // Set this to use the regular zlib library instead of the internal inflater
 //#define USE_ZLIB
