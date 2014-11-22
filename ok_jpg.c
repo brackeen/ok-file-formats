@@ -11,7 +11,6 @@
 #include <stdarg.h>
 #include <stdio.h> // For vsnprintf
 #include <stdlib.h>
-#include <errno.h>
 
 #ifndef min
 #define min(a, b) ((a) < (b) ? (a) : (b))
@@ -21,6 +20,12 @@
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #endif
 
+// JPEG spec allows up to 4, but values greater than 2 are rare. The IDCT functions here only support up to 2.
+#define MAX_SAMPLING_FACTOR 2
+#define C_WIDTH (MAX_SAMPLING_FACTOR*8)
+
+typedef void (*idct_func)(const int * const input, uint8_t * output);
+
 typedef struct {
     uint8_t id;
     uint8_t H;
@@ -28,14 +33,10 @@ typedef struct {
     uint8_t Tq;
     uint8_t Td;
     uint8_t Ta;
-    uint8_t *data;
+    uint8_t output[C_WIDTH * C_WIDTH];
     int pred;
+    idct_func idct;
 } component;
-
-// Output channels are seperated so that output can be either RGBA or BGRA.
-typedef void (*convert_data_unit_func)(const component *Y, const component *Cb, const component *Cr,
-                                       uint8_t *r, uint8_t *g, uint8_t *b, uint8_t *a,
-                                       const int max_width, const int max_height, const int out_stride);
 
 typedef struct {
     uint16_t code[256];
@@ -77,7 +78,6 @@ typedef struct {
     int num_components;
     component components[3];
     uint8_t q_table[4][8*8];
-    convert_data_unit_func convert_data_unit;
     
     // 0 = DC table, 1 = AC table
     huffman_table huffman_tables[2][4];
@@ -304,7 +304,7 @@ static inline int huffman_decode(jpg_decoder *decoder, const huffman_table *tabl
     return -1;
 }
 
-// MARK: JPEG color conversion and upsampling
+// MARK: JPEG color conversion
 
 static inline uint8_t clip_uint8(const int x) {
     return ((unsigned int)x) < 0xff ? x : (x < 0 ? 0 : 0xff);
@@ -314,18 +314,13 @@ static inline uint8_t clip_fp_uint8(const int fx) {
     return ((unsigned int)fx) < 0xff0000 ? (fx >> 16) : (fx < 0 ? 0 : 0xff);
 }
 
-static inline uint8_t clip_fp20_uint8(const int fx) {
-    return ((unsigned int)fx) < 0xff00000 ? (fx >> 20) : (fx < 0 ? 0 : 0xff);
-}
+static inline void convert_YCbCr_to_RGB(uint8_t Y, uint8_t Cb, uint8_t Cr, uint8_t *r, uint8_t *g, uint8_t *b) {
+    // From the JFIF spec. Converted to 16:16 fixed point.
+    static const int fx1 = 91881;  // 1.402
+    static const int fx2 = -22553; // 0.34414
+    static const int fx3 = -46802; // 0.71414
+    static const int fx4 = 116130; // 1.772
 
-// From the JFIF spec. Converted to 16:16 fixed point.
-static const int fx1 = 91881;  // 1.402
-static const int fx2 = -22553; // 0.34414
-static const int fx3 = -46802; // 0.71414
-static const int fx4 = 116130; // 1.772
-
-static inline void convert_YCbCr_to_RGB(uint8_t Y, uint8_t Cb, uint8_t Cr,
-                                        uint8_t *r, uint8_t *g, uint8_t *b) {
     const int fy = (Y << 16) + (1 << 15);
     const int fr = fy + fx1 * (Cr - 128);
     const int fg = fy + fx2 * (Cb - 128) + fx3 * (Cr - 128);
@@ -335,220 +330,51 @@ static inline void convert_YCbCr_to_RGB(uint8_t Y, uint8_t Cb, uint8_t Cr,
     *b = clip_fp_uint8(fb);
 }
 
-// Cb and Cr are 8:4 fixed point
-static inline void convert_YCbCr_fp_to_RGB(uint8_t Y, int Cb, int Cr,
-                                           uint8_t *r, uint8_t *g, uint8_t *b) {
-    const int fy = (Y << 20) + (1 << 19);
-    const int fr = fy + fx1 * Cr;
-    const int fg = fy + fx2 * Cb + fx3 * Cr;
-    const int fb = fy + fx4 * Cb;
-    *r = clip_fp20_uint8(fr);
-    *g = clip_fp20_uint8(fg);
-    *b = clip_fp20_uint8(fb);
-}
-
-// Convert row from grayscale to RGBA (no upsampling)
-static void convert_data_unit_grayscale(const component *Y, const component *Cb, const component *Cr,
+// Convert from grayscale to RGBA
+static void convert_data_unit_grayscale(const uint8_t *y,
                                         uint8_t *r, uint8_t *g, uint8_t *b, uint8_t *a,
                                         const int max_width, const int max_height, const int out_stride) {
-    const int row_offset = out_stride - 4 * max_width;
+    const int in_row_offfset = C_WIDTH - max_width;
+    const int out_row_offset = out_stride - 4 * max_width;
+    
     for (int v = 0; v < max_height; v++) {
-        uint8_t *y_data = Y->data + v * 8 * Y->H;
-        for (int h = 0; h < max_width; h++) {
-            *r = *g = *b = *y_data;
+        const uint8_t *y_end = y + max_width;
+        while (y < y_end) {
+            *r = *g = *b = *y;
             *a = 0xff;
             r += 4; g += 4; b += 4; a += 4;
-            y_data++;
+            y++;
         }
-        r += row_offset;
-        g += row_offset;
-        b += row_offset;
-        a += row_offset;
+        y += in_row_offfset;
+        r += out_row_offset;
+        g += out_row_offset;
+        b += out_row_offset;
+        a += out_row_offset;
     }
 }
 
-// Convert row from YCbCr to RGBA (no upsampling)
-// Y, Cb, and Cr are 8x8
-static void convert_data_unit_h1v1(const component *Y, const component *Cb, const component *Cr,
-                                   uint8_t *r, uint8_t *g, uint8_t *b, uint8_t *a,
-                                   const int max_width, const int max_height, const int out_stride) {
-    const int row_offset = out_stride - 4 * max_width;
+// Convert from YCbCr to RGBA
+static void convert_data_unit_color(const uint8_t *y, const uint8_t *cb, const uint8_t *cr,
+                                    uint8_t *r, uint8_t *g, uint8_t *b, uint8_t *a,
+                                    const int max_width, const int max_height, const int out_stride) {
+    const int in_row_offfset = C_WIDTH - max_width;
+    const int out_row_offset = out_stride - 4 * max_width;
+    
     for (int v = 0; v < max_height; v++) {
-        uint8_t *y_data = Y->data + v * 8;
-        uint8_t *cb_data = Cb->data + v * 8;
-        uint8_t *cr_data = Cr->data + v * 8;
-        for (int h = 0; h < max_width; h++) {
-            convert_YCbCr_to_RGB(*y_data, *cb_data, *cr_data, r, g, b);
+        const uint8_t *y_end = y + max_width;
+        while (y < y_end) {
+            convert_YCbCr_to_RGB(*y, *cb, *cr, r, g, b);
             *a = 0xff;
             r += 4; g += 4; b += 4; a += 4;
-            y_data++; cb_data++; cr_data++;
+            y++; cb++; cr++;
         }
-        r += row_offset;
-        g += row_offset;
-        b += row_offset;
-        a += row_offset;
-    }
-}
-
-// Convert row from YCbCr to RGBA (upsample Cb and Cr horizontally via triangle filter)
-// Y is 16x8, Cb and Cr are 8x8
-static void convert_data_unit_h2v1(const component *Y, const component *Cb, const component *Cr,
-                                   uint8_t *r, uint8_t *g, uint8_t *b, uint8_t *a,
-                                   const int max_width, const int max_height, const int out_stride) {
-    const int row_offset = out_stride - 4 * max_width;
-    for (int v = 0; v < max_height; v++) {
-        uint8_t *y_data = Y->data + v * 16;
-        uint8_t *y_data_end = y_data + max_width;
-        uint8_t *cb_data = Cb->data + v * 8;
-        uint8_t *cr_data = Cr->data + v * 8;
-        
-        // First pixel
-        convert_YCbCr_to_RGB(*y_data, *cb_data, *cr_data, r, g, b);
-        *a = 0xff;
-        r += 4; g += 4; b += 4; a += 4;
-        y_data++;
-        
-        // Middle pixels
-        while (y_data < y_data_end - 1) {
-            for (int h = 0; h < 2; h++) {
-                // (12/16 + 4/16) - 1/2
-                int Cb_s = cb_data[h]*12 + cb_data[1-h]*4 - 0x800;
-                int Cr_s = cr_data[h]*12 + cr_data[1-h]*4 - 0x800;
-                convert_YCbCr_fp_to_RGB(*y_data, Cb_s, Cr_s, r, g, b);
-                *a = 0xff;
-                r += 4; g += 4; b += 4; a += 4;
-                y_data++;
-            }
-            cb_data++; cr_data++;
-        }
-        
-        // Last pixel
-        if (y_data < y_data_end) {
-            if (max_width < 16) {
-                // (12/16 + 4/16) - 1/2
-                int Cb_s = cb_data[0]*12 + cb_data[1]*4 - 0x800;
-                int Cr_s = cr_data[0]*12 + cr_data[1]*4 - 0x800;
-                convert_YCbCr_fp_to_RGB(*y_data, Cb_s, Cr_s, r, g, b);
-            }
-            else {
-                convert_YCbCr_to_RGB(*y_data, *cb_data, *cr_data, r, g, b);
-            }
-            *a = 0xff;
-            r += 4; g += 4; b += 4; a += 4;
-        }
-        
-        r += row_offset;
-        g += row_offset;
-        b += row_offset;
-        a += row_offset;
-    }
-}
-
-// Convert row from YCbCr to RGBA (upsample Cb and Cr vertically via triangle filter)
-// Y is 8x16, Cb and Cr are 8x8
-static void convert_data_unit_h1v2(const component *Y, const component *Cb, const component *Cr,
-                                   uint8_t *r, uint8_t *g, uint8_t *b, uint8_t *a,
-                                   const int max_width, const int max_height, const int out_stride) {
-    const int row_offset = out_stride - 4 * max_width;
-    for (int v = 0; v < max_height; v++) {
-        uint8_t *y_data = Y->data + v * 8;
-        uint8_t *y_data_end = y_data + max_width;
-        
-        int v1 = 0;
-        int v2 = 0;
-        if (v > 0) {
-            v1 = v/2;
-            v2 = (v + 1) / 2 - ((v + 1) & 1);
-            v2 = min(v2, 7); // Cb and Cr data height is 8
-        }
-        uint8_t *cb_data = Cb->data + v1 * 8;
-        uint8_t *cr_data = Cr->data + v1 * 8;
-        uint8_t *cb_minor_data = Cb->data + v2 * 8;
-        uint8_t *cr_minor_data = Cr->data + v2 * 8;
-        
-        while (y_data < y_data_end) {
-            // (12/16 + 4/16) - 1/2
-            int Cb_s = *cb_data*12 + *cb_minor_data*4 - 0x800;
-            int Cr_s = *cr_data*12 + *cr_minor_data*4 - 0x800;
-            convert_YCbCr_fp_to_RGB(*y_data, Cb_s, Cr_s, r, g, b);
-            *a = 0xff;
-            r += 4; g += 4; b += 4; a += 4;
-            y_data++;
-            cb_data++; cr_data++; cb_minor_data++; cr_minor_data++;
-        }
-        
-        r += row_offset;
-        g += row_offset;
-        b += row_offset;
-        a += row_offset;
-    }
-}
-
-// Convert row from YCbCr to RGBA (upsample Cb and Cr via triangle filter)
-// Y is 16x16, Cb and Cr are 8x8
-static void convert_data_unit_h2v2(const component *Y, const component *Cb, const component *Cr,
-                                   uint8_t *r, uint8_t *g, uint8_t *b, uint8_t *a,
-                                   const int max_width, const int max_height, const int out_stride) {
-    const int row_offset = out_stride - 4 * max_width;
-    for (int v = 0; v < max_height; v++) {
-        uint8_t *y_data = Y->data + v * 16;
-        uint8_t *y_data_end = y_data + max_width;
-        
-        int v1 = 0;
-        int v2 = 0;
-        if (v > 0) {
-            v1 = v/2;
-            v2 = (v + 1) / 2 - ((v + 1) & 1);
-            v2 = min(v2, 7); // Cb and Cr data height is 8
-        }
-        uint8_t *cb_data = Cb->data + v1 * 8;
-        uint8_t *cr_data = Cr->data + v1 * 8;
-        uint8_t *cb_minor_data = Cb->data + v2 * 8;
-        uint8_t *cr_minor_data = Cr->data + v2 * 8;
-        
-        // First pixel
-        // (12/16 + 4/16) - 1/2
-        int Cb_s = cb_data[0]*12 + cb_minor_data[0]*4 - 0x800;
-        int Cr_s = cr_data[0]*12 + cr_minor_data[0]*4 - 0x800;
-        convert_YCbCr_fp_to_RGB(*y_data, Cb_s, Cr_s, r, g, b);
-        *a = 0xff;
-        r += 4; g += 4; b += 4; a += 4;
-        y_data++;
-
-        // Middle pixels
-        while (y_data < y_data_end - 1) {
-            for (int h = 0; h < 2; h++) {
-                // (9/16 + 3/16 + 3/16 + 1/16) - 1/2
-                Cb_s = cb_data[h]*9 + (cb_data[1-h] + cb_minor_data[h])*3 + cb_minor_data[1-h] - 0x800;
-                Cr_s = cr_data[h]*9 + (cr_data[1-h] + cr_minor_data[h])*3 + cr_minor_data[1-h] - 0x800;
-                convert_YCbCr_fp_to_RGB(*y_data, Cb_s, Cr_s, r, g, b);
-                *a = 0xff;
-                r += 4; g += 4; b += 4; a += 4;
-                y_data++;
-            }
-            cb_data++; cr_data++; cb_minor_data++; cr_minor_data++;
-        }
-        
-        // Last pixel
-        if (y_data < y_data_end) {
-            if (max_width < 16) {
-                // (9/16 + 3/16 + 3/16 + 1/16) - 1/2
-                Cb_s = cb_data[0]*9 + (cb_data[1] + cb_minor_data[0])*3 + cb_minor_data[1] - 0x800;
-                Cr_s = cr_data[0]*9 + (cr_data[1] + cr_minor_data[0])*3 + cr_minor_data[1] - 0x800;
-            }
-            else {
-                Cb_s = cb_data[0]*12 + cb_minor_data[0]*4 - 0x800;
-                Cr_s = cr_data[0]*12 + cr_minor_data[0]*4 - 0x800;
-            }
-            convert_YCbCr_fp_to_RGB(*y_data, Cb_s, Cr_s, r, g, b);
-            *a = 0xff;
-            r += 4; g += 4; b += 4; a += 4;
-        }
-        
-        r += row_offset;
-        g += row_offset;
-        b += row_offset;
-        a += row_offset;
+        y += in_row_offfset;
+        cb += in_row_offfset;
+        cr += in_row_offfset;
+        r += out_row_offset;
+        g += out_row_offset;
+        b += out_row_offset;
+        a += out_row_offset;
     }
 }
 
@@ -568,112 +394,230 @@ static void convert_data_unit(jpg_decoder *decoder, const int data_unit_x, const
     else {
         data += (y * data_stride);
     }
-
-    if (decoder->color_format == OK_COLOR_FORMAT_RGBA || decoder->color_format == OK_COLOR_FORMAT_RGBA_PRE) {
-        decoder->convert_data_unit(c, c + 1, c + 2,
-                                   data, data+1, data+2, data+3,
-                                   width, height, data_stride);
+    if (decoder->num_components == 1) {
+        convert_data_unit_grayscale(c->output, data, data+1, data+2, data+3,
+                                    width, height, data_stride);
+    }
+    else if (decoder->color_format == OK_COLOR_FORMAT_RGBA || decoder->color_format == OK_COLOR_FORMAT_RGBA_PRE) {
+        convert_data_unit_color(c->output, (c + 1)->output, (c + 2)->output,
+                                data, data+1, data+2, data+3,
+                                width, height, data_stride);
     }
     else {
-        decoder->convert_data_unit(c, c + 1, c + 2,
-                                   data+2, data+1, data, data+3,
-                                   width, height, data_stride);
+        convert_data_unit_color(c->output, (c + 1)->output, (c + 2)->output,
+                                data+2, data+1, data, data+3,
+                                width, height, data_stride);
     }
 }
 
 // MARK: IDCT
 
+// Output is scaled by (1 << 12) * sqrt(2) / (1 << out_shift)
+static inline void idct_1d_8(int *out, const int out_shift,
+                             const int v0, const int v1, const int v2, const int v3,
+                             const int v4, const int v5, const int v6, const int v7) {
+    
+    // Constants scaled by (1 << 12).
+    static const int c1 = 5681; // cos(1*pi/16) * sqrt(2)
+    static const int c2 = 5352; // cos(2*pi/16) * sqrt(2)
+    static const int c3 = 4816; // cos(3*pi/16) * sqrt(2)
+    static const int c5 = 3218; // cos(5*pi/16) * sqrt(2)
+    static const int c6 = 2217; // cos(6*pi/16) * sqrt(2)
+    static const int c7 = 1130; // cos(7*pi/16) * sqrt(2)
+
+    const int v0_1 = (v0 << 12) + (1 << (out_shift - 1));
+    const int v4_1 = (v4 << 12);
+    
+    const int x0 = v0_1 + v4_1;
+    const int x1 = v0_1 - v4_1;
+    
+    const int y0 = v2 * c2 + v6 * c6;
+    const int y1 = v2 * c6 - v6 * c2;
+
+    const int p0 = x0 + y0;
+    const int p1 = x1 + y1;
+    const int p2 = x1 - y1;
+    const int p3 = x0 - y0;
+    
+    const int q0 = v1 * c1 + v7 * c7 + v3 * c3 + v5 * c5;
+    const int q1 = v1 * c3 - v7 * c5 - v3 * c7 - v5 * c1;
+    const int q2 = v1 * c5 + v7 * c3 - v3 * c1 + v5 * c7;
+    const int q3 = v1 * c7 - v7 * c1 - v3 * c5 + v5 * c3;
+    
+    out[0] = (p0 + q0) >> out_shift;
+    out[1] = (p1 + q1) >> out_shift;
+    out[2] = (p2 + q2) >> out_shift;
+    out[3] = (p3 + q3) >> out_shift;
+    out[4] = (p3 - q3) >> out_shift;
+    out[5] = (p2 - q2) >> out_shift;
+    out[6] = (p1 - q1) >> out_shift;
+    out[7] = (p0 - q0) >> out_shift;
+}
+
+// Output is scaled by (1 << 12) * sqrt(2) / (1 << out_shift)
+static inline void idct_1d_16(int *out, const int out_shift,
+                              const int v0, const int v1, const int v2, const int v3,
+                              const int v4, const int v5, const int v6, const int v7) {
+
+    // Constants scaled by (1 << 12).
+    static const int c1 = 5765;   // cos(1*pi/32) * sqrt(2)
+    static const int c2 = 5681;   // cos(2*pi/32) * sqrt(2)
+    static const int c3 = 5543;   // cos(3*pi/32) * sqrt(2)
+    static const int c4 = 5352;   // cos(4*pi/32) * sqrt(2)
+    static const int c5 = 5109;   // cos(5*pi/32) * sqrt(2)
+    static const int c6 = 4816;   // cos(6*pi/32) * sqrt(2)
+    static const int c7 = 4478;   // cos(7*pi/32) * sqrt(2)
+    static const int c9 = 3675;   // cos(9*pi/32) * sqrt(2)
+    static const int c10 = 3218; // cos(10*pi/32) * sqrt(2)
+    static const int c11 = 2731; // cos(11*pi/32) * sqrt(2)
+    static const int c12 = 2217; // cos(12*pi/32) * sqrt(2)
+    static const int c13 = 1682; // cos(13*pi/32) * sqrt(2)
+    static const int c14 = 1130; // cos(14*pi/32) * sqrt(2)
+    static const int c15 = 568;  // cos(15*pi/32) * sqrt(2)
+    
+    const int v0_1 = (v0 << 12) + (1 << (out_shift - 1));
+    
+    const int v4_c4 = v4 * c4;
+    const int v4_c12 = v4 * c12;
+    
+    const int x0 = v0_1 + v4_c4;
+    const int x1 = v0_1 + v4_c12;
+    const int x2 = v0_1 - v4_c12;
+    const int x3 = v0_1 - v4_c4;
+    
+    const int y0 = v2 * c2 + v6 * c6;
+    const int y1 = v2 * c6 - v6 * c14;
+    const int y2 = v2 * c10 - v6 * c2;
+    const int y3 = v2 * c14 - v6 * c10;
+    
+    const int p0 = x0 + y0;
+    const int p1 = x1 + y1;
+    const int p2 = x2 + y2;
+    const int p3 = x3 + y3;
+    const int p4 = x3 - y3;
+    const int p5 = x2 - y2;
+    const int p6 = x1 - y1;
+    const int p7 = x0 - y0;
+    
+    const int q0 = v1 * c1  + v3 * c3  + v5 * c5  + v7 * c7;
+    const int q1 = v1 * c3  + v3 * c9  + v5 * c15 - v7 * c11;
+    const int q2 = v1 * c5  + v3 * c15 - v5 * c7  - v7 * c3;
+    const int q3 = v1 * c7  - v3 * c11 - v5 * c3  + v7 * c15;
+    const int q4 = v1 * c9  - v3 * c5  - v5 * c13 + v7 * c1;
+    const int q5 = v1 * c11 - v3 * c1  + v5 * c9  + v7 * c13;
+    const int q6 = v1 * c13 - v3 * c7  + v5 * c1  - v7 * c5;
+    const int q7 = v1 * c15 - v3 * c13 + v5 * c11 - v7 * c9;
+    
+    out[0]  = (p0 + q0) >> out_shift;
+    out[1]  = (p1 + q1) >> out_shift;
+    out[2]  = (p2 + q2) >> out_shift;
+    out[3]  = (p3 + q3) >> out_shift;
+    out[4]  = (p4 + q4) >> out_shift;
+    out[5]  = (p5 + q5) >> out_shift;
+    out[6]  = (p6 + q6) >> out_shift;
+    out[7]  = (p7 + q7) >> out_shift;
+    out[8]  = (p7 - q7) >> out_shift;
+    out[9]  = (p6 - q6) >> out_shift;
+    out[10] = (p5 - q5) >> out_shift;
+    out[11] = (p4 - q4) >> out_shift;
+    out[12] = (p3 - q3) >> out_shift;
+    out[13] = (p2 - q2) >> out_shift;
+    out[14] = (p1 - q1) >> out_shift;
+    out[15] = (p0 - q0) >> out_shift;
+}
+
+// From JPEG spec, "A.3.3"
+// IDCT a 8x8 block in a array of size (C_WIDTH x C_WIDTH)
+// w and h must be either 8 or 16
+//
 // 1D Inverse Discrete Cosine Transform
-// This function was created by first creating a naive implementation, and then
+// The 1D versions (idct_1d_8 and idct_1d_16) were created by first creating a naive implementation, and then
 // unrolling loops and optimizing by hand.
 // Once loops were unrolled, redundant computations were obvious, and they could be eliminated.
 // 1. Converted to integer (fixed-point)
 // 2. Scaled output by sqrt(2).
+//
 // TODO: Optimize. Use SIMD code, and/or one of these papers on IDCTs:
 // http://www3.matapp.unimib.it/corsi-2007-2008/matematica/istituzioni-di-analisi-numerica/jpeg/papers/ \
 // 11-multiplications.pdf (Loeffler)
 // http://www.reznik.org/papers/SPIE07_MPEG-C_IDCT.pdf (Reznik)
-static inline void idct_1d(int *out, const int v0, const int v1, const int v2, const int v3, const int v4,
-                           const int v5, const int v6, const int v7, const int out_shift) {
-    // Constants scaled by (1 << 12).
-    static const int c1_sqrt2 = 5681; // cos(1*pi/16) * sqrt(2)
-    static const int c2_sqrt2 = 5352; // cos(2*pi/16) * sqrt(2)
-    static const int c3_sqrt2 = 4816; // cos(3*pi/16) * sqrt(2)
-    static const int c5_sqrt2 = 3218; // cos(5*pi/16) * sqrt(2)
-    static const int c6_sqrt2 = 2217; // cos(6*pi/16) * sqrt(2)
-    static const int c7_sqrt2 = 1130; // cos(7*pi/16) * sqrt(2)
-    
-    const int a0 = (v0 << 12) + (1 << (out_shift - 1));
-    const int a1 = (v4 << 12);
-    int a2 = a0 + a1;
-    int a3 = a0 - a1;
+static void idct_wxh(const int * const input, uint8_t *output, const int w, const int h) {
 
-    // Quick check to avoid mults
-    if (v1 == 0 && v2 == 0 && v3 == 0 &&
-        v5 == 0 && v6 == 0 && v7 == 0) {
-        a2 >>= out_shift;
-        a3 >>= out_shift;
-        out[0] = a2;
-        out[1] = a3;
-        out[2] = a3;
-        out[3] = a2;
-        out[4] = a2;
-        out[5] = a3;
-        out[6] = a3;
-        out[7] = a2;
+    int temp[16 * h];
+    int temp_row[w];
+    const int *in = input;
+    int *out = temp;
+    
+    // idct_1d scales output by ((1 << 12) * sqrt(2)).
+    // Shift-right by 8 so output is scaled ((1 << 4) * sqrt(2)).
+    if (h == 8) {
+        for (int u = 0; u < 8; u++) {
+            idct_1d_8(out, 8,
+                      in[0*8], in[1*8], in[2*8], in[3*8],
+                      in[4*8], in[5*8], in[6*8], in[7*8]);
+            in++;
+            out += 16;
+        }
     }
-    else {
-        // 20 mults, 18 adds
-        const int a4 = v2 * c2_sqrt2 + v6 * c6_sqrt2;
-        const int a5 = v2 * c6_sqrt2 - v6 * c2_sqrt2;
-        const int p1 = a2 + a4;
-        const int p2 = a3 + a5;
-        const int p3 = a3 - a5;
-        const int p4 = a2 - a4;
-        const int q1 = v1 * c1_sqrt2 + v3 * c3_sqrt2 + v5 * c5_sqrt2 + v7 * c7_sqrt2;
-        const int q2 = v1 * c3_sqrt2 - v3 * c7_sqrt2 - v5 * c1_sqrt2 - v7 * c5_sqrt2;
-        const int q3 = v1 * c5_sqrt2 - v3 * c1_sqrt2 + v5 * c7_sqrt2 + v7 * c3_sqrt2;
-        const int q4 = v1 * c7_sqrt2 - v3 * c5_sqrt2 + v5 * c3_sqrt2 - v7 * c1_sqrt2;
-        
-        // 8 adds, 8 shifts
-        out[0] = (p1 + q1) >> out_shift;
-        out[1] = (p2 + q2) >> out_shift;
-        out[2] = (p3 + q3) >> out_shift;
-        out[3] = (p4 + q4) >> out_shift;
-        out[4] = (p4 - q4) >> out_shift;
-        out[5] = (p3 - q3) >> out_shift;
-        out[6] = (p2 - q2) >> out_shift;
-        out[7] = (p1 - q1) >> out_shift;
+    else { // h == 16
+        for (int u = 0; u < 8; u++) {
+            idct_1d_16(out, 8,
+                       in[0*8], in[1*8], in[2*8], in[3*8],
+                       in[4*8], in[5*8], in[6*8], in[7*8]);
+            in++;
+            out += 16;
+        }
+    }
+    
+    // Input is scaled by ((1 << 4) * sqrt(2)).
+    // idct_1d scales output by ((1 << 12) * sqrt(2)), for a total output scale of (1 << 17).
+    // Shift by 19 to get rid of the scale and to divide by 4 at the same time.
+    // (Divide by 4 per the IDCT formula, JPEG spec section A.3.3)
+    in = temp;
+    if (w == 8) {
+        for (int y = 0; y < h; y++) {
+            idct_1d_8(temp_row, 19,
+                      in[0*16], in[1*16], in[2*16], in[3*16],
+                      in[4*16], in[5*16], in[6*16], in[7*16]);
+            for (int x = 0; x < 8; x++) {
+                output[x] = clip_uint8(temp_row[x] + 128);
+            }
+            in++;
+            output += C_WIDTH;
+        }
+    }
+    else { // w == 16
+        for (int y = 0; y < h; y++) {
+            idct_1d_16(temp_row, 19,
+                       in[0*16], in[1*16], in[2*16], in[3*16],
+                       in[4*16], in[5*16], in[6*16], in[7*16]);
+            for (int x = 0; x < 16; x++) {
+                output[x] = clip_uint8(temp_row[x] + 128);
+            }
+            in++;
+            output += C_WIDTH;
+        }
     }
 }
 
-// From JPEG spec, "A.3.3"
-static void idct(int *in, uint8_t *out, const int out_stride) {
-    int temp[8*8];
-    int *v = in;
-    int *r = temp;
-    for (int u = 0; u < 8; u++) {
-        // idct_1d scales output by ((1 << 12) * sqrt(2)).
-        // Shift-right by 8 so output is scaled ((1 << 4) * sqrt(2)).
-        idct_1d(r, v[0], v[8], v[16], v[24], v[32], v[40], v[48], v[56], 8);
-        r += 8;
-        v++;
-    }
-    v = temp;
-    r = in;
-    for (int y = 0; y < 8; y++) {
-        // Input is scaled by ((1 << 4) * sqrt(2)).
-        // idct_1d scales output by ((1 << 12) * sqrt(2)), for a total output scale of (1 << 17).
-        // Shift by 19 to get rid of the scale and to divide by 4 at the same time.
-        // (Divide by 4 per the IDCT formula, JPEG spec section A.3.3)
-        idct_1d(r, v[0], v[8], v[16], v[24], v[32], v[40], v[48], v[56], 19);
-        for (int x = 0; x < 8; x++) {
-            // Add 128 per JPEG spec section F.2.1.5
-            out[x] = clip_uint8(r[x] + 128);
-        }
-        out += out_stride;
-        v++;
-    }
+// IDCT a 8x8 input block to 8x8 in an output of size (C_WIDTH x C_WIDTH)
+static void idct_8x8(const int * const input, uint8_t *output) {
+    idct_wxh(input, output, 8, 8);
+}
+
+// IDCT a 8x8 block to 8x16 in an output of size (C_WIDTH x C_WIDTH)
+static void idct_8x16(const int * const input, uint8_t *output) {
+    idct_wxh(input, output, 8, 16);
+}
+
+// IDCT a 8x8 block to 16x8 in an output of size (C_WIDTH x C_WIDTH)
+static void idct_16x8(const int * const input, uint8_t *output) {
+    idct_wxh(input, output, 16, 8);
+}
+
+// IDCT a 8x8 block to 16x16 in an output of size (C_WIDTH x C_WIDTH)
+static void idct_16x16(const int * const input, uint8_t *output) {
+    idct_wxh(input, output, 16, 16);
 }
 
 // MARK: Entropy decoding
@@ -700,13 +644,12 @@ static inline int extend(const int v, const uint8_t t) {
 }
 
 static bool decode_data_unit(jpg_decoder *decoder, component *c, uint8_t *out) {
-
-    int block[8*8];
-
-    const uint8_t *q_table = decoder->q_table[c->Tq];
-    memset(block, 0, sizeof(block));
     
+    int block[8*8];
+    memset(block, 0, sizeof(block));
+
     // Decode DC coefficients - F.2.2.1
+    const uint8_t *q_table = decoder->q_table[c->Tq];
     huffman_table *dc = decoder->huffman_tables[0] + c->Td;
     int t = huffman_decode(decoder, dc);
     if (t < 0) {
@@ -754,7 +697,7 @@ static bool decode_data_unit(jpg_decoder *decoder, component *c, uint8_t *out) {
         }
     }
     
-    idct(block, out, c->H * 8);
+    c->idct(block, out);
     return true;
 }
 
@@ -776,12 +719,14 @@ static bool decode_scan(jpg_decoder *decoder) {
                 component *c = decoder->components + i;
                 int offset_y = 0;
                 for (int y = 0; y < c->V; y++) {
+                    int offset_x = 0;
                     for (int x = 0; x < c->H; x++) {
-                        if (!decode_data_unit(decoder, c, c->data + offset_y + x * 8)) {
+                        if (!decode_data_unit(decoder, c, c->output + offset_x + offset_y)) {
                             return false;
                         }
+                        offset_x += 8;
                     }
-                    offset_y += c->H * 8 * 8;
+                    offset_y += C_WIDTH * 8;
                 }
             }
             
@@ -880,9 +825,8 @@ static bool read_sof(jpg_decoder *decoder) {
             return false;
         }
         
-        c->data = malloc(c->H * 8 * c->V * 8);
-        if (!c->data) {
-            ok_image_error(image, "Couldn't allocate memory for %u x %u component", (c->H * 8), (c->V * 8));
+        if (c->H > MAX_SAMPLING_FACTOR || c->V > MAX_SAMPLING_FACTOR) {
+            ok_image_error(image, "Unsupported sampling factor: %ix%i", c->H, c->V);
             return false;
         }
         
@@ -900,27 +844,25 @@ static bool read_sof(jpg_decoder *decoder) {
         }
     }
     
-    // Setup data unit conversion
-    component *c = decoder->components;
-    if (decoder->num_components == 1) {
-        decoder->convert_data_unit = convert_data_unit_grayscale;
-    }
-    else if (c[0].H == 1 && c[0].V == 1 && c[1].H == 1 && c[1].V == 1 && c[2].H == 1 && c[2].V == 1) {
-        decoder->convert_data_unit = convert_data_unit_h1v1;
-    }
-    else if (c[0].H == 2 && c[0].V == 1 && c[1].H == 1 && c[1].V == 1 && c[2].H == 1 && c[2].V == 1) {
-        decoder->convert_data_unit = convert_data_unit_h2v1;
-    }
-    else if (c[0].H == 1 && c[0].V == 2 && c[1].H == 1 && c[1].V == 1 && c[2].H == 1 && c[2].V == 1) {
-        decoder->convert_data_unit = convert_data_unit_h1v2;
-    }
-    else if (c[0].H == 2 && c[0].V == 2 && c[1].H == 1 && c[1].V == 1 && c[2].H == 1 && c[2].V == 1) {
-        decoder->convert_data_unit = convert_data_unit_h2v2;
-    }
-    else {
-        ok_image_error(image, "Can't upsample image (%ix%i, %ix%i, %ix%i)", c[0].H, c[0].V,
-                       c[1].H, c[1].V, c[2].H, c[2].V);
-        return false;
+    // Setup idct
+    for (int i = 0; i < decoder->num_components; i++) {
+        component *c = decoder->components + i;
+        if (c->H == maxH && c->V == maxV) {
+            c->idct = idct_8x8;
+        }
+        else if (c->H * 2 == maxH && c->V * 2 == maxV) {
+            c->idct = idct_16x16;
+        }
+        else if (c->H == maxH && c->V * 2 == maxV) {
+            c->idct = idct_8x16;
+        }
+        else if (c->H * 2 == maxH && c->V == maxV) {
+            c->idct = idct_16x8;
+        }
+        else {
+            ok_image_error(image, "Unsupported sampling factor: %ix%i in max %ix%i", c->H, c->V, maxH, maxV);
+            return false;
+        }
     }
     
     // Allocate data
@@ -1224,16 +1166,7 @@ static ok_image *decode_jpg(void *user_data, ok_jpg_input_func input_func,
     decoder->info_only = info_only;
     
     decode_jpg2(decoder);
-    
-    // Cleanup
-    for (int i = 0; i < 3; i++) {
-        component *c = decoder->components + i;
-        if (c->data) {
-            free(c->data);
-            c->data = NULL;
-        }
-    }
+
     free(decoder);
-    
     return image;
 }
