@@ -418,32 +418,45 @@ static inline void idct_1d_8(int *out, const int out_shift,
                              const int v4, const int v5, const int v6, const int v7) {
     
     // Constants scaled by (1 << 12).
-    static const int c1 = 5681; // cos(1*pi/16) * sqrt(2)
-    static const int c2 = 5352; // cos(2*pi/16) * sqrt(2)
-    static const int c3 = 4816; // cos(3*pi/16) * sqrt(2)
-    static const int c5 = 3218; // cos(5*pi/16) * sqrt(2)
-    static const int c6 = 2217; // cos(6*pi/16) * sqrt(2)
-    static const int c7 = 1130; // cos(7*pi/16) * sqrt(2)
+    static const int c1 = 5681;   // cos(1*pi/16) * sqrt(2)
+    static const int c2 = 5352;   // cos(2*pi/16) * sqrt(2)
+    static const int c3 = 4816;   // cos(3*pi/16) * sqrt(2)
+    static const int c5 = 3218;   // cos(5*pi/16) * sqrt(2)
+    static const int c6 = 2217;   // cos(6*pi/16) * sqrt(2)
+    static const int c7 = 1130;   // cos(7*pi/16) * sqrt(2)
+    
+    int t0, t1, t2;
+    int p0, p1, p2, p3;
 
-    const int v0_1 = (v0 << 12) + (1 << (out_shift - 1));
-    const int v4_1 = (v4 << 12);
+    // Even part: 3 mults
+    t0 = (v0 << 12) + (1 << (out_shift - 1));
+    t1 = (v4 << 12);
+    p0 = p3 = t0 + t1;
+    p1 = p2 = t0 - t1;
     
-    const int x0 = v0_1 + v4_1;
-    const int x1 = v0_1 - v4_1;
+    t0 = (v2 + v6) * c6;
+    t1 = t0 + v2 * (c2 - c6);
+    p0 += t1;
+    p3 -= t1;
     
-    const int y0 = v2 * c2 + v6 * c6;
-    const int y1 = v2 * c6 - v6 * c2;
-
-    const int p0 = x0 + y0;
-    const int p1 = x1 + y1;
-    const int p2 = x1 - y1;
-    const int p3 = x0 - y0;
+    t1 = t0 - v6 * (c2 + c6);
+    p1 += t1;
+    p2 -= t1;
     
-    const int q0 = v1 * c1 + v7 * c7 + v3 * c3 + v5 * c5;
-    const int q1 = v1 * c3 - v7 * c5 - v3 * c7 - v5 * c1;
-    const int q2 = v1 * c5 + v7 * c3 - v3 * c1 + v5 * c7;
-    const int q3 = v1 * c7 - v7 * c1 - v3 * c5 + v5 * c3;
+    // Odd part: 9 mults
+    t1 = (v1 + v3 + v5 + v7) * c3;
+    t0 = t1 + (v1 + v5) * (-c3 + c5);
+    t1 = t1 + (v3 + v7) * (-c3 - c5);
     
+    t2 = (v1 + v7) * (-c3 + c7);
+    const int q0 = t0 + t2 + v1 * (c1 + c3 - c5 - c7);
+    const int q3 = t1 + t2 + v7 * (-c1 + c3 + c5 - c7);
+    
+    t2 = (v3 + v5) * (-c3 - c1);
+    const int q1 = t1 + t2 + v3 * (c1 + c3 + c5 - c7);
+    const int q2 = t0 + t2 + v5 * (c1 + c3 - c5 + c7);
+    
+    // Output
     out[0] = (p0 + q0) >> out_shift;
     out[1] = (p1 + q1) >> out_shift;
     out[2] = (p2 + q2) >> out_shift;
@@ -460,14 +473,14 @@ static inline void idct_1d_16(int *out, const int out_shift,
                               const int v4, const int v5, const int v6, const int v7) {
 
     // Constants scaled by (1 << 12).
-    static const int c1 = 5765;   // cos(1*pi/32) * sqrt(2)
-    static const int c2 = 5681;   // cos(2*pi/32) * sqrt(2)
-    static const int c3 = 5543;   // cos(3*pi/32) * sqrt(2)
-    static const int c4 = 5352;   // cos(4*pi/32) * sqrt(2)
-    static const int c5 = 5109;   // cos(5*pi/32) * sqrt(2)
-    static const int c6 = 4816;   // cos(6*pi/32) * sqrt(2)
-    static const int c7 = 4478;   // cos(7*pi/32) * sqrt(2)
-    static const int c9 = 3675;   // cos(9*pi/32) * sqrt(2)
+    static const int c1 = 5765;  // cos( 1*pi/32) * sqrt(2)
+    static const int c2 = 5681;  // cos( 2*pi/32) * sqrt(2)
+    static const int c3 = 5543;  // cos( 3*pi/32) * sqrt(2)
+    static const int c4 = 5352;  // cos( 4*pi/32) * sqrt(2)
+    static const int c5 = 5109;  // cos( 5*pi/32) * sqrt(2)
+    static const int c6 = 4816;  // cos( 6*pi/32) * sqrt(2)
+    static const int c7 = 4478;  // cos( 7*pi/32) * sqrt(2)
+    static const int c9 = 3675;  // cos( 9*pi/32) * sqrt(2)
     static const int c10 = 3218; // cos(10*pi/32) * sqrt(2)
     static const int c11 = 2731; // cos(11*pi/32) * sqrt(2)
     static const int c12 = 2217; // cos(12*pi/32) * sqrt(2)
@@ -475,39 +488,60 @@ static inline void idct_1d_16(int *out, const int out_shift,
     static const int c14 = 1130; // cos(14*pi/32) * sqrt(2)
     static const int c15 = 568;  // cos(15*pi/32) * sqrt(2)
     
-    const int v0_1 = (v0 << 12) + (1 << (out_shift - 1));
+    int t0, t1, t2;
+    int p0, p1, p2, p3, p4, p5, p6, p7;
     
-    const int v4_c4 = v4 * c4;
-    const int v4_c12 = v4 * c12;
+    // Even part: 8 mults
+    t0 = (v0 << 12) + (1 << (out_shift - 1));
     
-    const int x0 = v0_1 + v4_c4;
-    const int x1 = v0_1 + v4_c12;
-    const int x2 = v0_1 - v4_c12;
-    const int x3 = v0_1 - v4_c4;
+    t1 = v4 * c4;
+    p0 = p7 = t0 + t1;
+    p3 = p4 = t0 - t1;
+
+    t1 = v4 * c12;
+    p1 = p6 = t0 + t1;
+    p2 = p5 = t0 - t1;
     
-    const int y0 = v2 * c2 + v6 * c6;
-    const int y1 = v2 * c6 - v6 * c14;
-    const int y2 = v2 * c10 - v6 * c2;
-    const int y3 = v2 * c14 - v6 * c10;
+    t0 = (v2 + v6) * c6;
+    t1 = t0 + v2 * (c2 - c6);
+    p0 += t1;
+    p7 -= t1;
+
+    t1 = t0 + v6 * (-c6 - c14);
+    p1 += t1;
+    p6 -= t1;
     
-    const int p0 = x0 + y0;
-    const int p1 = x1 + y1;
-    const int p2 = x2 + y2;
-    const int p3 = x3 + y3;
-    const int p4 = x3 - y3;
-    const int p5 = x2 - y2;
-    const int p6 = x1 - y1;
-    const int p7 = x0 - y0;
+    t0 = (v2 - v6) * c10;
+    t1 = t0 + v6 * (c10 - c2);
+    p2 += t1;
+    p5 -= t1;
     
-    const int q0 = v1 * c1  + v3 * c3  + v5 * c5  + v7 * c7;
-    const int q1 = v1 * c3  + v3 * c9  + v5 * c15 - v7 * c11;
-    const int q2 = v1 * c5  + v3 * c15 - v5 * c7  - v7 * c3;
-    const int q3 = v1 * c7  - v3 * c11 - v5 * c3  + v7 * c15;
-    const int q4 = v1 * c9  - v3 * c5  - v5 * c13 + v7 * c1;
-    const int q5 = v1 * c11 - v3 * c1  + v5 * c9  + v7 * c13;
-    const int q6 = v1 * c13 - v3 * c7  + v5 * c1  - v7 * c5;
-    const int q7 = v1 * c15 - v3 * c13 + v5 * c11 - v7 * c9;
+    t1 = t0 + v2 * (c14 - c10);
+    p3 += t1;
+    p4 -= t1;
     
+    // Odd part: 21 mults
+    t1 = (v1 + v3 + v5 - v7) * c9;
+    t0 = t1 + (v1 + v5) * (c15 - c9);
+    t1 = t1 + (-v3 + v7) * (c1 + c9);
+    
+    t2 = (v1 - v7) * (c11 - c9);
+    const int q1 = t0 + t2 + v1 * (c3 + c9 - c11 - c15);
+    const int q5 = t1 + t2 + v7 * (-c1 - c9 + c11 + c13);
+    
+    t2 = (-v3 - v5) * (c13 + c9);
+    const int q4 = t1 + t2 + v3 * (c1 - c5 + c9 + c13);
+    const int q7 = t0 + t2 + v5 * (c9 + c11 + c13 - c15);
+
+    t0 = (v1 - v3 - v5 + v7) * c7;
+    t1 = (v3 - v7) * (c3 + c7);
+    t2 = (v5 - v7) * (c5 + c7);
+    const int q0 = t0 + t1 + t2 + v1 * (c1 - c7) + v7 * (c5 + c7 + c3 + c7);
+    const int q2 = t0 + t1 + v1 * (c5 - c7) + v3 * (c15 - c3);
+    const int q3 = t0 + v3 * (-c11 + c7) + v5 * (-c3 + c7) + v7 * (c15 - c7);
+    const int q6 = t0 + t2 + v1 * (c13 - c7) + v5 * (c1 - c5);
+
+    // Output
     out[0]  = (p0 + q0) >> out_shift;
     out[1]  = (p1 + q1) >> out_shift;
     out[2]  = (p2 + q2) >> out_shift;
@@ -536,11 +570,6 @@ static inline void idct_1d_16(int *out, const int out_shift,
 // Once loops were unrolled, redundant computations were obvious, and they could be eliminated.
 // 1. Converted to integer (fixed-point)
 // 2. Scaled output by sqrt(2).
-//
-// TODO: Optimize. Use SIMD code, and/or one of these papers on IDCTs:
-// http://www3.matapp.unimib.it/corsi-2007-2008/matematica/istituzioni-di-analisi-numerica/jpeg/papers/ \
-// 11-multiplications.pdf (Loeffler)
-// http://www.reznik.org/papers/SPIE07_MPEG-C_IDCT.pdf (Reznik)
 static void idct_wxh(const int * const input, uint8_t *output, const int w, const int h) {
 
     int temp[16 * h];
