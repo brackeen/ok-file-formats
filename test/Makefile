@@ -38,9 +38,6 @@ $(GEN)/%.rgba: $(PNG_SUITE)/%.png
 # Tested against jpeg 8d via ImageMagick
 $(GEN)/%.rgba: $(JPG_SUITE)/%.jpg
 	convert $< $@
-	#sips -s format png $< --out temp.png
-	#convert -intensity Average temp.png $@
-	#@@rm temp.png
 
 gen: init $(RGBA_FILES)
 

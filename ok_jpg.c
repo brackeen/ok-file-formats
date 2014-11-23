@@ -427,44 +427,65 @@ static inline void idct_1d_8(int *out, const int out_shift,
     
     int t0, t1, t2;
     int p0, p1, p2, p3;
-
-    // Even part: 3 mults
+    
     t0 = (v0 << 12) + (1 << (out_shift - 1));
     t1 = (v4 << 12);
     p0 = p3 = t0 + t1;
     p1 = p2 = t0 - t1;
     
-    t0 = (v2 + v6) * c6;
-    t1 = t0 + v2 * (c2 - c6);
-    p0 += t1;
-    p3 -= t1;
-    
-    t1 = t0 - v6 * (c2 + c6);
-    p1 += t1;
-    p2 -= t1;
-    
-    // Odd part: 9 mults
-    t1 = (v1 + v3 + v5 + v7) * c3;
-    t0 = t1 + (v1 + v5) * (-c3 + c5);
-    t1 = t1 + (v3 + v7) * (-c3 - c5);
-    
-    t2 = (v1 + v7) * (-c3 + c7);
-    const int q0 = t0 + t2 + v1 * (c1 + c3 - c5 - c7);
-    const int q3 = t1 + t2 + v7 * (-c1 + c3 + c5 - c7);
-    
-    t2 = (v3 + v5) * (-c3 - c1);
-    const int q1 = t1 + t2 + v3 * (c1 + c3 + c5 - c7);
-    const int q2 = t0 + t2 + v5 * (c1 + c3 - c5 + c7);
-    
-    // Output
-    out[0] = (p0 + q0) >> out_shift;
-    out[1] = (p1 + q1) >> out_shift;
-    out[2] = (p2 + q2) >> out_shift;
-    out[3] = (p3 + q3) >> out_shift;
-    out[4] = (p3 - q3) >> out_shift;
-    out[5] = (p2 - q2) >> out_shift;
-    out[6] = (p1 - q1) >> out_shift;
-    out[7] = (p0 - q0) >> out_shift;
+    // Quick check to avoid mults
+    if (v1 == 0 && v2 == 0 && v3 == 0 &&
+        v5 == 0 && v6 == 0 && v7 == 0) {
+        p0 >>= out_shift;
+        p1 >>= out_shift;
+        out[0] = p0;
+        out[1] = p1;
+        out[2] = p1;
+        out[3] = p0;
+        out[4] = p0;
+        out[5] = p1;
+        out[6] = p1;
+        out[7] = p0;
+    }
+    else {
+        // Even part: 3 mults
+        t0 = (v0 << 12) + (1 << (out_shift - 1));
+        t1 = (v4 << 12);
+        p0 = p3 = t0 + t1;
+        p1 = p2 = t0 - t1;
+        
+        t0 = (v2 + v6) * c6;
+        t1 = t0 + v2 * (c2 - c6);
+        p0 += t1;
+        p3 -= t1;
+        
+        t1 = t0 - v6 * (c2 + c6);
+        p1 += t1;
+        p2 -= t1;
+        
+        // Odd part: 9 mults
+        t1 = (v1 + v3 + v5 + v7) * c3;
+        t0 = t1 + (v1 + v5) * (-c3 + c5);
+        t1 = t1 + (v3 + v7) * (-c3 - c5);
+        
+        t2 = (v1 + v7) * (-c3 + c7);
+        const int q0 = t0 + t2 + v1 * (c1 + c3 - c5 - c7);
+        const int q3 = t1 + t2 + v7 * (-c1 + c3 + c5 - c7);
+        
+        t2 = (v3 + v5) * (-c3 - c1);
+        const int q1 = t1 + t2 + v3 * (c1 + c3 + c5 - c7);
+        const int q2 = t0 + t2 + v5 * (c1 + c3 - c5 + c7);
+        
+        // Output
+        out[0] = (p0 + q0) >> out_shift;
+        out[1] = (p1 + q1) >> out_shift;
+        out[2] = (p2 + q2) >> out_shift;
+        out[3] = (p3 + q3) >> out_shift;
+        out[4] = (p3 - q3) >> out_shift;
+        out[5] = (p2 - q2) >> out_shift;
+        out[6] = (p1 - q1) >> out_shift;
+        out[7] = (p0 - q0) >> out_shift;
+    }
 }
 
 // Output is scaled by (1 << 12) * sqrt(2) / (1 << out_shift)
@@ -491,73 +512,96 @@ static inline void idct_1d_16(int *out, const int out_shift,
     int t0, t1, t2;
     int p0, p1, p2, p3, p4, p5, p6, p7;
     
-    // Even part: 8 mults
     t0 = (v0 << 12) + (1 << (out_shift - 1));
-    
-    t1 = v4 * c4;
-    p0 = p7 = t0 + t1;
-    p3 = p4 = t0 - t1;
 
-    t1 = v4 * c12;
-    p1 = p6 = t0 + t1;
-    p2 = p5 = t0 - t1;
-    
-    t0 = (v2 + v6) * c6;
-    t1 = t0 + v2 * (c2 - c6);
-    p0 += t1;
-    p7 -= t1;
-
-    t1 = t0 + v6 * (-c6 - c14);
-    p1 += t1;
-    p6 -= t1;
-    
-    t0 = (v2 - v6) * c10;
-    t1 = t0 + v6 * (c10 - c2);
-    p2 += t1;
-    p5 -= t1;
-    
-    t1 = t0 + v2 * (c14 - c10);
-    p3 += t1;
-    p4 -= t1;
-    
-    // Odd part: 21 mults
-    t1 = (v1 + v3 + v5 - v7) * c9;
-    t0 = t1 + (v1 + v5) * (c15 - c9);
-    t1 = t1 + (-v3 + v7) * (c1 + c9);
-    
-    t2 = (v1 - v7) * (c11 - c9);
-    const int q1 = t0 + t2 + v1 * (c3 + c9 - c11 - c15);
-    const int q5 = t1 + t2 + v7 * (-c1 - c9 + c11 + c13);
-    
-    t2 = (-v3 - v5) * (c13 + c9);
-    const int q4 = t1 + t2 + v3 * (c1 - c5 + c9 + c13);
-    const int q7 = t0 + t2 + v5 * (c9 + c11 + c13 - c15);
-
-    t0 = (v1 - v3 - v5 + v7) * c7;
-    t1 = (v3 - v7) * (c3 + c7);
-    t2 = (v5 - v7) * (c5 + c7);
-    const int q0 = t0 + t1 + t2 + v1 * (c1 - c7) + v7 * (c5 + c7 + c3 + c7);
-    const int q2 = t0 + t1 + v1 * (c5 - c7) + v3 * (c15 - c3);
-    const int q3 = t0 + v3 * (-c11 + c7) + v5 * (-c3 + c7) + v7 * (c15 - c7);
-    const int q6 = t0 + t2 + v1 * (c13 - c7) + v5 * (c1 - c5);
-
-    // Output
-    out[0]  = (p0 + q0) >> out_shift;
-    out[1]  = (p1 + q1) >> out_shift;
-    out[2]  = (p2 + q2) >> out_shift;
-    out[3]  = (p3 + q3) >> out_shift;
-    out[4]  = (p4 + q4) >> out_shift;
-    out[5]  = (p5 + q5) >> out_shift;
-    out[6]  = (p6 + q6) >> out_shift;
-    out[7]  = (p7 + q7) >> out_shift;
-    out[8]  = (p7 - q7) >> out_shift;
-    out[9]  = (p6 - q6) >> out_shift;
-    out[10] = (p5 - q5) >> out_shift;
-    out[11] = (p4 - q4) >> out_shift;
-    out[12] = (p3 - q3) >> out_shift;
-    out[13] = (p2 - q2) >> out_shift;
-    out[14] = (p1 - q1) >> out_shift;
-    out[15] = (p0 - q0) >> out_shift;
+    // Quick check to avoid mults
+    if (v1 == 0 && v2 == 0 && v3 == 0 && v4 == 0 &&
+        v5 == 0 && v6 == 0 && v7 == 0) {
+        t0 >>= out_shift;
+        out[0] = t0;
+        out[1] = t0;
+        out[2] = t0;
+        out[3] = t0;
+        out[4] = t0;
+        out[5] = t0;
+        out[6] = t0;
+        out[7] = t0;
+        out[8] = t0;
+        out[9] = t0;
+        out[10] = t0;
+        out[11] = t0;
+        out[12] = t0;
+        out[13] = t0;
+        out[14] = t0;
+        out[15] = t0;
+    }
+    else {
+        // Even part: 8 mults
+        t1 = v4 * c4;
+        p0 = p7 = t0 + t1;
+        p3 = p4 = t0 - t1;
+        
+        t1 = v4 * c12;
+        p1 = p6 = t0 + t1;
+        p2 = p5 = t0 - t1;
+        
+        t0 = (v2 + v6) * c6;
+        t1 = t0 + v2 * (c2 - c6);
+        p0 += t1;
+        p7 -= t1;
+        
+        t1 = t0 + v6 * (-c6 - c14);
+        p1 += t1;
+        p6 -= t1;
+        
+        t0 = (v2 - v6) * c10;
+        t1 = t0 + v6 * (c10 - c2);
+        p2 += t1;
+        p5 -= t1;
+        
+        t1 = t0 + v2 * (c14 - c10);
+        p3 += t1;
+        p4 -= t1;
+        
+        // Odd part: 21 mults
+        t1 = (v1 + v3 + v5 - v7) * c9;
+        t0 = t1 + (v1 + v5) * (c15 - c9);
+        t1 = t1 + (-v3 + v7) * (c1 + c9);
+        
+        t2 = (v1 - v7) * (c11 - c9);
+        const int q1 = t0 + t2 + v1 * (c3 + c9 - c11 - c15);
+        const int q5 = t1 + t2 + v7 * (-c1 - c9 + c11 + c13);
+        
+        t2 = (-v3 - v5) * (c13 + c9);
+        const int q4 = t1 + t2 + v3 * (c1 - c5 + c9 + c13);
+        const int q7 = t0 + t2 + v5 * (c9 + c11 + c13 - c15);
+        
+        t0 = (v1 - v3 - v5 + v7) * c7;
+        t1 = (v3 - v7) * (c3 + c7);
+        t2 = (v5 - v7) * (c5 + c7);
+        const int q0 = t0 + t1 + t2 + v1 * (c1 - c7) + v7 * (c5 + c7 + c3 + c7);
+        const int q2 = t0 + t1 + v1 * (c5 - c7) + v3 * (c15 - c3);
+        const int q3 = t0 + v3 * (-c11 + c7) + v5 * (-c3 + c7) + v7 * (c15 - c7);
+        const int q6 = t0 + t2 + v1 * (c13 - c7) + v5 * (c1 - c5);
+        
+        // Output
+        out[0]  = (p0 + q0) >> out_shift;
+        out[1]  = (p1 + q1) >> out_shift;
+        out[2]  = (p2 + q2) >> out_shift;
+        out[3]  = (p3 + q3) >> out_shift;
+        out[4]  = (p4 + q4) >> out_shift;
+        out[5]  = (p5 + q5) >> out_shift;
+        out[6]  = (p6 + q6) >> out_shift;
+        out[7]  = (p7 + q7) >> out_shift;
+        out[8]  = (p7 - q7) >> out_shift;
+        out[9]  = (p6 - q6) >> out_shift;
+        out[10] = (p5 - q5) >> out_shift;
+        out[11] = (p4 - q4) >> out_shift;
+        out[12] = (p3 - q3) >> out_shift;
+        out[13] = (p2 - q2) >> out_shift;
+        out[14] = (p1 - q1) >> out_shift;
+        out[15] = (p0 - q0) >> out_shift;
+    }
 }
 
 // From JPEG spec, "A.3.3"
@@ -1195,7 +1239,7 @@ static ok_image *decode_jpg(void *user_data, ok_jpg_input_func input_func,
     decoder->info_only = info_only;
     
     decode_jpg2(decoder);
-
+    
     free(decoder);
     return image;
 }
