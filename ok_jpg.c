@@ -518,22 +518,9 @@ static inline void idct_1d_16(int *out, const int out_shift,
     if (v1 == 0 && v2 == 0 && v3 == 0 && v4 == 0 &&
         v5 == 0 && v6 == 0 && v7 == 0) {
         t0 >>= out_shift;
-        out[0] = t0;
-        out[1] = t0;
-        out[2] = t0;
-        out[3] = t0;
-        out[4] = t0;
-        out[5] = t0;
-        out[6] = t0;
-        out[7] = t0;
-        out[8] = t0;
-        out[9] = t0;
-        out[10] = t0;
-        out[11] = t0;
-        out[12] = t0;
-        out[13] = t0;
-        out[14] = t0;
-        out[15] = t0;
+        for (int i = 0; i < 16; i++) {
+            *out++ = t0;
+        }
     }
     else {
         // Even part: 8 mults
