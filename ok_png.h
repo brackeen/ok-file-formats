@@ -38,16 +38,13 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#ifndef _OK_IMAGE_STRUCT_
-#define _OK_IMAGE_STRUCT_
-    
+  
     typedef enum {
-        OK_COLOR_FORMAT_RGBA = 0,
-        OK_COLOR_FORMAT_RGBA_PRE,
-        OK_COLOR_FORMAT_BGRA,
-        OK_COLOR_FORMAT_BGRA_PRE,
-    } ok_color_format;
+        OK_PNG_COLOR_FORMAT_RGBA = 0,
+        OK_PNG_COLOR_FORMAT_RGBA_PRE,
+        OK_PNG_COLOR_FORMAT_BGRA,
+        OK_PNG_COLOR_FORMAT_BGRA_PRE,
+    } ok_png_color_format;
     
     typedef struct {
         uint32_t width;
@@ -55,9 +52,7 @@ extern "C" {
         bool has_alpha;
         uint8_t *data;
         char error_message[80];
-    } ok_image;
-    
-#endif
+    } ok_png;
     
     /**
      Input function provided to the ok_png_read function.
@@ -70,7 +65,7 @@ extern "C" {
      Gets a PNG image's dimensions and color format without reading the image data. 
      On failure, width and height are both zero. 
      */
-    ok_image *ok_png_read_info(void *user_data, ok_png_input_func input_func);
+    ok_png *ok_png_read_info(void *user_data, ok_png_input_func input_func);
     
     /**
      Reads a PNG image.
@@ -83,13 +78,13 @@ extern "C" {
      If flip_y is true, the returned image data is flipped along the vertical axis, so that the first row of data
      is the last row in the image.
      */
-    ok_image *ok_png_read(void *user_data, ok_png_input_func input_func,
-                          const ok_color_format color_format, const bool flip_y);
+    ok_png *ok_png_read(void *user_data, ok_png_input_func input_func,
+                        const ok_png_color_format color_format, const bool flip_y);
     
     /**
      Frees the image. This function should always be called when done with the image, even if reading failed.
      */
-    void ok_image_free(ok_image *image);
+    void ok_png_free(ok_png *png);
 
     //
     // Inflater - used internally by the PNG decoder, and may be useful for other applications.

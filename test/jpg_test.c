@@ -3,6 +3,7 @@
 #include <time.h>
 #include "test_common.h"
 #include "jpg_test.h"
+#include "ok_jpg.h"
 
 const char *filenames[] = {
     
@@ -47,8 +48,7 @@ const char *filenames[] = {
     "jpg-size-33x33",
 };
 
-static bool test_image(read_type input_read_type,
-                       const char *path_to_png_suite,
+static bool test_image(const char *path_to_jpgs,
                        const char *path_to_rgba_files,
                        const char *name,
                        const bool info_only) {
@@ -58,17 +58,32 @@ static bool test_image(read_type input_read_type,
     char *rgba_filename = get_full_path(path_to_rgba_files, name, "rgba");
     unsigned long rgba_data_length;
     uint8_t *rgba_data = read_file(rgba_filename, &rgba_data_length);
-    free(rgba_filename);
     
     // Load via ok_jpg
-    ok_image *image = read_image(path_to_png_suite, name, "jpg", input_read_type, info_only, OK_COLOR_FORMAT_RGBA, flip_y);
-    bool success = compare(name, "jpg", image, rgba_data, rgba_data_length, info_only, 4, print_image_on_error);
-    
-    // Cleanup
-    if (rgba_data) {
-        free(rgba_data);
+    ok_jpg *jpg = NULL;
+    char *in_filename = get_full_path(path_to_jpgs, name, "JPG");
+    FILE *fp = fopen(in_filename, "rb");
+    if (fp) {
+        if (info_only) {
+            jpg = ok_jpg_read_info(fp, file_input_func);
+        }
+        else {
+            jpg = ok_jpg_read(fp, file_input_func, OK_JPG_COLOR_FORMAT_RGBA, flip_y);
+        }
+        fclose(fp);
     }
-    ok_image_free(image);
+    else {
+        printf("Warning: File not found: %s.jpg\n", name);
+        return true;
+    }
+    
+    bool success = compare(name, "jpg", jpg->data, jpg->width, jpg->height, jpg->error_message,
+                           rgba_data, rgba_data_length, info_only, 4, print_image_on_error);
+    
+    free(rgba_data);
+    free(rgba_filename);
+    free(in_filename);
+    ok_jpg_free(jpg);
     
     return success;
 }
@@ -80,17 +95,15 @@ void jpg_test(const char *path_to_jpgs, const char *path_to_rgba_files) {
     double startTime = (double)clock()/CLOCKS_PER_SEC;
     int num_failures = 0;
     for (int i = 0; i < num_files; i++) {
-        for (int j = 0; j < READ_TYPE_COUNT; j++) {
-            bool success = test_image(j, path_to_jpgs, path_to_rgba_files, filenames[i], true);
-            if (!success) {
-                num_failures++;
-                break;
-            }
-            success = test_image(j, path_to_jpgs, path_to_rgba_files, filenames[i], false);
-            if (!success) {
-                num_failures++;
-                break;
-            }
+        bool success = test_image(path_to_jpgs, path_to_rgba_files, filenames[i], true);
+        if (!success) {
+            num_failures++;
+            break;
+        }
+        success = test_image(path_to_jpgs, path_to_rgba_files, filenames[i], false);
+        if (!success) {
+            num_failures++;
+            break;
         }
     }
     double endTime = (double)clock()/CLOCKS_PER_SEC;

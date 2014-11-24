@@ -36,7 +36,7 @@ extern "C" {
         uint64_t num_frames;
         void *data;
         char error_message[80];
-    } ok_audio;
+    } ok_wav;
 
     /**
      Input function provided to the ok_wav_read function.
@@ -51,12 +51,12 @@ extern "C" {
      
      If an error occurs, data is NULL.
      */
-    ok_audio *ok_wav_read(void *user_data, ok_wav_input_func input_func, const bool convert_to_system_endian);
+    ok_wav *ok_wav_read(void *user_data, ok_wav_input_func input_func, const bool convert_to_system_endian);
     
     /**
      Frees the audio. This function should always be called when done with the audio, even if reading failed.
      */
-    void ok_audio_free(ok_audio *audio);
+    void ok_wav_free(ok_wav *wav);
 
 #ifdef __cplusplus
 }

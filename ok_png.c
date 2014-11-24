@@ -48,14 +48,14 @@ typedef enum {
 
 typedef struct {
     // Image
-    ok_image *image;
+    ok_png *png;
     
     // Input
     void *input_data;
     ok_png_input_func input_func;
     
     // Decode options
-    ok_color_format color_format;
+    ok_png_color_format color_format;
     bool flip_y;
     bool info_only;
     
@@ -89,18 +89,18 @@ typedef struct {
 } png_decoder;
 
 __attribute__((__format__ (__printf__, 2, 3)))
-static void ok_image_error(ok_image *image, const char *format, ... ) {
-    if (image) {
-        image->width = 0;
-        image->height = 0;
-        if (image->data) {
-            free(image->data);
-            image->data = NULL;
+static void ok_png_error(ok_png *png, const char *format, ... ) {
+    if (png) {
+        png->width = 0;
+        png->height = 0;
+        if (png->data) {
+            free(png->data);
+            png->data = NULL;
         }
         if (format) {
             va_list args;
             va_start(args, format);
-            vsnprintf(image->error_message, sizeof(image->error_message), format, args);
+            vsnprintf(png->error_message, sizeof(png->error_message), format, args);
             va_end(args);
         }
     }
@@ -111,7 +111,7 @@ static bool ok_read(png_decoder *decoder, uint8_t *data, const int length) {
         return true;
     }
     else {
-        ok_image_error(decoder->image, "Read error: error calling input function.");
+        ok_png_error(decoder->png, "Read error: error calling input function.");
         return false;
     }
 }
@@ -120,26 +120,26 @@ static bool ok_seek(png_decoder *decoder, const int length) {
     return ok_read(decoder, NULL, length);
 }
 
-static ok_image *decode_png(void *user_data, ok_png_input_func input_func,
-                            const ok_color_format color_format, const bool flip_y, const bool info_only);
+static ok_png *decode_png(void *user_data, ok_png_input_func input_func,
+                          const ok_png_color_format color_format, const bool flip_y, const bool info_only);
 
 // Public API
 
-ok_image *ok_png_read_info(void *user_data, ok_png_input_func input_func) {
-    return decode_png(user_data, input_func, OK_COLOR_FORMAT_RGBA, false, true);
+ok_png *ok_png_read_info(void *user_data, ok_png_input_func input_func) {
+    return decode_png(user_data, input_func, OK_PNG_COLOR_FORMAT_RGBA, false, true);
 }
 
-ok_image *ok_png_read(void *user_data, ok_png_input_func input_func,
-                      const ok_color_format color_format, const bool flip_y) {
+ok_png *ok_png_read(void *user_data, ok_png_input_func input_func,
+                    const ok_png_color_format color_format, const bool flip_y) {
     return decode_png(user_data, input_func, color_format, flip_y, false);
 }
 
-void ok_image_free(ok_image *image) {
-    if (image) {
-        if (image->data) {
-            free(image->data);
+void ok_png_free(ok_png *png) {
+    if (png) {
+        if (png->data) {
+            free(png->data);
         }
-        free(image);
+        free(png);
     }
 }
 
@@ -177,17 +177,17 @@ static inline void unpremultiply(uint8_t *dst) {
 }
 
 static bool read_header(png_decoder *decoder, const uint32_t chunk_length) {
-    ok_image *image = decoder->image;
+    ok_png *png = decoder->png;
     if (chunk_length != 13) {
-        ok_image_error(image, "Invalid IHDR chunk length: %u", chunk_length);
+        ok_png_error(png, "Invalid IHDR chunk length: %u", chunk_length);
         return false;
     }
     uint8_t chunk_data[13];
     if (!ok_read(decoder, chunk_data, sizeof(chunk_data))) {
         return false;
     }
-    image->width = readBE32(chunk_data);
-    image->height = readBE32(chunk_data + 4);
+    png->width = readBE32(chunk_data);
+    png->height = readBE32(chunk_data + 4);
     decoder->bit_depth = chunk_data[8];
     decoder->color_type = chunk_data[9];
     uint8_t compression_method = chunk_data[10];
@@ -195,15 +195,15 @@ static bool read_header(png_decoder *decoder, const uint32_t chunk_length) {
     decoder->interlace_method = chunk_data[12];
     
     if (compression_method != 0) {
-        ok_image_error(image, "Invalid compression method: %i", (int)compression_method);
+        ok_png_error(png, "Invalid compression method: %i", (int)compression_method);
         return false;
     }
     else if (filter_method != 0) {
-        ok_image_error(image, "Invalid filter method: %i", (int)filter_method);
+        ok_png_error(png, "Invalid filter method: %i", (int)filter_method);
         return false;
     }
     else if (decoder->interlace_method != 0 && decoder->interlace_method != 1) {
-        ok_image_error(image, "Invalid interlace method: %i", (int)decoder->interlace_method);
+        ok_png_error(png, "Invalid interlace method: %i", (int)decoder->interlace_method);
         return false;
     }
     
@@ -217,27 +217,27 @@ static bool read_header(png_decoder *decoder, const uint32_t chunk_length) {
     (c == COLOR_TYPE_RGB_WITH_ALPHA && (b == 8 || b == 16));
     
     if (!valid) {
-        ok_image_error(image, "Invalid combination of color type (%i) and bit depth (%i)", c, b);
+        ok_png_error(png, "Invalid combination of color type (%i) and bit depth (%i)", c, b);
         return false;
     }
     
-    image->has_alpha = c == COLOR_TYPE_GRAYSCALE_WITH_ALPHA || c == COLOR_TYPE_RGB_WITH_ALPHA;
+    png->has_alpha = c == COLOR_TYPE_GRAYSCALE_WITH_ALPHA || c == COLOR_TYPE_RGB_WITH_ALPHA;
     decoder->interlace_pass = 0;
     decoder->ready_for_next_interlace_pass = true;
     return true;
 }
 
 static bool read_palette(png_decoder *decoder, const uint32_t chunk_length) {
-    ok_image *image = decoder->image;
+    ok_png *png = decoder->png;
     decoder->palette_length = chunk_length / 3;
     
     if (decoder->palette_length > 256 || decoder->palette_length * 3 != chunk_length) {
-        ok_image_error(image, "Invalid palette chunk length: %u", chunk_length);
+        ok_png_error(png, "Invalid palette chunk length: %u", chunk_length);
         return false;
     }
     const bool src_is_bgr = decoder->is_ios_format;
-    const bool dst_is_bgr = decoder->color_format == OK_COLOR_FORMAT_BGRA ||
-    decoder->color_format == OK_COLOR_FORMAT_BGRA_PRE;
+    const bool dst_is_bgr = (decoder->color_format == OK_PNG_COLOR_FORMAT_BGRA ||
+                             decoder->color_format == OK_PNG_COLOR_FORMAT_BGRA_PRE);
     const bool should_byteswap = src_is_bgr != dst_is_bgr;
     uint8_t *dst = decoder->palette;
     uint8_t buffer[3];
@@ -261,17 +261,17 @@ static bool read_palette(png_decoder *decoder, const uint32_t chunk_length) {
 }
 
 static bool read_transparency(png_decoder *decoder, const uint32_t chunk_length) {
-    ok_image *image = decoder->image;
-    image->has_alpha = true;
+    ok_png *png = decoder->png;
+    png->has_alpha = true;
     
     if (decoder->color_type == COLOR_TYPE_PALETTE) {
         if (chunk_length > decoder->palette_length) {
-            ok_image_error(image, "Invalid transparency length for palette color type: %u", chunk_length);
+            ok_png_error(png, "Invalid transparency length for palette color type: %u", chunk_length);
             return false;
         }
         
-        const bool should_premultiply = decoder->color_format == OK_COLOR_FORMAT_BGRA_PRE ||
-        decoder->color_format == OK_COLOR_FORMAT_RGBA_PRE;
+        const bool should_premultiply = (decoder->color_format == OK_PNG_COLOR_FORMAT_BGRA_PRE ||
+                                         decoder->color_format == OK_PNG_COLOR_FORMAT_RGBA_PRE);
         uint8_t *dst = decoder->palette;
         for (uint32_t i = 0; i < chunk_length; i++) {
             if (!ok_read(decoder, (dst + 3), 1)) {
@@ -286,7 +286,7 @@ static bool read_transparency(png_decoder *decoder, const uint32_t chunk_length)
     }
     else if (decoder->color_type == COLOR_TYPE_GRAYSCALE) {
         if (chunk_length != 2) {
-            ok_image_error(image, "Invalid transparency length for grayscale color type: %u", chunk_length);
+            ok_png_error(png, "Invalid transparency length for grayscale color type: %u", chunk_length);
             return false;
         }
         else {
@@ -304,7 +304,7 @@ static bool read_transparency(png_decoder *decoder, const uint32_t chunk_length)
     }
     else if (decoder->color_type == COLOR_TYPE_RGB) {
         if (chunk_length != 6) {
-            ok_image_error(image, "Invalid transparency length for truecolor color type: %u", chunk_length);
+            ok_png_error(png, "Invalid transparency length for truecolor color type: %u", chunk_length);
             return false;
         }
         else {
@@ -320,7 +320,7 @@ static bool read_transparency(png_decoder *decoder, const uint32_t chunk_length)
         }
     }
     else {
-        ok_image_error(image, "Invalid transparency for color type %i", (int)decoder->color_type);
+        ok_png_error(png, "Invalid transparency for color type %i", (int)decoder->color_type);
         return false;
     }
 }
@@ -390,18 +390,18 @@ static void decode_filter(uint8_t * RESTRICT curr, const uint8_t * RESTRICT prev
 }
 
 static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const uint32_t width) {
-    ok_image *image = decoder->image;
-    const uint32_t dst_stride = image->width * 4;
+    ok_png *png = decoder->png;
+    const uint32_t dst_stride = png->width * 4;
     uint8_t * dst_start;
     uint8_t * dst_end;
     if (decoder->interlace_method == 0) {
-        const uint32_t dst_y = decoder->flip_y ? (image->height - decoder->scanline - 1) : decoder->scanline;
-        dst_start = image->data + (dst_y * dst_stride);
+        const uint32_t dst_y = decoder->flip_y ? (png->height - decoder->scanline - 1) : decoder->scanline;
+        dst_start = png->data + (dst_y * dst_stride);
     }
     else if (decoder->interlace_pass == 7) {
         const uint32_t t_scanline = decoder->scanline * 2 + 1;
-        const uint32_t dst_y = decoder->flip_y ? (image->height - t_scanline - 1) : t_scanline;
-        dst_start = image->data + (dst_y * dst_stride);
+        const uint32_t dst_y = decoder->flip_y ? (png->height - t_scanline - 1) : t_scanline;
+        dst_start = png->data + (dst_y * dst_stride);
     }
     else {
         dst_start = decoder->temp_data_row;
@@ -413,11 +413,11 @@ static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const u
     const bool t = decoder->has_single_transparent_color;
     const bool has_full_alpha = c == COLOR_TYPE_GRAYSCALE_WITH_ALPHA || c == COLOR_TYPE_RGB_WITH_ALPHA;
     const bool src_is_premultiplied = decoder->is_ios_format;
-    const bool dst_is_premultiplied = decoder->color_format == OK_COLOR_FORMAT_RGBA_PRE ||
-    decoder->color_format == OK_COLOR_FORMAT_BGRA_PRE;
+    const bool dst_is_premultiplied = (decoder->color_format == OK_PNG_COLOR_FORMAT_RGBA_PRE ||
+                                       decoder->color_format == OK_PNG_COLOR_FORMAT_BGRA_PRE);
     const bool src_is_bgr = decoder->is_ios_format;
-    const bool dst_is_bgr = decoder->color_format == OK_COLOR_FORMAT_BGRA ||
-    decoder->color_format == OK_COLOR_FORMAT_BGRA_PRE;
+    const bool dst_is_bgr = (decoder->color_format == OK_PNG_COLOR_FORMAT_BGRA ||
+                             decoder->color_format == OK_PNG_COLOR_FORMAT_BGRA_PRE);
     bool should_byteswap = (c == COLOR_TYPE_RGB || c == COLOR_TYPE_RGB_WITH_ALPHA) && src_is_bgr != dst_is_bgr;
     
     // Simple transforms
@@ -659,12 +659,12 @@ static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const u
         uint32_t y = dst_y[i];
         uint32_t dx = 4 * (dst_dx[i] - 1);
         if (decoder->flip_y) {
-            y = (image->height - y - 1);
+            y = (png->height - y - 1);
         }
         
         src = dst_start;
         uint8_t *src_end = dst_end;
-        uint8_t *dst = image->data + (y * dst_stride) + (x * 4);
+        uint8_t *dst = png->data + (y * dst_stride) + (x * 4);
         while (src < src_end) {
             *dst++ = *src++;
             *dst++ = *src++;
@@ -678,7 +678,7 @@ static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const u
 }
 
 static uint32_t get_width_for_pass(const png_decoder *decoder) {
-    const uint32_t w = decoder->image->width;
+    const uint32_t w = decoder->png->width;
     if (decoder->interlace_method == 0) {
         return w;
     }
@@ -704,7 +704,7 @@ static uint32_t get_width_for_pass(const png_decoder *decoder) {
 }
 
 static uint32_t get_height_for_pass(const png_decoder *decoder) {
-    const uint32_t h = decoder->image->height;
+    const uint32_t h = decoder->png->height;
     if (decoder->interlace_method == 0) {
         return h;
     }
@@ -730,23 +730,22 @@ static uint32_t get_height_for_pass(const png_decoder *decoder) {
 }
 
 static bool read_data(png_decoder *decoder, uint32_t bytes_remaining) {
-    ok_image *image = decoder->image;
+    ok_png *png = decoder->png;
     const int inflate_buffer_size = 64 * 1024;
     const int num_passes = decoder->interlace_method == 0 ? 1 : 7;
     const int bits_per_pixel = decoder->bit_depth * SAMPLES_PER_PIXEL[decoder->color_type];
     const int bytes_per_pixel = (bits_per_pixel + 7) / 8;
-    const int max_bytes_per_scanline = 1 + (image->width * bits_per_pixel + 7) / 8;
+    const int max_bytes_per_scanline = 1 + (png->width * bits_per_pixel + 7) / 8;
     
     // Create buffers
-    if (!image->data) {
-        uint64_t size = (uint64_t)image->width * image->height * 4;
+    if (!png->data) {
+        uint64_t size = (uint64_t)png->width * png->height * 4;
         size_t platform_size = (size_t)size;
         if (platform_size == size) {
-            image->data = malloc(platform_size);
+            png->data = malloc(platform_size);
         }
-        if (!image->data) {
-            ok_image_error(image, "Couldn't allocate memory for %u x %u image",
-                        image->width, image->height);
+        if (!png->data) {
+            ok_png_error(png, "Couldn't allocate memory for %u x %u image", png->width, png->height);
             return false;
         }
     }
@@ -760,11 +759,11 @@ static bool read_data(png_decoder *decoder, uint32_t bytes_remaining) {
         decoder->inflate_buffer = malloc(inflate_buffer_size);
     }
     if (decoder->interlace_method == 1 && !decoder->temp_data_row) {
-        decoder->temp_data_row = malloc(image->width * 4);
+        decoder->temp_data_row = malloc(png->width * 4);
     }
     if (!decoder->curr_scanline || !decoder->prev_scanline || !decoder->inflate_buffer ||
         (decoder->interlace_method == 1 && !decoder->temp_data_row)) {
-        ok_image_error(image, "Couldn't allocate buffers");
+        ok_png_error(png, "Couldn't allocate buffers");
         return false;
     }
     
@@ -772,7 +771,7 @@ static bool read_data(png_decoder *decoder, uint32_t bytes_remaining) {
 #ifdef USE_ZLIB
     if (!decoder->zlib_initialized) {
         if (inflateInit2(&decoder->zlib_stream, decoder->is_ios_format ? -15 : 15) != Z_OK) {
-            ok_image_error(image, "Couldn't init zlib");
+            ok_png_error(png, "Couldn't init zlib");
             return false;
         }
         decoder->zlib_initialized = true;
@@ -781,7 +780,7 @@ static bool read_data(png_decoder *decoder, uint32_t bytes_remaining) {
     if (!decoder->inflater) {
         decoder->inflater = ok_inflater_init(decoder->is_ios_format);
         if (!decoder->inflater) {
-            ok_image_error(image, "Couldn't init inflater");
+            ok_png_error(png, "Couldn't init inflater");
             return false;
         }
     }
@@ -865,7 +864,7 @@ static bool read_data(png_decoder *decoder, uint32_t bytes_remaining) {
 #ifdef USE_ZLIB
         int status = inflate(&decoder->zlib_stream, Z_NO_FLUSH);
         if (status != Z_OK && status != Z_STREAM_END) {
-            ok_image_error(image, "Error inflating data");
+            ok_png_error(png, "Error inflating data");
             return false;
         }
         
@@ -876,7 +875,7 @@ static bool read_data(png_decoder *decoder, uint32_t bytes_remaining) {
                                            decoder->curr_scanline + decoder->inflater_bytes_read,
                                            curr_bytes_per_scanline - decoder->inflater_bytes_read);
         if (len < 0) {
-            ok_image_error(image, "inflater: %s", ok_inflater_error_message(decoder->inflater));
+            ok_png_error(png, "inflater: %s", ok_inflater_error_message(decoder->inflater));
             return false;
         }
         decoder->inflater_bytes_read += len;
@@ -890,7 +889,7 @@ static bool read_data(png_decoder *decoder, uint32_t bytes_remaining) {
                               filter, bytes_per_pixel);
             }
             else if (filter != 0) {
-                ok_image_error(image, "Invalid filter type: %i", filter);
+                ok_png_error(png, "Invalid filter type: %i", filter);
                 return false;
             }
 
@@ -920,7 +919,7 @@ static bool read_data(png_decoder *decoder, uint32_t bytes_remaining) {
 }
 
 static void decode_png2(png_decoder *decoder) {
-    ok_image *image = decoder->image;
+    ok_png *png = decoder->png;
     
     uint8_t png_header[8];
     if (!ok_read(decoder, png_header, sizeof(png_header))) {
@@ -928,7 +927,7 @@ static void decode_png2(png_decoder *decoder) {
     }
     uint8_t png_signature[8] = { 137, 80, 78, 71, 13, 10, 26, 10 };
     if (memcmp(png_header, png_signature, 8) != 0) {
-        ok_image_error(decoder->image, "Invalid signature (not a PNG file)");
+        ok_png_error(decoder->png, "Invalid signature (not a PNG file)");
         return;
     }
     
@@ -946,9 +945,9 @@ static void decode_png2(png_decoder *decoder) {
         if (chunk_type == CHUNK_IHDR) {
             success = read_header(decoder, chunk_length);
             if (success && decoder->info_only) {
-                // If the image has alpha, then we have all the info we need.
+                // If the png has alpha, then we have all the info we need.
                 // Otherwise, continue scanning to see if the tRNS chunk exists.
-                if (image->has_alpha) {
+                if (png->has_alpha) {
                     return;
                 }
             }
@@ -963,7 +962,7 @@ static void decode_png2(png_decoder *decoder) {
         else if (chunk_type == CHUNK_TRNS) {
             if (decoder->info_only) {
                 // No need to parse this chunk, we have all the info we need.
-                image->has_alpha = true;
+                png->has_alpha = true;
                 return;
             }
             else {
@@ -998,29 +997,29 @@ static void decode_png2(png_decoder *decoder) {
     
     // Sanity check
     if (!decoder->decoding_completed) {
-        ok_image_error(image, "Missing imaga data");
+        ok_png_error(png, "Missing imaga data");
     }
 }
 
-static ok_image *decode_png(void *user_data, ok_png_input_func input_func,
-                            const ok_color_format color_format, const bool flip_y, const bool info_only) {
+static ok_png *decode_png(void *user_data, ok_png_input_func input_func,
+                          const ok_png_color_format color_format, const bool flip_y, const bool info_only) {
     
-    ok_image *image = calloc(1, sizeof(ok_image));
-    if (!image) {
+    ok_png *png = calloc(1, sizeof(ok_png));
+    if (!png) {
         return NULL;
     }
     if (!input_func) {
-        ok_image_error(image, "Invalid argument: input_func is NULL");
-        return image;
+        ok_png_error(png, "Invalid argument: input_func is NULL");
+        return png;
     }
     
     png_decoder *decoder = calloc(1, sizeof(png_decoder));
     if (!decoder) {
-        ok_image_error(image, "Couldn't allocate decoder.");
-        return image;
+        ok_png_error(png, "Couldn't allocate decoder.");
+        return png;
     }
 
-    decoder->image = image;
+    decoder->png = png;
     decoder->input_data = user_data;
     decoder->input_func = input_func;
     decoder->color_format = color_format;
@@ -1051,7 +1050,7 @@ static ok_image *decode_png(void *user_data, ok_png_input_func input_func,
     }
     free(decoder);
     
-    return image;
+    return png;
 }
         
 //

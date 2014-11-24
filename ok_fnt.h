@@ -37,13 +37,13 @@ extern "C" {
         int16_t advance_x;
         uint8_t page;
         uint8_t channel;
-    } ok_font_glyph;
+    } ok_fnt_glyph;
     
     typedef struct {
         uint32_t first_char;
         uint32_t second_char;
         int16_t amount;
-    } ok_font_kerning;
+    } ok_fnt_kerning;
     
     typedef struct {
         char *name;
@@ -53,11 +53,11 @@ extern "C" {
         int num_pages;
         char **page_names;
         int num_glyphs;
-        ok_font_glyph *glyphs;
+        ok_fnt_glyph *glyphs;
         int num_kerning_pairs;
-        ok_font_kerning *kerning_pairs;
+        ok_fnt_kerning *kerning_pairs;
         char error_message[80];
-    } ok_font;
+    } ok_fnt;
     
     /**
      Input function provided to the ok_fnt_read function.
@@ -70,12 +70,12 @@ extern "C" {
      Reads an AngelCode bitmap font file (binary format, version 3, from AngelCode Bitmap Font Generator v1.10.)
      If an error occurs, the num_glyphs will be 0.
      */
-    ok_font *ok_fnt_read(void *user_data, ok_fnt_input_func input_func);
+    ok_fnt *ok_fnt_read(void *user_data, ok_fnt_input_func input_func);
     
     /**
      Frees the font. This function should always be called when done with the font, even if reading failed.
      */
-    void ok_font_free(ok_font *font);
+    void ok_fnt_free(ok_fnt *fnt);
     
 #ifdef __cplusplus
 }

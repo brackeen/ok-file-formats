@@ -5,7 +5,7 @@
 #include <stdlib.h>
 
 typedef struct {
-    ok_font *font;
+    ok_fnt *fnt;
     
     // Input
     void *input_data;
@@ -14,13 +14,13 @@ typedef struct {
 } fnt_decoder;
 
  __attribute__((__format__ (__printf__, 2, 3)))
-static void ok_font_error(ok_font *font, const char *format, ... ) {
-    if (font) {
-        font->num_glyphs = 0;
+static void ok_fnt_error(ok_fnt *fnt, const char *format, ... ) {
+    if (fnt) {
+        fnt->num_glyphs = 0;
         if (format) {
             va_list args;
             va_start(args, format);
-            vsnprintf(font->error_message, sizeof(font->error_message), format, args);
+            vsnprintf(fnt->error_message, sizeof(fnt->error_message), format, args);
             va_end(args);
         }
     }
@@ -31,46 +31,46 @@ static bool ok_read(fnt_decoder *decoder, uint8_t *data, const int length) {
         return true;
     }
     else {
-        ok_font_error(decoder->font, "Read error: error calling input function.");
+        ok_fnt_error(decoder->fnt, "Read error: error calling input function.");
         return false;
     }
 }
 
-static void decode_fnt(ok_font *font, void *input_data, ok_fnt_input_func input_func);
+static void decode_fnt(ok_fnt *fnt, void *input_data, ok_fnt_input_func input_func);
 
 // Public API
 
-ok_font *ok_fnt_read(void *user_data, ok_fnt_input_func input_func) {
-    ok_font *font = calloc(1, sizeof(ok_font));
+ok_fnt *ok_fnt_read(void *user_data, ok_fnt_input_func input_func) {
+    ok_fnt *fnt = calloc(1, sizeof(ok_fnt));
     if (input_func) {
-        decode_fnt(font, user_data, input_func);
+        decode_fnt(fnt, user_data, input_func);
     }
     else {
-        ok_font_error(font, "Invalid argument: input_func is NULL");
+        ok_fnt_error(fnt, "Invalid argument: input_func is NULL");
     }
-    return font;
+    return fnt;
 }
 
-void ok_font_free(ok_font *font) {
-    if (font) {
-        if (font->name) {
-            free(font->name);
+void ok_fnt_free(ok_fnt *fnt) {
+    if (fnt) {
+        if (fnt->name) {
+            free(fnt->name);
         }
-        if (font->page_names) {
+        if (fnt->page_names) {
             // The memory was only allocated for the first item;
             // the remaining items are pointers within the first, so they shouldn't be freed.
-            if (font->page_names[0]) {
-                free(font->page_names[0]);
+            if (fnt->page_names[0]) {
+                free(fnt->page_names[0]);
             }
-            free(font->page_names);
+            free(fnt->page_names);
         }
-        if (font->glyphs) {
-            free(font->glyphs);
+        if (fnt->glyphs) {
+            free(fnt->glyphs);
         }
-        if (font->kerning_pairs) {
-            free(font->kerning_pairs);
+        if (fnt->kerning_pairs) {
+            free(fnt->kerning_pairs);
         }
-        free(font);
+        free(fnt);
     }
 }
 
@@ -93,18 +93,18 @@ typedef enum {
 } block_type;
 
 static void decode_fnt2(fnt_decoder *decoder) {
-    ok_font *font = decoder->font;
+    ok_fnt *fnt = decoder->fnt;
     
     uint8_t header[4];
     if (!ok_read(decoder, header, sizeof(header))) {
         return;
     }
     if (memcmp("BMF", header, 3) != 0) {
-        ok_font_error(font, "Not an AngelCode binary FNT file.");
+        ok_fnt_error(fnt, "Not an AngelCode binary FNT file.");
         return;
     }
     if (header[3] != 3) {
-        ok_font_error(font, "Version %i of AngelCode binary FNT file not supported (only version 3 supported).",
+        ok_fnt_error(fnt, "Version %i of AngelCode binary FNT file not supported (only version 3 supported).",
                       header[3]);
         return;
     }
@@ -117,7 +117,7 @@ static void decode_fnt2(fnt_decoder *decoder) {
             // Don't give an error if all required blocks have been found.
             const bool all_required_blocks_found = (block_types_found & 0x1E) == 0x1E;
             if (!all_required_blocks_found) {
-                ok_font_error(decoder->font, "Read error: error calling input function.");
+                ok_fnt_error(decoder->fnt, "Read error: error calling input function.");
             }
             return;
         }
@@ -132,84 +132,84 @@ static void decode_fnt2(fnt_decoder *decoder) {
                 uint8_t info_header[14];
                 const int name_buffer_length = block_length - sizeof(info_header);
                 if (name_buffer_length <= 0) {
-                    ok_font_error(font, "Invalid info block");
+                    ok_fnt_error(fnt, "Invalid info block");
                     return;
                 }
                 if (!ok_read(decoder, info_header, sizeof(info_header))) {
                     return;
                 }
-                // Get the font size, ignore the rest
-                font->size = readLE16(info_header);
+                // Get the fnt size, ignore the rest
+                fnt->size = readLE16(info_header);
                 
-                // Get the font name
-                font->name = malloc(name_buffer_length);
-                if (!font->name) {
-                    ok_font_error(font, "Couldn't allocate font name");
+                // Get the fnt name
+                fnt->name = malloc(name_buffer_length);
+                if (!fnt->name) {
+                    ok_fnt_error(fnt, "Couldn't allocate font name");
                     return;
                 }
-                if (!ok_read(decoder, (uint8_t*)font->name, name_buffer_length)) {
+                if (!ok_read(decoder, (uint8_t*)fnt->name, name_buffer_length)) {
                     return;
                 }
                 // Sanity check - make sure the string has a null-terminator
-                font->name[name_buffer_length - 1] = 0;
+                fnt->name[name_buffer_length - 1] = 0;
                 break;
             }
                 
             case BLOCK_TYPE_COMMON: {
                 uint8_t common[15];
                 if (block_length != sizeof(common)) {
-                    ok_font_error(font, "Invalid common block");
+                    ok_fnt_error(fnt, "Invalid common block");
                     return;
                 }
                 if (!ok_read(decoder, common, sizeof(common))) {
                     return;
                 }
                 // Get the line height, base, and page count; ignore the rest
-                font->line_height = readLE16(common);
-                font->base = readLE16(common + 2);
-                font->num_pages = readLE16(common + 8);
+                fnt->line_height = readLE16(common);
+                fnt->base = readLE16(common + 2);
+                fnt->num_pages = readLE16(common + 8);
                 break;
             }
                 
             case BLOCK_TYPE_PAGES: {
-                if (font->num_pages <= 0 || block_length == 0) {
-                    ok_font_error(font, "Couldn't get page names");
+                if (fnt->num_pages <= 0 || block_length == 0) {
+                    ok_fnt_error(fnt, "Couldn't get page names");
                     return;
                 }
                 else {
-                    font->page_names = calloc(font->num_pages, sizeof(char *));
-                    if (!font->page_names) {
-                        font->num_pages = 0;
-                        ok_font_error(font, "Couldn't allocate memory for page name array");
+                    fnt->page_names = calloc(fnt->num_pages, sizeof(char *));
+                    if (!fnt->page_names) {
+                        fnt->num_pages = 0;
+                        ok_fnt_error(fnt, "Couldn't allocate memory for page name array");
                         return;
                     }
                     // Load everything into the first item; setup pointers below.
-                    font->page_names[0] = malloc(block_length);
-                    if (!font->page_names[0]) {
-                        font->num_pages = 0;
-                        ok_font_error(font, "Couldn't allocate memory for page names");
+                    fnt->page_names[0] = malloc(block_length);
+                    if (!fnt->page_names[0]) {
+                        fnt->num_pages = 0;
+                        ok_fnt_error(fnt, "Couldn't allocate memory for page names");
                         return;
                     }
-                    if (!ok_read(decoder, (uint8_t*)font->page_names[0], block_length)) {
+                    if (!ok_read(decoder, (uint8_t*)fnt->page_names[0], block_length)) {
                         return;
                     }
-                    char *pos = font->page_names[0];
+                    char *pos = fnt->page_names[0];
                     char * const end_pos = pos + block_length;
                     // Sanity check - make sure there is a null terminator
                     *(end_pos - 1) = 0;
                     
                     // Set up pointers for each page name
                     int next_index = 1;
-                    while (pos + 1 < end_pos && next_index < font->num_pages) {
+                    while (pos + 1 < end_pos && next_index < fnt->num_pages) {
                         if (*pos == 0) {
-                            font->page_names[next_index] = pos + 1;
+                            fnt->page_names[next_index] = pos + 1;
                             next_index++;
                         }
                         pos++;
                     }
                     // Sanity check - make sure the remaining page names, if any, point somewhere
-                    for (int i = next_index; i < font->num_pages; i++) {
-                        font->page_names[i] = end_pos - 1;
+                    for (int i = next_index; i < fnt->num_pages; i++) {
+                        fnt->page_names[i] = end_pos - 1;
                     }
                 }
                 break;
@@ -217,20 +217,20 @@ static void decode_fnt2(fnt_decoder *decoder) {
                 
             case BLOCK_TYPE_CHARS: {
                 uint8_t data[20];
-                font->num_glyphs = block_length / sizeof(data);
-                font->glyphs = malloc(font->num_glyphs * sizeof(ok_font_glyph));
-                if (!font->glyphs) {
-                    font->num_glyphs = 0;
-                    ok_font_error(font, "Couldn't allocate memory for glyphs");
+                fnt->num_glyphs = block_length / sizeof(data);
+                fnt->glyphs = malloc(fnt->num_glyphs * sizeof(ok_fnt_glyph));
+                if (!fnt->glyphs) {
+                    fnt->num_glyphs = 0;
+                    ok_fnt_error(fnt, "Couldn't allocate memory for glyphs");
                     return;
                 }
                 // On little-endian systems we could just load the entire block into memory, but we'll assume
                 // the byte order is unknown here.
-                for (int i = 0; i < font->num_glyphs; i++) {
+                for (int i = 0; i < fnt->num_glyphs; i++) {
                     if (!ok_read(decoder, data, sizeof(data))) {
                         return;
                     }
-                    ok_font_glyph *glyph = &font->glyphs[i];
+                    ok_fnt_glyph *glyph = &fnt->glyphs[i];
                     glyph->ch = readLE32(data);
                     glyph->x = readLE16(data + 4);
                     glyph->y = readLE16(data + 6);
@@ -247,20 +247,20 @@ static void decode_fnt2(fnt_decoder *decoder) {
                 
             case BLOCK_TYPE_KERNING: {
                 uint8_t data[10];
-                font->num_kerning_pairs = block_length / sizeof(data);
-                font->kerning_pairs = malloc(font->num_kerning_pairs * sizeof(ok_font_kerning));
-                if (!font->kerning_pairs) {
-                    font->num_kerning_pairs = 0;
-                    ok_font_error(font, "Couldn't allocate memory for kerning");
+                fnt->num_kerning_pairs = block_length / sizeof(data);
+                fnt->kerning_pairs = malloc(fnt->num_kerning_pairs * sizeof(ok_fnt_kerning));
+                if (!fnt->kerning_pairs) {
+                    fnt->num_kerning_pairs = 0;
+                    ok_fnt_error(fnt, "Couldn't allocate memory for kerning");
                     return;
                 }
                 // On little-endian systems we could just load the entire block into memory, but we'll assume
                 // the byte order is unknown here.
-                for (int i = 0; i < font->num_kerning_pairs; i++) {
+                for (int i = 0; i < fnt->num_kerning_pairs; i++) {
                     if (!ok_read(decoder, data, sizeof(data))) {
                         return;
                     }
-                    ok_font_kerning *kerning = &font->kerning_pairs[i];
+                    ok_fnt_kerning *kerning = &fnt->kerning_pairs[i];
                     kerning->first_char = readLE32(data);
                     kerning->second_char = readLE32(data + 4);
                     kerning->amount = readLE16(data + 8);
@@ -269,20 +269,20 @@ static void decode_fnt2(fnt_decoder *decoder) {
             }
                 
             default:
-                ok_font_error(font, "Unknown block type: %i", block_type);
+                ok_fnt_error(fnt, "Unknown block type: %i", block_type);
                 return;
         }
     }
 }
 
-static void decode_fnt(ok_font *font, void *input_data, ok_fnt_input_func input_func) {
-    if (font) {
+static void decode_fnt(ok_fnt *fnt, void *input_data, ok_fnt_input_func input_func) {
+    if (fnt) {
         fnt_decoder *decoder = calloc(1, sizeof(fnt_decoder));
         if (!decoder) {
-            ok_font_error(font, "Couldn't allocate decoder.");
+            ok_fnt_error(fnt, "Couldn't allocate decoder.");
             return;
         }
-        decoder->font = font;
+        decoder->fnt = fnt;
         decoder->input_data = input_data;
         decoder->input_func = input_func;
         

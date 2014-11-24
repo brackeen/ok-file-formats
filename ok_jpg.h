@@ -20,7 +20,7 @@
 #define _OK_JPG_H_
 
 /*
- JPEG decoder (baseline only - no exteded, progressive, lossless, or CMYK)
+ JPEG decoder (baseline only - no extended, progressive, lossless, or CMYK)
  */
 
 #include <stdbool.h>
@@ -30,25 +30,17 @@
 extern "C" {
 #endif
     
-#ifndef _OK_IMAGE_STRUCT_
-#define _OK_IMAGE_STRUCT_
-    
     typedef enum {
-        OK_COLOR_FORMAT_RGBA = 0,
-        OK_COLOR_FORMAT_RGBA_PRE,
-        OK_COLOR_FORMAT_BGRA,
-        OK_COLOR_FORMAT_BGRA_PRE,
-    } ok_color_format;
+        OK_JPG_COLOR_FORMAT_RGBA = 0,
+        OK_JPG_COLOR_FORMAT_BGRA,
+    } ok_jpg_color_format;
     
     typedef struct {
         uint32_t width;
         uint32_t height;
-        bool has_alpha;
         uint8_t *data;
         char error_message[80];
-    } ok_image;
-    
-#endif
+    } ok_jpg;
     
     /**
      Input function provided to the ok_jpg_read function.
@@ -57,16 +49,15 @@ extern "C" {
      */
     typedef int (*ok_jpg_input_func)(void *user_data, unsigned char *buffer, const int count);
     
-    ok_image *ok_jpg_read_info(void *user_data, ok_jpg_input_func input_func);
+    ok_jpg *ok_jpg_read_info(void *user_data, ok_jpg_input_func input_func);
     
-    ok_image *ok_jpg_read(void *user_data, ok_jpg_input_func input_func,
-                          const ok_color_format color_format, const bool flip_y);
+    ok_jpg *ok_jpg_read(void *user_data, ok_jpg_input_func input_func,
+                        const ok_jpg_color_format color_format, const bool flip_y);
     
     /**
      Frees the image. This function should always be called when done with the image, even if reading failed.
-     NOTE: This function is the same as the ok_image_free function in ok_png and can be used interchangeably.
      */
-    void ok_jpg_image_free(ok_image *image);
+    void ok_jpg_free(ok_jpg *jpg);
         
 #ifdef __cplusplus
 }

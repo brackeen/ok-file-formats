@@ -200,8 +200,7 @@ static const char *filenames[] = {
     "xs7n0g01",    
 };
 
-static bool test_image(read_type input_read_type,
-                       const char *path_to_png_suite, 
+static bool test_image(const char *path_to_png_suite,
                        const char *path_to_rgba_files,
                        const char *name,
                        const bool info_only) {
@@ -211,13 +210,13 @@ static bool test_image(read_type input_read_type,
     char *rgba_filename = get_full_path(path_to_rgba_files, name, "rgba");
     unsigned long rgba_data_length;
     uint8_t *rgba_data = read_file(rgba_filename, &rgba_data_length);
-    free(rgba_filename);
+    
 
 #if TARGET_OS_IPHONE
     // On iOS, Apple stores PNG data with premultiplied alpha.
     // Unpremultiplying would lose precision, so instead, premultiply the raw RGBA data
     // for comparison purposes.
-    ok_color_format color_format = OK_COLOR_FORMAT_RGBA_PRE;
+    ok_png_color_format color_format = OK_PNG_COLOR_FORMAT_RGBA_PRE;
     for (uint8_t *src = rgba_data; src < rgba_data + rgba_data_length; src += 4) {
         const uint8_t a = src[3];
         if (a == 0) {
@@ -232,20 +231,34 @@ static bool test_image(read_type input_read_type,
         }
     }
 #else
-    ok_color_format color_format = OK_COLOR_FORMAT_RGBA;
+    ok_png_color_format color_format = OK_PNG_COLOR_FORMAT_RGBA;
 #endif
-
+    
     // Load via ok_png
-    ok_image *image = read_image(path_to_png_suite, name, "png", input_read_type, info_only, color_format, flip_y);
-    
-    // Test equality
-    bool success = compare(name, "png", image, rgba_data, rgba_data_length, info_only, 0, print_image_on_error);
-    
-    // Cleanup
-    if (rgba_data) {
-        free(rgba_data);
+    ok_png *png = NULL;
+    char *in_filename = get_full_path(path_to_png_suite, name, "png");
+    FILE *fp = fopen(in_filename, "rb");
+    if (fp) {
+        if (info_only) {
+            png = ok_png_read_info(fp, file_input_func);
+        }
+        else {
+            png = ok_png_read(fp, file_input_func, color_format, flip_y);
+        }
+        fclose(fp);
     }
-    ok_image_free(image);
+    else {
+        printf("Warning: File not found: %s.png\n", name);
+        return true;
+    }
+    
+    bool success = compare(name, "png", png->data, png->width, png->height, png->error_message,
+                           rgba_data, rgba_data_length, info_only, 4, print_image_on_error);
+    
+    free(rgba_data);
+    free(rgba_filename);
+    free(in_filename);
+    ok_png_free(png);
     
     return success;
 }
@@ -257,19 +270,17 @@ void png_suite_test(const char *path_to_png_suite, const char *path_to_rgba_file
     double startTime = (double)clock()/CLOCKS_PER_SEC;
     int num_failures = 0;
     for (int i = 0; i < num_files; i++) {
-        for (int j = 0; j < READ_TYPE_COUNT; j++) {
-            bool success = test_image(j, path_to_png_suite, path_to_rgba_files, filenames[i], true);
-            if (!success) {
-                num_failures++;
-                break;
-            }
-            success = test_image(j, path_to_png_suite, path_to_rgba_files, filenames[i], false);
-            if (!success) {
-                num_failures++;
-                break;
-            }
+        bool success = test_image(path_to_png_suite, path_to_rgba_files, filenames[i], true);
+        if (!success) {
+            num_failures++;
+            break;
         }
-    }    
+        success = test_image(path_to_png_suite, path_to_rgba_files, filenames[i], false);
+        if (!success) {
+            num_failures++;
+            break;
+        }
+    }
     double endTime = (double)clock()/CLOCKS_PER_SEC;
     double elapsedTime = endTime - startTime;
     printf("Success: %i of %i\n", (num_files-num_failures), num_files);

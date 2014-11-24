@@ -52,10 +52,10 @@ typedef struct {
 
 typedef struct {
     // Output image
-    ok_image *image;
+    ok_jpg *jpg;
     
     // Decode options
-    ok_color_format color_format;
+    ok_jpg_color_format color_format;
     bool flip_y;
     bool info_only;
     
@@ -84,18 +84,18 @@ typedef struct {
 } jpg_decoder;
 
 __attribute__((__format__ (__printf__, 2, 3)))
-static void ok_image_error(ok_image *image, const char *format, ... ) {
-    if (image) {
-        image->width = 0;
-        image->height = 0;
-        if (image->data) {
-            free(image->data);
-            image->data = NULL;
+static void ok_jpg_error(ok_jpg *jpg, const char *format, ... ) {
+    if (jpg) {
+        jpg->width = 0;
+        jpg->height = 0;
+        if (jpg->data) {
+            free(jpg->data);
+            jpg->data = NULL;
         }
         if (format) {
             va_list args;
             va_start(args, format);
-            vsnprintf(image->error_message, sizeof(image->error_message), format, args);
+            vsnprintf(jpg->error_message, sizeof(jpg->error_message), format, args);
             va_end(args);
         }
     }
@@ -106,7 +106,7 @@ static bool ok_read(jpg_decoder *decoder, uint8_t *data, const int length) {
         return true;
     }
     else {
-        ok_image_error(decoder->image, "Read error: error calling input function.");
+        ok_jpg_error(decoder->jpg, "Read error: error calling input function.");
         return false;
     }
 }
@@ -115,26 +115,26 @@ static bool ok_seek(jpg_decoder *decoder, const int length) {
     return ok_read(decoder, NULL, length);
 }
 
-static ok_image *decode_jpg(void *user_data, ok_jpg_input_func input_func,
-                            const ok_color_format color_format, const bool flip_y, const bool info_only);
+static ok_jpg *decode_jpg(void *user_data, ok_jpg_input_func input_func,
+                          const ok_jpg_color_format color_format, const bool flip_y, const bool info_only);
 
 // MARK: Public API
 
-ok_image *ok_jpg_read_info(void *user_data, ok_jpg_input_func input_func) {
-    return decode_jpg(user_data, input_func, OK_COLOR_FORMAT_RGBA, false, true);
+ok_jpg *ok_jpg_read_info(void *user_data, ok_jpg_input_func input_func) {
+    return decode_jpg(user_data, input_func, OK_JPG_COLOR_FORMAT_RGBA, false, true);
 }
 
-ok_image *ok_jpg_read(void *user_data, ok_jpg_input_func input_func,
-                      const ok_color_format color_format, const bool flip_y) {
+ok_jpg *ok_jpg_read(void *user_data, ok_jpg_input_func input_func,
+                    const ok_jpg_color_format color_format, const bool flip_y) {
     return decode_jpg(user_data, input_func, color_format, flip_y, false);
 }
 
-void ok_jpg_image_free(ok_image *image) {
-    if (image) {
-        if (image->data) {
-            free(image->data);
+void ok_jpg_free(ok_jpg *jpg) {
+    if (jpg) {
+        if (jpg->data) {
+            free(jpg->data);
         }
-        free(image);
+        free(jpg);
     }
 }
 
@@ -300,7 +300,7 @@ static inline int huffman_decode(jpg_decoder *decoder, const huffman_table *tabl
         }
     }
     // Shouldn't happen
-    ok_image_error(decoder->image, "Invalid huffman code");
+    ok_jpg_error(decoder->jpg, "Invalid huffman code");
     return -1;
 }
 
@@ -379,16 +379,16 @@ static void convert_data_unit_color(const uint8_t *y, const uint8_t *cb, const u
 }
 
 static void convert_data_unit(jpg_decoder *decoder, const int data_unit_x, const int data_unit_y) {
-    ok_image *image = decoder->image;
+    ok_jpg *jpg = decoder->jpg;
     component *c = decoder->components;
     const uint32_t x = data_unit_x * c->H * 8;
     const uint32_t y = data_unit_y * c->V * 8;
-    const int width = min(c->H * 8, image->width - x);
-    const int height = min(c->V * 8, image->height - y);
-    uint32_t data_stride = image->width * 4;
-    uint8_t *data = image->data + x * 4;
+    const int width = min(c->H * 8, jpg->width - x);
+    const int height = min(c->V * 8, jpg->height - y);
+    uint32_t data_stride = jpg->width * 4;
+    uint8_t *data = jpg->data + x * 4;
     if (decoder->flip_y) {
-        data += ((image->height - y - 1) * data_stride);
+        data += ((jpg->height - y - 1) * data_stride);
         data_stride = -data_stride;
     }
     else {
@@ -398,7 +398,7 @@ static void convert_data_unit(jpg_decoder *decoder, const int data_unit_x, const
         convert_data_unit_grayscale(c->output, data, data+1, data+2, data+3,
                                     width, height, data_stride);
     }
-    else if (decoder->color_format == OK_COLOR_FORMAT_RGBA || decoder->color_format == OK_COLOR_FORMAT_RGBA_PRE) {
+    else if (decoder->color_format == OK_JPG_COLOR_FORMAT_RGBA) {
         convert_data_unit_color(c->output, (c + 1)->output, (c + 2)->output,
                                 data, data+1, data+2, data+3,
                                 width, height, data_stride);
@@ -745,7 +745,7 @@ static bool decode_data_unit(jpg_decoder *decoder, component *c, uint8_t *out) {
         else {
             k += r;
             if (k > 63) {
-                ok_image_error(decoder->image, "Invalid block index");
+                ok_jpg_error(decoder->jpg, "Invalid block index");
                 return false;
             }
             int zzk = load_next_bits(decoder, s);
@@ -769,7 +769,7 @@ static void decode_restart(jpg_decoder *decoder) {
 }
 
 static bool decode_scan(jpg_decoder *decoder) {
-    ok_image *image = decoder->image;
+    ok_jpg *jpg = decoder->jpg;
     int next_restart = 0;
     decode_restart(decoder);
     for (int data_unit_y = 0; data_unit_y < decoder->data_units_y; data_unit_y++) {
@@ -807,7 +807,7 @@ static bool decode_scan(jpg_decoder *decoder) {
                                 decoder->next_marker = 0;
                             }
                             else {
-                                ok_image_error(image, "Invalid restart marker (1)");
+                                ok_jpg_error(jpg, "Invalid restart marker (1)");
                                 return false;
                             }
                         }
@@ -817,7 +817,7 @@ static bool decode_scan(jpg_decoder *decoder) {
                                 return false;
                             }
                             if (!(buffer[0] == 0xff && buffer[1] == 0xD0 + next_restart)) {
-                                ok_image_error(image, "Invalid restart marker (2)");
+                                ok_jpg_error(jpg, "Invalid restart marker (2)");
                                 return false;
                             }
                         }
@@ -839,7 +839,7 @@ static bool decode_scan(jpg_decoder *decoder) {
 #define intDivCeil(x, y) (((x) + (y) - 1) / (y))
 
 static bool read_sof(jpg_decoder *decoder) {
-    ok_image *image = decoder->image;
+    ok_jpg *jpg = decoder->jpg;
     uint8_t buffer[3*3];
     if (!ok_read(decoder, buffer, 8)) {
         return false;
@@ -847,24 +847,24 @@ static bool read_sof(jpg_decoder *decoder) {
     int length = readBE16(buffer) - 8;
     int P = buffer[2];
     if (P != 8) {
-        ok_image_error(image, "Invalid JPEG (component size=%i)", P);
+        ok_jpg_error(jpg, "Invalid JPEG (component size=%i)", P);
         return false;
     }
-    image->height = readBE16(buffer + 3);
-    image->width = readBE16(buffer + 5);
-    if (image->width == 0 || image->height == 0) {
+    jpg->height = readBE16(buffer + 3);
+    jpg->width = readBE16(buffer + 5);
+    if (jpg->width == 0 || jpg->height == 0) {
         // height == 0 is supposed to be legal?
-        ok_image_error(image, "Invalid JPEG dimensions %ix%i", image->width, image->height);
+        ok_jpg_error(jpg, "Invalid JPEG dimensions %ix%i", jpg->width, jpg->height);
         return false;
     }
     decoder->num_components = buffer[7];
     if (decoder->num_components != 1 && decoder->num_components != 3) {
-        ok_image_error(image, "Invalid JPEG (num_components=%i)", decoder->num_components);
+        ok_jpg_error(jpg, "Invalid JPEG (num_components=%i)", decoder->num_components);
         return false;
     }
     
     if (length < 3 * decoder->num_components) {
-        ok_image_error(image, "Invalid JPEG (SOF segment too short)");
+        ok_jpg_error(jpg, "Invalid JPEG (SOF segment too short)");
         return false;
     }
     if (!ok_read(decoder, buffer, 3 * decoder->num_components)) {
@@ -881,12 +881,12 @@ static bool read_sof(jpg_decoder *decoder) {
         c->Tq = buffer[i*3+2];
         
         if (c->H == 0 || c->V == 0 || c->H > 4 || c->V > 4 || c->Tq > 3) {
-            ok_image_error(image, "Invalid JPEG (Bad component)");
+            ok_jpg_error(jpg, "Invalid JPEG (Bad component)");
             return false;
         }
         
         if (c->H > MAX_SAMPLING_FACTOR || c->V > MAX_SAMPLING_FACTOR) {
-            ok_image_error(image, "Unsupported sampling factor: %ix%i", c->H, c->V);
+            ok_jpg_error(jpg, "Unsupported sampling factor: %ix%i", c->H, c->V);
             return false;
         }
         
@@ -894,8 +894,8 @@ static bool read_sof(jpg_decoder *decoder) {
         maxV = max(maxV, c->V);
         length -= 3;
     }
-    decoder->data_units_x = intDivCeil(image->width, maxH * 8);
-    decoder->data_units_y = intDivCeil(image->height, maxV * 8);
+    decoder->data_units_x = intDivCeil(jpg->width, maxH * 8);
+    decoder->data_units_y = intDivCeil(jpg->height, maxV * 8);
     
     // Skip remaining length, if any
     if (length > 0) {
@@ -920,25 +920,25 @@ static bool read_sof(jpg_decoder *decoder) {
             c->idct = idct_16x8;
         }
         else {
-            ok_image_error(image, "Unsupported sampling factor: %ix%i in max %ix%i", c->H, c->V, maxH, maxV);
+            ok_jpg_error(jpg, "Unsupported sampling factor: %ix%i in max %ix%i", c->H, c->V, maxH, maxV);
             return false;
         }
     }
     
     // Allocate data
     if (!decoder->info_only) {
-        if (image->data) {
-            ok_image_error(image, "Invalid JPEG (Multiple SOF markers)");
+        if (jpg->data) {
+            ok_jpg_error(jpg, "Invalid JPEG (Multiple SOF markers)");
             return false;
         }
         
-        uint64_t size = (uint64_t)image->width * image->height * 4;
+        uint64_t size = (uint64_t)jpg->width * jpg->height * 4;
         size_t platform_size = (size_t)size;
         if (platform_size == size) {
-            image->data = malloc(platform_size);
+            jpg->data = malloc(platform_size);
         }
-        if (!image->data) {
-            ok_image_error(image, "Couldn't allocate memory for %u x %u image", image->width, image->height);
+        if (!jpg->data) {
+            ok_jpg_error(jpg, "Couldn't allocate memory for %u x %u JPEG image", jpg->width, jpg->height);
             return false;
         }
     }
@@ -946,7 +946,7 @@ static bool read_sof(jpg_decoder *decoder) {
 }
 
 static bool read_dqt(jpg_decoder *decoder) {
-    ok_image *image = decoder->image;
+    ok_jpg *jpg = decoder->jpg;
     uint8_t buffer[2];
     if (!ok_read(decoder, buffer, sizeof(buffer))) {
         return false;
@@ -961,11 +961,11 @@ static bool read_dqt(jpg_decoder *decoder) {
         int Tq = buffer[0] & 0x0f;
         
         if (Pq != 0) {
-            ok_image_error(image, "Unsupported JPEG (extended)");
+            ok_jpg_error(jpg, "Unsupported JPEG (extended)");
             return false;
         }
         if (Tq > 3) {
-            ok_image_error(image, "Invalid JPEG (Tq)");
+            ok_jpg_error(jpg, "Invalid JPEG (Tq)");
             return false;
         }
         if (!ok_read(decoder, decoder->q_table[Tq], 64)) {
@@ -974,7 +974,7 @@ static bool read_dqt(jpg_decoder *decoder) {
         length -= 65;
     }
     if (length != 0) {
-        ok_image_error(image, "Invalid DQT segment length");
+        ok_jpg_error(jpg, "Invalid DQT segment length");
         return false;
     }
     else {
@@ -989,7 +989,7 @@ static bool read_dri(jpg_decoder *decoder) {
     }
     int length = readBE16(buffer) - 2;
     if (length != 2) {
-        ok_image_error(decoder->image, "Invalid DRI segment length");
+        ok_jpg_error(decoder->jpg, "Invalid DRI segment length");
         return false;
     }
     else {
@@ -999,7 +999,7 @@ static bool read_dri(jpg_decoder *decoder) {
 }
 
 static bool read_dht(jpg_decoder *decoder) {
-    ok_image *image = decoder->image;
+    ok_jpg *jpg = decoder->jpg;
     uint8_t buffer[17];
     if (!ok_read(decoder, buffer, 2)) {
         return false;
@@ -1014,14 +1014,14 @@ static bool read_dht(jpg_decoder *decoder) {
         int Tc = buffer[0] >> 4;
         int Th = buffer[0] & 0x0f;
         if (Tc > 1 || Th > 3) {
-            ok_image_error(image, "Invalid JPEG (Bad DHT Tc/Th)");
+            ok_jpg_error(jpg, "Invalid JPEG (Bad DHT Tc/Th)");
             return false;
         }
         huffman_table *table = decoder->huffman_tables[Tc] + Th;
         generate_huffman_table(table, buffer);
         if (table->count > 0) {
             if (table->count > 256 || table->count > length) {
-                ok_image_error(image, "Invalid DHT segment length");
+                ok_jpg_error(jpg, "Invalid DHT segment length");
                 return false;
             }
             if (!ok_read(decoder, table->val, table->count)) {
@@ -1032,7 +1032,7 @@ static bool read_dht(jpg_decoder *decoder) {
         generate_huffman_table_lookups(table);
     }
     if (length != 0) {
-        ok_image_error(image, "Invalid DHT segment length");
+        ok_jpg_error(jpg, "Invalid DHT segment length");
         return false;
     }
     else {
@@ -1041,7 +1041,7 @@ static bool read_dht(jpg_decoder *decoder) {
 }
 
 static bool read_sos(jpg_decoder *decoder) {
-    ok_image *image = decoder->image;
+    ok_jpg *jpg = decoder->jpg;
     int expected_size = 6 + decoder->num_components * 2;
     uint8_t buffer[expected_size];
     if (!ok_read(decoder, buffer, expected_size)) {
@@ -1049,11 +1049,11 @@ static bool read_sos(jpg_decoder *decoder) {
     }
     int length = readBE16(buffer);
     if (length != expected_size) {
-        ok_image_error(image, "Invalid SOS segment (L)");
+        ok_jpg_error(jpg, "Invalid SOS segment (L)");
         return false;
     }
     if (buffer[2] != decoder->num_components) {
-        ok_image_error(image, "Invalid SOS segment (Ns)");
+        ok_jpg_error(jpg, "Invalid SOS segment (Ns)");
         return false;
     }
     
@@ -1062,20 +1062,20 @@ static bool read_sos(jpg_decoder *decoder) {
         component *comp = decoder->components + i;
         int C = src[0];
         if (C != comp->id) {
-            ok_image_error(image, "Invalid SOS segment (C)");
+            ok_jpg_error(jpg, "Invalid SOS segment (C)");
             return false;
         }
         
         comp->Td = src[1] >> 4;
         comp->Ta = src[1] & 0x0f;
         if (comp->Td > 3 || comp->Ta > 3) {
-            ok_image_error(image, "Invalid SOS segment (Td/Ta)");
+            ok_jpg_error(jpg, "Invalid SOS segment (Td/Ta)");
             return false;
         }
     }
     
     if (src[0] != 0 || src[1] != 63 || src[2] != 0) {
-        ok_image_error(image, "Invalid SOS segment (Ss/Se/Ah/Al)");
+        ok_jpg_error(jpg, "Invalid SOS segment (Ss/Se/Ah/Al)");
         return false;
     }
     
@@ -1097,7 +1097,7 @@ static bool skip_segment(jpg_decoder *decoder) {
 // MARK: JPEG decoding entry point
 
 static void decode_jpg2(jpg_decoder *decoder) {
-    ok_image *image = decoder->image;
+    ok_jpg *jpg = decoder->jpg;
 
     // Read header
     uint8_t jpg_header[2];
@@ -1105,7 +1105,7 @@ static void decode_jpg2(jpg_decoder *decoder) {
         return;
     }
     if (jpg_header[0] != 0xFF || jpg_header[1] != 0xD8) {
-        ok_image_error(image, "Invalid signature (not a JPG file)");
+        ok_jpg_error(jpg, "Invalid signature (not a JPG file)");
         return;
     }
     
@@ -1122,7 +1122,7 @@ static void decode_jpg2(jpg_decoder *decoder) {
                 return;
             }
             if (buffer[0] != 0xFF) {
-                ok_image_error(image, "Invalid JPG marker 0x%02X%02X", buffer[0], buffer[1]);
+                ok_jpg_error(jpg, "Invalid JPG marker 0x%02X%02X", buffer[0], buffer[1]);
                 return;
             }
             marker = buffer[1];
@@ -1183,11 +1183,11 @@ static void decode_jpg2(jpg_decoder *decoder) {
             success = skip_segment(decoder);
         }
         else if ((marker & 0xF0) == 0xC0) {
-            ok_image_error(image, "Unsupported JPEG (marker 0xFF%02X) - progressive, extended, or lossless", marker);
+            ok_jpg_error(jpg, "Unsupported JPEG (marker 0xFF%02X) - progressive, extended, or lossless", marker);
             success = false;
         }
         else {
-            ok_image_error(image, "Unsupported or corrupt JPEG (marker 0xFF%02X)", marker);
+            ok_jpg_error(jpg, "Unsupported or corrupt JPEG (marker 0xFF%02X)", marker);
             success = false;
         }
         
@@ -1197,28 +1197,28 @@ static void decode_jpg2(jpg_decoder *decoder) {
     }
     
     if (!decoder->complete) {
-        ok_image_error(image, "Incomplete image data");
+        ok_jpg_error(jpg, "Incomplete JPEG image data");
     }
 }
 
-static ok_image *decode_jpg(void *user_data, ok_jpg_input_func input_func,
-                            const ok_color_format color_format, const bool flip_y, const bool info_only) {
-    ok_image *image = calloc(1, sizeof(ok_image));
-    if (!image) {
+static ok_jpg *decode_jpg(void *user_data, ok_jpg_input_func input_func,
+                          const ok_jpg_color_format color_format, const bool flip_y, const bool info_only) {
+    ok_jpg *jpg = calloc(1, sizeof(ok_jpg));
+    if (!jpg) {
         return NULL;
     }
     if (!input_func) {
-        ok_image_error(image, "Invalid argument: input_func is NULL");
-        return image;
+        ok_jpg_error(jpg, "Invalid argument: input_func is NULL");
+        return jpg;
     }
 
     jpg_decoder *decoder = calloc(1, sizeof(jpg_decoder));
     if (!decoder) {
-        ok_image_error(image, "Couldn't allocate decoder.");
-        return image;
+        ok_jpg_error(jpg, "Couldn't allocate decoder.");
+        return jpg;
     }
     
-    decoder->image = image;
+    decoder->jpg = jpg;
     decoder->input_data = user_data;
     decoder->input_func = input_func;
     decoder->color_format = color_format;
@@ -1228,5 +1228,5 @@ static ok_image *decode_jpg(void *user_data, ok_jpg_input_func input_func,
     decode_jpg2(decoder);
     
     free(decoder);
-    return image;
+    return jpg;
 }
