@@ -187,17 +187,17 @@ static const char *filenames[] = {
     "xc1n0g08",
     "xc9n2c08",
     "xcrn0g04",
-    "xcsn0g01",
+    //"xcsn0g01", // incorrect checksum - ok_png ignores checksums
     "xd0n2c08",
     "xd3n2c08",
     "xd9n2c08",
     "xdtn0g01",
-    "xhdn0g08",
+    //"xhdn0g08", // incorrect checksum - ok_png ignores checksums
     "xlfn0g04",
     "xs1n0g01",
     "xs2n0g01",
     "xs4n0g01",
-    "xs7n0g01",    
+    "xs7n0g01",
 };
 
 static bool test_image(const char *path_to_png_suite,
