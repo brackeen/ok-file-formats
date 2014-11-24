@@ -140,7 +140,7 @@ bool compare(const char *name, const char *ext,
             success = true;
         }
     }
-    else if (!image_data && !rgba_data) {
+    else if (!image_data && (!rgba_data || rgba_data_length == 0)) {
         printf("Success: %14.14s.%s (invalid file correctly detected).\n", name, ext);
         success = true;
     }

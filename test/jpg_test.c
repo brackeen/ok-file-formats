@@ -98,12 +98,12 @@ void jpg_test(const char *path_to_jpgs, const char *path_to_rgba_files) {
         bool success = test_image(path_to_jpgs, path_to_rgba_files, filenames[i], true);
         if (!success) {
             num_failures++;
-            break;
         }
-        success = test_image(path_to_jpgs, path_to_rgba_files, filenames[i], false);
-        if (!success) {
-            num_failures++;
-            break;
+        else {
+            success = test_image(path_to_jpgs, path_to_rgba_files, filenames[i], false);
+            if (!success) {
+                num_failures++;
+            }
         }
     }
     double endTime = (double)clock()/CLOCKS_PER_SEC;

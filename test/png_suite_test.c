@@ -273,12 +273,12 @@ void png_suite_test(const char *path_to_png_suite, const char *path_to_rgba_file
         bool success = test_image(path_to_png_suite, path_to_rgba_files, filenames[i], true);
         if (!success) {
             num_failures++;
-            break;
         }
-        success = test_image(path_to_png_suite, path_to_rgba_files, filenames[i], false);
-        if (!success) {
-            num_failures++;
-            break;
+        else {
+            success = test_image(path_to_png_suite, path_to_rgba_files, filenames[i], false);
+            if (!success) {
+                num_failures++;
+            }
         }
     }
     double endTime = (double)clock()/CLOCKS_PER_SEC;

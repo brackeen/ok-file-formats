@@ -32,6 +32,8 @@ $(GEN)/%.rgba: $(PNG_SUITE)/%.png
 	@if test -f temp.png; then \
 		convert -depth 8 -intensity Average temp.png $@; \
 		rm temp.png; \
+	else \
+        touch $@; \
 	fi
 
 # Convert jpg files to raw RGBA8888 format.
