@@ -2,6 +2,7 @@
  + JPEG spec
    http://www.w3.org/Graphics/JPEG/itu-t81.pdf
    http://www.w3.org/Graphics/JPEG/jfif3.pdf
+   http://www.fifi.org/doc/jhead/exif-e.html
  + Another easy-to-read JPEG decoder (written in python)
    https://github.com/enmasse/jpeg_read/blob/master/jpeg_read.py
  */
@@ -73,6 +74,7 @@ typedef struct {
     int input_buffer_bits;
 
     // JPEG data
+    int orientation;
     int data_units_x;
     int data_units_y;
     int num_components;
@@ -142,6 +144,18 @@ void ok_jpg_free(ok_jpg *jpg) {
 
 static inline uint16_t readBE16(const uint8_t *data) {
     return (uint16_t)((data[0] << 8) | data[1]);
+}
+
+static inline uint32_t readBE32(const uint8_t *data) {
+    return (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
+}
+
+static inline uint16_t readLE16(const uint8_t *data) {
+    return (uint16_t)((data[1] << 8) | data[0]);
+}
+
+static inline uint32_t readLE32(const uint8_t *data) {
+    return (data[3] << 24) | (data[2] << 16) | (data[1] << 8) | data[0];
 }
 
 // Load bits without reading them
@@ -945,6 +959,105 @@ static bool read_sof(jpg_decoder *decoder) {
     return true;
 }
 
+static bool read_exif(jpg_decoder *decoder) {
+    
+    static const char exif_magic[] = { 'E', 'x', 'i', 'f', 0, 0 };
+    static const char tiff_magic_little_endian[] = { 0x49, 0x49, 0x2a, 0x00 };
+    static const char tiff_magic_big_endian[] = { 0x4d, 0x4d, 0x00, 0x2a };
+    
+    uint8_t buffer[2];
+    if (!ok_read(decoder, buffer, sizeof(buffer))) {
+        return false;
+    }
+    int length = readBE16(buffer) - 2;
+    
+    // Check for Exif header
+    const int exif_header_length = 6;
+    if (length < exif_header_length) {
+        return ok_seek(decoder, length);
+    }
+    uint8_t exif_header[exif_header_length];
+
+    if (!ok_read(decoder, exif_header, exif_header_length)) {
+        return false;
+    }
+    length -= exif_header_length;
+    if (memcmp(exif_header, exif_magic, exif_header_length) != 0) {
+        return ok_seek(decoder, length);
+    }
+    
+    // Check for TIFF header
+    bool little_endian;
+    const int tiff_header_length = 4;
+    if (length < tiff_header_length) {
+        return ok_seek(decoder, length);
+    }
+    uint8_t tiff_header[tiff_header_length];
+    if (!ok_read(decoder, tiff_header, tiff_header_length)) {
+        return false;
+    }
+    length -= tiff_header_length;
+    if (memcmp(tiff_header, tiff_magic_little_endian, tiff_header_length) == 0) {
+        little_endian = true;
+    }
+    else if (memcmp(tiff_header, tiff_magic_big_endian, tiff_header_length) == 0) {
+        little_endian = false;
+    }
+    else {
+        return ok_seek(decoder, length);
+    }
+    
+    // Get start offset
+    if (length < 4) {
+        return ok_seek(decoder, length);
+    }
+    int32_t offset;
+    uint8_t offset_buffer[4];
+    if (!ok_read(decoder, offset_buffer, sizeof(offset_buffer))) {
+        return false;
+    }
+    offset = little_endian ? readLE32(offset_buffer) : readBE32(offset_buffer);
+    length -= 4;
+    offset -= 8; // Ignore tiff header, offset
+    if (offset < 0 || offset > length) {
+        return ok_seek(decoder, length);
+    }
+    if (!ok_seek(decoder, offset)) {
+        return false;
+    }
+    length -= offset;
+    
+    // Get number of tags
+    if (length < 2) {
+        return ok_seek(decoder, length);
+    }
+    if (!ok_read(decoder, buffer, sizeof(buffer))) {
+        return false;
+    }
+    length -= 2;
+    int num_tags = little_endian ? readLE16(buffer) : readBE16(buffer);
+    
+    // Read tags, searching for orientation (0x112)
+    const int tag_length = 12;
+    uint8_t tag_buffer[tag_length];
+    for (int i = 0; i < num_tags; i++) {
+        if (length < tag_length) {
+            return ok_seek(decoder, length);
+        }
+        if (!ok_read(decoder, tag_buffer, tag_length)) {
+            return false;
+        }
+        length -= tag_length;
+        
+        int tag = little_endian ? readLE16(tag_buffer) : readBE16(tag_buffer);
+        if (tag == 0x112) {
+            decoder->orientation = little_endian ? readLE16(tag_buffer + 8) : readBE16(tag_buffer + 8);
+            break;
+        }
+    }
+    return ok_seek(decoder, length);
+}
+
 static bool read_dqt(jpg_decoder *decoder) {
     ok_jpg *jpg = decoder->jpg;
     uint8_t buffer[2];
@@ -1088,10 +1201,7 @@ static bool skip_segment(jpg_decoder *decoder) {
         return false;
     }
     int length = readBE16(buffer) - 2;
-    if (!ok_seek(decoder, length)) {
-        return false;
-    }
-    return true;
+    return ok_seek(decoder, length);
 }
 
 // MARK: JPEG decoding entry point
@@ -1177,6 +1287,10 @@ static void decode_jpg2(jpg_decoder *decoder) {
         else if (marker == 0xDD) {
             // DRI
             success = read_dri(decoder);
+        }
+        else if (marker == 0xE1) {
+            // APP1 - EXIF metadata
+            success = read_exif(decoder);
         }
         else if ((marker >= 0xE0 && marker <= 0xEF) || marker == 0xFE) {
             // APP or Comment
