@@ -253,7 +253,7 @@ static bool test_image(const char *path_to_png_suite,
     }
     
     bool success = compare(name, "png", png->data, png->width, png->height, png->error_message,
-                           rgba_data, rgba_data_length, info_only, 4, print_image_on_error);
+                           rgba_data, rgba_data_length, info_only, 0, print_image_on_error);
     
     free(rgba_data);
     free(rgba_filename);
