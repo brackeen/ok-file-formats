@@ -136,12 +136,12 @@ bool compare(const char *name, const char *ext,
                    name, ext, image_width, image_height, rgba_data_length, (image_width * image_height * 4));
         }
         else {
-            printf("Success: %14.14s.%s (Info only: %u x %u)\n", name, ext, image_width, image_height);
+            printf("Success: %16.16s.%s (Info only: %u x %u)\n", name, ext, image_width, image_height);
             success = true;
         }
     }
     else if (!image_data && (!rgba_data || rgba_data_length == 0)) {
-        printf("Success: %14.14s.%s (invalid file correctly detected).\n", name, ext);
+        printf("Success: %16.16s.%s (invalid file correctly detected).\n", name, ext);
         success = true;
     }
     else if (!image_data) {
@@ -178,11 +178,11 @@ bool compare(const char *name, const char *ext,
         }
     }
     else if (fuzziness > 0) {
-        printf("Success: %14.14s.%s (%9.5f%% diff<=1, peak diff=%i)\n", name, ext, (p_identical * 100), peak_diff);
+        printf("Success: %16.16s.%s (%9.5f%% diff<=1, peak diff=%i)\n", name, ext, (p_identical * 100), peak_diff);
         success = true;
     }
     else {
-        printf("Success: %14.14s.%s\n", name, ext);
+        printf("Success: %16.16s.%s\n", name, ext);
         success = true;
     }
     return success;

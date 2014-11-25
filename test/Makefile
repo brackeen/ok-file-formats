@@ -37,9 +37,10 @@ $(GEN)/%.rgba: $(PNG_SUITE)/%.png
 	fi
 
 # Convert jpg files to raw RGBA8888 format.
-# Tested against jpeg 8d via ImageMagick
+# Tested against jpeg 8d via ImageMagick.
+# Use -auto-orient to handle Exif orientation.
 $(GEN)/%.rgba: $(JPG_SUITE)/%.jpg
-	convert $< $@
+	convert -auto-orient $< $@
 
 gen: init $(RGBA_FILES)
 

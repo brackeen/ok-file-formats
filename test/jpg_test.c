@@ -46,6 +46,17 @@ const char *filenames[] = {
     "jpg-size-31x31",
     "jpg-size-32x32",
     "jpg-size-33x33",
+    
+    // EXIF orientation
+    "orientation_none",
+    "orientation_1",
+    "orientation_2",
+    "orientation_3",
+    "orientation_4",
+    "orientation_5",
+    "orientation_6",
+    "orientation_7",
+    "orientation_8",
 };
 
 static bool test_image(const char *path_to_jpgs,
@@ -61,7 +72,7 @@ static bool test_image(const char *path_to_jpgs,
     
     // Load via ok_jpg
     ok_jpg *jpg = NULL;
-    char *in_filename = get_full_path(path_to_jpgs, name, "JPG");
+    char *in_filename = get_full_path(path_to_jpgs, name, "jpg");
     FILE *fp = fopen(in_filename, "rb");
     if (fp) {
         if (info_only) {

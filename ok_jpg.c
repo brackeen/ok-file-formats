@@ -57,7 +57,9 @@ typedef struct {
     
     // Decode options
     ok_jpg_color_format color_format;
+    bool flip_x;
     bool flip_y;
+    bool rotate;
     bool info_only;
     
     // Input
@@ -74,7 +76,8 @@ typedef struct {
     int input_buffer_bits;
 
     // JPEG data
-    int orientation;
+    int in_width;
+    int in_height;
     int data_units_x;
     int data_units_y;
     int num_components;
@@ -347,16 +350,17 @@ static inline void convert_YCbCr_to_RGB(uint8_t Y, uint8_t Cb, uint8_t Cr, uint8
 // Convert from grayscale to RGBA
 static void convert_data_unit_grayscale(const uint8_t *y,
                                         uint8_t *r, uint8_t *g, uint8_t *b, uint8_t *a,
-                                        const int max_width, const int max_height, const int out_stride) {
+                                        const int x_inc, const int y_inc,
+                                        const int max_width, const int max_height) {
     const int in_row_offfset = C_WIDTH - max_width;
-    const int out_row_offset = out_stride - 4 * max_width;
+    const int out_row_offset = y_inc - x_inc * max_width;
     
     for (int v = 0; v < max_height; v++) {
         const uint8_t *y_end = y + max_width;
         while (y < y_end) {
             *r = *g = *b = *y;
             *a = 0xff;
-            r += 4; g += 4; b += 4; a += 4;
+            r += x_inc; g += x_inc; b += x_inc; a += x_inc;
             y++;
         }
         y += in_row_offfset;
@@ -370,16 +374,17 @@ static void convert_data_unit_grayscale(const uint8_t *y,
 // Convert from YCbCr to RGBA
 static void convert_data_unit_color(const uint8_t *y, const uint8_t *cb, const uint8_t *cr,
                                     uint8_t *r, uint8_t *g, uint8_t *b, uint8_t *a,
-                                    const int max_width, const int max_height, const int out_stride) {
+                                    const int x_inc, const int y_inc,
+                                    const int max_width, const int max_height) {
     const int in_row_offfset = C_WIDTH - max_width;
-    const int out_row_offset = out_stride - 4 * max_width;
+    const int out_row_offset = y_inc - x_inc * max_width;
     
     for (int v = 0; v < max_height; v++) {
         const uint8_t *y_end = y + max_width;
         while (y < y_end) {
             convert_YCbCr_to_RGB(*y, *cb, *cr, r, g, b);
             *a = 0xff;
-            r += 4; g += 4; b += 4; a += 4;
+            r += x_inc; g += x_inc; b += x_inc; a += x_inc;
             y++; cb++; cr++;
         }
         y += in_row_offfset;
@@ -395,32 +400,51 @@ static void convert_data_unit_color(const uint8_t *y, const uint8_t *cb, const u
 static void convert_data_unit(jpg_decoder *decoder, const int data_unit_x, const int data_unit_y) {
     ok_jpg *jpg = decoder->jpg;
     component *c = decoder->components;
-    const uint32_t x = data_unit_x * c->H * 8;
-    const uint32_t y = data_unit_y * c->V * 8;
-    const int width = min(c->H * 8, jpg->width - x);
-    const int height = min(c->V * 8, jpg->height - y);
-    uint32_t data_stride = jpg->width * 4;
-    uint8_t *data = jpg->data + x * 4;
-    if (decoder->flip_y) {
-        data += ((jpg->height - y - 1) * data_stride);
-        data_stride = -data_stride;
+    int x = data_unit_x * c->H * 8;
+    int y = data_unit_y * c->V * 8;
+    const int width = min(c->H * 8, decoder->in_width - x);
+    const int height = min(c->V * 8, decoder->in_height - y);
+    int x_inc = 4;
+    int y_inc = jpg->width * 4;
+    uint8_t *data = jpg->data;
+    if (decoder->rotate) {
+        int temp = x;
+        x = y;
+        y = temp;
+    }
+    if (decoder->flip_x) {
+        data += y_inc - (x + 1) * x_inc;
+        x_inc = -x_inc;
     }
     else {
-        data += (y * data_stride);
+        data += x * x_inc;
     }
+    if (decoder->flip_y) {
+        data += ((jpg->height - y - 1) * y_inc);
+        y_inc = -y_inc;
+    }
+    else {
+        data += y * y_inc;
+    }
+    if (decoder->rotate) {
+        int temp = x_inc;
+        x_inc = y_inc;
+        y_inc = temp;
+    }
+
     if (decoder->num_components == 1) {
         convert_data_unit_grayscale(c->output, data, data+1, data+2, data+3,
-                                    width, height, data_stride);
+                                    x_inc, y_inc, width, height);
     }
     else if (decoder->color_format == OK_JPG_COLOR_FORMAT_RGBA) {
         convert_data_unit_color(c->output, (c + 1)->output, (c + 2)->output,
                                 data, data+1, data+2, data+3,
-                                width, height, data_stride);
+                                x_inc, y_inc, width, height);
     }
     else {
         convert_data_unit_color(c->output, (c + 1)->output, (c + 2)->output,
                                 data+2, data+1, data, data+3,
-                                width, height, data_stride);
+                                x_inc, y_inc, width, height);
     }
 }
 
@@ -864,13 +888,14 @@ static bool read_sof(jpg_decoder *decoder) {
         ok_jpg_error(jpg, "Invalid JPEG (component size=%i)", P);
         return false;
     }
-    jpg->height = readBE16(buffer + 3);
-    jpg->width = readBE16(buffer + 5);
-    if (jpg->width == 0 || jpg->height == 0) {
-        // height == 0 is supposed to be legal?
-        ok_jpg_error(jpg, "Invalid JPEG dimensions %ix%i", jpg->width, jpg->height);
+    decoder->in_height = readBE16(buffer + 3);
+    decoder->in_width = readBE16(buffer + 5);
+    if (decoder->in_width == 0 || decoder->in_height == 0) {
+        ok_jpg_error(jpg, "Invalid JPEG dimensions %ix%i", decoder->in_width, decoder->in_height);
         return false;
     }
+    jpg->width = decoder->rotate ? decoder->in_height : decoder->in_width;
+    jpg->height = decoder->rotate ? decoder->in_width : decoder->in_height;
     decoder->num_components = buffer[7];
     if (decoder->num_components != 1 && decoder->num_components != 3) {
         ok_jpg_error(jpg, "Invalid JPEG (num_components=%i)", decoder->num_components);
@@ -908,8 +933,8 @@ static bool read_sof(jpg_decoder *decoder) {
         maxV = max(maxV, c->V);
         length -= 3;
     }
-    decoder->data_units_x = intDivCeil(jpg->width, maxH * 8);
-    decoder->data_units_y = intDivCeil(jpg->height, maxV * 8);
+    decoder->data_units_x = intDivCeil(decoder->in_width, maxH * 8);
+    decoder->data_units_y = intDivCeil(decoder->in_height, maxV * 8);
     
     // Skip remaining length, if any
     if (length > 0) {
@@ -1051,7 +1076,37 @@ static bool read_exif(jpg_decoder *decoder) {
         
         int tag = little_endian ? readLE16(tag_buffer) : readBE16(tag_buffer);
         if (tag == 0x112) {
-            decoder->orientation = little_endian ? readLE16(tag_buffer + 8) : readBE16(tag_buffer + 8);
+            int orientation = little_endian ? readLE16(tag_buffer + 8) : readBE16(tag_buffer + 8);
+            switch (orientation) {
+                case 1: default: // top-left
+                    break;
+                case 2: // top-right
+                    decoder->flip_x = true;
+                    break;
+                case 3: // bottom-right
+                    decoder->flip_x = true;
+                    decoder->flip_y = !decoder->flip_y;
+                    break;
+                case 4: // bottom-left
+                    decoder->flip_y = !decoder->flip_y;
+                    break;
+                case 5: // left-top
+                    decoder->rotate = true;
+                    break;
+                case 6: // right-top
+                    decoder->rotate = true;
+                    decoder->flip_x = true;
+                    break;
+                case 7: // right-bottom
+                    decoder->rotate = true;
+                    decoder->flip_x = true;
+                    decoder->flip_y = !decoder->flip_y;
+                    break;
+                case 8: // left-bottom
+                    decoder->rotate = true;
+                    decoder->flip_y = !decoder->flip_y;
+                    break;
+            }
             break;
         }
     }
