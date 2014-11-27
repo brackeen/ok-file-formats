@@ -163,8 +163,7 @@ static inline uint32_t readLE32(const uint8_t *data) {
 
 // Load bits without reading them
 static inline bool load_bits(jpg_decoder *decoder, const int num_bits) {
-    // TODO: Optimize. Buffer data instead of calling ok_read for every byte?
-    // This is the number one thing that need optimization!
+    // Needs optimization? Buffer the data instead of calling ok_read for every byte
     while (decoder->input_buffer_bits < num_bits) {
         if (decoder->next_marker != 0) {
             decoder->input_buffer <<= 8;
@@ -303,7 +302,7 @@ static inline int huffman_decode(jpg_decoder *decoder, const huffman_table *tabl
     }
     
     // Next, try a code up to 16-bits
-    // TODO: Needs optimization for codes > 8 bits?
+    // Needs optimization for codes > 8 bits?
     consume_bits(decoder, 8);
     if (!load_bits(decoder, 8)) {
         return -1;
