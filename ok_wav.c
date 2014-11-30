@@ -124,7 +124,7 @@ static void decode_pcm_data(pcm_decoder *decoder) {
         wav->data = malloc(platform_data_length);
     }
     if (!wav->data) {
-        ok_wav_error(wav, "Couldn't allocate memory for audio with %llu frames", wav->num_frames);
+        ok_wav_error(wav, "Couldn't allocate memory for audio with %llu frames", (unsigned long long)wav->num_frames);
         return;
     }
     
