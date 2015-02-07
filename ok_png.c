@@ -379,10 +379,10 @@ static void decode_filter(uint8_t * RESTRICT curr, const uint8_t * RESTRICT prev
             // Input = Paeth
             // Raw(x) = Paeth(x) + PaethPredictor(Raw(x-bpp), Prior(x), Prior(x-bpp))
             for (int i = 0; i < bpp; i++) {
-                curr[i] = curr[i] + prev[i];
+                curr[i] += prev[i];
             }
             for (uint32_t j = bpp; j < length; j++) {
-                curr[j] = curr[j] + paeth_predictor(curr[j - bpp], prev[j], prev[j - bpp]);
+                curr[j] += paeth_predictor(curr[j - bpp], prev[j], prev[j - bpp]);
             }
             break;
         }
@@ -505,7 +505,7 @@ static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const u
                 }
                 int v = (*src >> bit) & bitmask;
                 if (c == COLOR_TYPE_GRAYSCALE) {
-                    r = g = b = v * (255 / bitmask);
+                    r = g = b = (uint16_t)(v * (255 / bitmask));
                 }
                 else {
                     const uint8_t *psrc = palette + (v * 4);
@@ -584,16 +584,16 @@ static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const u
             }
             
             if (should_byteswap) {
-                *dst++ = b;
-                *dst++ = g;
-                *dst++ = r;
-                *dst++ = a;
+                *dst++ = (uint8_t)b;
+                *dst++ = (uint8_t)g;
+                *dst++ = (uint8_t)r;
+                *dst++ = (uint8_t)a;
             }
             else {
-                *dst++ = r;
-                *dst++ = g;
-                *dst++ = b;
-                *dst++ = a;
+                *dst++ = (uint8_t)r;
+                *dst++ = (uint8_t)g;
+                *dst++ = (uint8_t)b;
+                *dst++ = (uint8_t)a;
             }
         }
         should_byteswap = false;
@@ -1066,6 +1066,7 @@ static ok_png *decode_png(void *user_data, ok_png_input_func input_func,
 
 // 32k for back buffer, 32k for forward buffer
 #define BUFFER_SIZE (1 << BUFFER_SIZE_BITS)
+#define BUFFER_SIZE_MASK (BUFFER_SIZE - 1)
 
 #define BLOCK_TYPE_NO_COMPRESSION 0
 #define BLOCK_TYPE_FIXED_HUFFMAN 1
@@ -1197,7 +1198,8 @@ inline static uint16_t can_write_total(const ok_inflater *inflater) {
 }
 
 inline static void write_byte(ok_inflater *inflater, const uint8_t b) {
-    inflater->buffer[inflater->buffer_end_pos++] = b;
+    inflater->buffer[inflater->buffer_end_pos & BUFFER_SIZE_MASK] = b;
+    inflater->buffer_end_pos++;
 }
 
 inline static size_t write_bytes(ok_inflater *inflater, const uint8_t* src, const size_t len) {
@@ -1354,7 +1356,7 @@ static bool make_huffman_tree_from_array(huffman_tree *tree, const uint8_t* code
             code = next_code[len];
             next_code[len]++;
             
-            tree->lookup_table[reverse_bits(code, len)] = i | (len << VALUE_BITS);
+            tree->lookup_table[reverse_bits(code, len)] = (uint16_t)(i | (len << VALUE_BITS));
         }
     }
     
@@ -1399,7 +1401,7 @@ static bool inflate_huffman_tree(ok_inflater *inflater, huffman_tree *tree, huff
             }
         }
         if (inflater->huffman_code <= 15) {
-            inflater->tree_codes[inflater->state_count++] = inflater->huffman_code;
+            inflater->tree_codes[inflater->state_count++] = (uint8_t)inflater->huffman_code;
         }
         else {
             int value = 0;
@@ -1660,7 +1662,7 @@ static bool inflate_distance(ok_inflater *inflater) {
     
      // Copy len bytes from offset to buffer_end_pos
     if (inflater->state_count > 0) {
-        uint16_t buffer_offset = inflater->buffer_end_pos - inflater->state_distance;
+        int buffer_offset = (inflater->buffer_end_pos - inflater->state_distance) & BUFFER_SIZE_MASK;
         if (inflater->state_distance == 1) {
             // Optimization: can use memset
             const size_t n = inflater->state_count;
@@ -1689,10 +1691,10 @@ static bool inflate_distance(ok_inflater *inflater) {
             // This could be optimized, but it happens much less often, so it's probably not worth it
             while (inflater->state_count > 0) {
                 size_t n = min(inflater->state_count, inflater->state_distance);
-                n = min(n, BUFFER_SIZE - buffer_offset);
+                n = min(n, (size_t)(BUFFER_SIZE - buffer_offset));
                 const size_t n2 = write_bytes(inflater, inflater->buffer + buffer_offset, n);
                 inflater->state_count -= n2;
-                buffer_offset += n2;
+                buffer_offset = (buffer_offset + n2) & BUFFER_SIZE_MASK;
                 if (n2 != n) {
                     // Full buffer
                     return false;
@@ -1736,7 +1738,7 @@ static bool inflate_dynamic_block_code_lengths(ok_inflater *inflater) {
             return false;
         }
         int index = inflater->num_code_length_codes - inflater->state_count;
-        inflater->tree_codes[BIT_LENGTH_TABLE[index]] = read_bits(inflater, 3);
+        inflater->tree_codes[BIT_LENGTH_TABLE[index]] = (uint8_t)read_bits(inflater, 3);
         inflater->state_count--;
     }
     make_huffman_tree_from_array(inflater->code_length_huffman,
@@ -1767,7 +1769,7 @@ static bool inflate_compressed_block(ok_inflater *inflater) {
             return false;
         }
         else if (value < 256) {
-            write_byte(inflater, value);
+            write_byte(inflater, (uint8_t)value);
             max_write--;
             if (max_write == 0) {
                 return false;

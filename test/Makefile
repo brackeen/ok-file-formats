@@ -20,7 +20,7 @@ test: gen build
 	$(BIN)/$(OUT_NAME)
 	
 build:  
-	$(CC) -o $(BIN)/$(OUT_NAME) $(INCLUDES) $(FILES)
+	$(CC) -o $(BIN)/$(OUT_NAME) -Wall $(INCLUDES) $(FILES)
 
 # Convert png files to raw RGBA8888 format, ignoring the gAMA chunk.
 # The "-intensity Average" setting prevents ImageMagick from 

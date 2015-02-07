@@ -28,7 +28,7 @@ extern "C" {
     
     /** PCM audio data. The length of the data is (num_channels * num_frames * (bit_depth/8)) */
     typedef struct {
-        float sample_rate;
+        double sample_rate;
         uint8_t num_channels;
         uint8_t bit_depth;
         bool is_float;

@@ -76,8 +76,8 @@ typedef struct {
     int input_buffer_bits;
 
     // JPEG data
-    int in_width;
-    int in_height;
+    uint16_t in_width;
+    uint16_t in_height;
     int data_units_x;
     int data_units_y;
     int num_components;
@@ -150,7 +150,7 @@ static inline uint16_t readBE16(const uint8_t *data) {
 }
 
 static inline uint32_t readBE32(const uint8_t *data) {
-    return (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
+    return (uint32_t)((data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3]);
 }
 
 static inline uint16_t readLE16(const uint8_t *data) {
@@ -158,7 +158,7 @@ static inline uint16_t readLE16(const uint8_t *data) {
 }
 
 static inline uint32_t readLE32(const uint8_t *data) {
-    return (data[3] << 24) | (data[2] << 16) | (data[1] << 8) | data[0];
+    return (uint32_t)((data[3] << 24) | (data[2] << 16) | (data[1] << 8) | data[0]);
 }
 
 // Load bits without reading them
@@ -197,10 +197,9 @@ static inline int next_bit(jpg_decoder *decoder) {
     return (decoder->input_buffer >> decoder->input_buffer_bits) & 1;
 }
 
-// Assumes at least num_bits of data was previously loaded in load_bits
-static inline int peek_bits(jpg_decoder *decoder, const int num_bits) {
-    int b = decoder->input_buffer_bits - num_bits;
-    return (decoder->input_buffer >> b) & ((1 << num_bits) - 1);
+// Assumes at least 8 bits of data was previously loaded in load_bits
+static inline int peek_byte(jpg_decoder *decoder) {
+    return (decoder->input_buffer >> (decoder->input_buffer_bits - 8)) & 0xff;
 }
 
 // Assumes at least num_bits of data was previously loaded in load_bits
@@ -218,7 +217,7 @@ static inline int load_next_bits(jpg_decoder *decoder, const int num_bits) {
         return -1;
     }
     decoder->input_buffer_bits -= num_bits;
-    return (decoder->input_buffer >> decoder->input_buffer_bits) & ((1 << num_bits) - 1);
+    return (int)(decoder->input_buffer >> decoder->input_buffer_bits) & ((1 << num_bits) - 1);
 }
 
 // MARK: Huffman decoding
@@ -226,7 +225,7 @@ static inline int load_next_bits(jpg_decoder *decoder, const int num_bits) {
 static void generate_huffman_table(huffman_table *huff, const uint8_t *bits) {
     // JPEG spec: "Generate_size_table"
     int k = 0;
-    for (int i = 1; i <= 16; i++) {
+    for (uint8_t i = 1; i <= 16; i++) {
         for (int j = 1; j <= bits[i]; j++) {
             huff->size[k++] = i;
         }
@@ -236,7 +235,7 @@ static void generate_huffman_table(huffman_table *huff, const uint8_t *bits) {
     
     // JPEG spec: "Generate_code_table"
     k = 0;
-    int code = 0;
+    uint16_t code = 0;
     int si = huff->size[0];
     while (true) {
         huff->code[k] = code;
@@ -272,8 +271,8 @@ static void generate_huffman_table_lookups(huffman_table *huff) {
     // Look up table for codes that use 8 bits or less (most of them)
     for (int q = 0; q < 256; q++) {
         huff->lookup_num_bits[q] = 0;
-        for (int i = 0; i < 8; i++) {
-            int num_bits = i + 1;
+        for (uint8_t i = 0; i < 8; i++) {
+            uint8_t num_bits = i + 1;
             int code = q >> (8 - num_bits);
             if (code <= huff->maxcode[i]) {
                 huff->lookup_num_bits[q] = num_bits;
@@ -294,7 +293,7 @@ static inline int huffman_decode(jpg_decoder *decoder, const huffman_table *tabl
     if (!load_bits(decoder, 8)) {
         return -1;
     }
-    int code = peek_bits(decoder, 8);
+    int code = peek_byte(decoder);
     int num_bits = table->lookup_num_bits[code];
     if (num_bits != 0) {
         consume_bits(decoder, num_bits);
@@ -323,11 +322,11 @@ static inline int huffman_decode(jpg_decoder *decoder, const huffman_table *tabl
 // MARK: JPEG color conversion
 
 static inline uint8_t clip_uint8(const int x) {
-    return ((unsigned int)x) < 0xff ? x : (x < 0 ? 0 : 0xff);
+    return ((unsigned int)x) < 0xff ? (uint8_t)x : (x < 0 ? 0 : 0xff);
 }
 
 static inline uint8_t clip_fp_uint8(const int fx) {
-    return ((unsigned int)fx) < 0xff0000 ? (fx >> 16) : (fx < 0 ? 0 : 0xff);
+    return ((unsigned int)fx) < 0xff0000 ? (uint8_t)(fx >> 16) : (fx < 0 ? 0 : 0xff);
 }
 
 static inline void convert_YCbCr_to_RGB(uint8_t Y, uint8_t Cb, uint8_t Cr, uint8_t *r, uint8_t *g, uint8_t *b) {
@@ -404,7 +403,7 @@ static void convert_data_unit(jpg_decoder *decoder, const int data_unit_x, const
     const int width = min(c->H * 8, decoder->in_width - x);
     const int height = min(c->V * 8, decoder->in_height - y);
     int x_inc = 4;
-    int y_inc = jpg->width * 4;
+    int y_inc = (int)jpg->width * 4;
     uint8_t *data = jpg->data;
     if (decoder->rotate) {
         int temp = x;
@@ -419,7 +418,7 @@ static void convert_data_unit(jpg_decoder *decoder, const int data_unit_x, const
         data += x * x_inc;
     }
     if (decoder->flip_y) {
-        data += ((jpg->height - y - 1) * y_inc);
+        data += (((int)jpg->height - y - 1) * y_inc);
         y_inc = -y_inc;
     }
     else {
@@ -730,7 +729,7 @@ static const uint8_t zig_zag[] = {
     53, 60, 61, 54, 47, 55, 62, 63,
 };
 
-static inline int extend(const int v, const uint8_t t) {
+static inline int extend(const int v, const int t) {
     // Figure F.12
     if (v < (1 << (t - 1))) {
         return v + ((-1) << t) + 1;
@@ -1040,7 +1039,7 @@ static bool read_exif(jpg_decoder *decoder) {
     if (!ok_read(decoder, offset_buffer, sizeof(offset_buffer))) {
         return false;
     }
-    offset = little_endian ? readLE32(offset_buffer) : readBE32(offset_buffer);
+    offset = (int32_t)(little_endian ? readLE32(offset_buffer) : readBE32(offset_buffer));
     length -= 4;
     offset -= 8; // Ignore tiff header, offset
     if (offset < 0 || offset > length) {

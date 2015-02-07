@@ -232,15 +232,14 @@ static void decode_wav(pcm_decoder *decoder) {
                 return;
             }
             uint16_t format = readLE16(chunk_data);
-            wav->num_channels = readLE16(chunk_data + 2);
+            wav->num_channels = (uint8_t)readLE16(chunk_data + 2);
             wav->sample_rate = readLE32(chunk_data + 4);
-            wav->bit_depth = readLE16(chunk_data + 14);
+            wav->bit_depth = (uint8_t)readLE16(chunk_data + 14);
             wav->is_float = format == 3;
 
             bool validFormat = ((format == 1 || format == 3) && valid_bit_depth(wav) && wav->num_channels > 0);
             if (!validFormat) {
-                ok_wav_error(wav, "Invalid WAV format. "
-                               "Must be PCM, and a bit depth of 8, 16, 32, 48, or 64-bit.");
+                ok_wav_error(wav, "Invalid WAV format. Must be PCM, and a bit depth of 8, 16, 32, 48, or 64-bit.");
                 return;
             }
         }
@@ -310,10 +309,10 @@ static void decode_caf(pcm_decoder *decoder) {
             uint32_t bits_per_channel = readBE32(chunk_data + 28);
             
             wav->sample_rate = sample_rate.value;
-            wav->num_channels = channels_per_frame;
+            wav->num_channels = (uint8_t)channels_per_frame;
             wav->is_float = format_flags & 1;
             wav->little_endian = (format_flags & 2) != 0;
-            wav->bit_depth = bits_per_channel;
+            wav->bit_depth = (uint8_t)bits_per_channel;
             
             bool valid_format = (memcmp("lpcm", format_id, 4) == 0 &&
                                  (sample_rate.value > 0) &&
@@ -322,8 +321,7 @@ static void decode_caf(pcm_decoder *decoder) {
                                  (frames_per_packet == 1) &&
                                  (valid_bit_depth(wav)));
             if (!valid_format) {
-                ok_wav_error(wav, "Invalid CAF format. "
-                               "Must be PCM, mono or stereo, and 8-, 16-, 24- or 32-bit.)");
+                ok_wav_error(wav, "Invalid CAF format. Must be PCM, mono or stereo, and 8-, 16-, 24- or 32-bit.)");
                 return;
             }
         }

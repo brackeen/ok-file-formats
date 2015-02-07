@@ -64,11 +64,17 @@ uint8_t *read_file(const char *filename, unsigned long *length) {
     
     if (fp) {
         fseek(fp, 0, SEEK_END);
-        *length = ftell(fp);
-        fseek(fp, 0, SEEK_SET);
-        buffer = malloc(*length);
-        if (buffer) {
-            fread(buffer, 1, *length, fp);
+        long tell = ftell(fp);
+        if (tell < 0) {
+            *length = 0;
+        }
+        else {
+            *length = (unsigned long)tell;
+            fseek(fp, 0, SEEK_SET);
+            buffer = malloc(*length);
+            if (buffer) {
+                fread(buffer, 1, *length, fp);
+            }
         }
         fclose(fp);
     }
@@ -83,7 +89,7 @@ uint8_t *read_file(const char *filename, unsigned long *length) {
 int file_input_func(void *user_data, unsigned char *buffer, const int count) {
     FILE *fp = (FILE *)user_data;
     if (buffer && count > 0) {
-        return (int)fread(buffer, 1, count, fp);
+        return (int)fread(buffer, 1, (size_t)count, fp);
     }
     else if (fseek(fp, count, SEEK_CUR) == 0) {
         return count;
@@ -170,7 +176,7 @@ bool compare(const char *name, const char *ext,
             print_image(image_data, image_width, image_height);
             uint8_t *diff_data = malloc(rgba_data_length);
             for (unsigned long i = 0; i < rgba_data_length; i++) {
-                diff_data[i] = abs(rgba_data[i] - image_data[i]);
+                diff_data[i] = (uint8_t)abs(rgba_data[i] - image_data[i]);
             }
             printf("diff:\n");
             print_image_diff(diff_data, image_width, image_height);

@@ -148,10 +148,10 @@ static inline uint16_t read16(const uint8_t *data, const bool little_endian) {
 
 static inline uint32_t read32(const uint8_t *data, const bool little_endian) {
     if (little_endian) {
-        return (data[3] << 24) | (data[2] << 16) | (data[1] << 8) | data[0];
+        return (uint32_t)((data[3] << 24) | (data[2] << 16) | (data[1] << 8) | data[0]);
     }
     else {
-        return (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
+        return (uint32_t)((data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3]);
     }
 }
 
