@@ -66,6 +66,7 @@ uint8_t *read_file(const char *filename, unsigned long *length) {
         fseek(fp, 0, SEEK_END);
         long tell = ftell(fp);
         if (tell < 0) {
+            buffer = NULL;
             *length = 0;
         }
         else {

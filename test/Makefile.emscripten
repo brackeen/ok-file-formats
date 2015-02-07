@@ -3,12 +3,10 @@
 
 EMSDK = $(EMSCRIPTEN_PATH)/emsdk
 $(shell $(EMSDK) construct_env)
-include ./emsdk_set_env.sh
-# Not sure why this line is required
-export SHELL := $(shell echo $$SHELL)
 	
 emscripten_build: gen
-	emcc -Wall -Os --memory-init-file 0 -std=c99 -o $(BIN)/$(OUT_NAME).html -s TOTAL_MEMORY=33554432 \
+	. emsdk_set_env.sh; emcc -Wall -Os --memory-init-file 0 -std=c99 \
+	-o $(BIN)/$(OUT_NAME).html -s TOTAL_MEMORY=33554432 \
 	--pre-js emscripten-pre.js \
 	--preload-file PngSuite/ --preload-file jpg/ \
 	--preload-file gen/ --preload-file gettext/ --preload-file csv/ \
@@ -20,3 +18,13 @@ clean:
 	rm -f $(BIN)/$(OUT_NAME).html
 	rm -f $(BIN)/$(OUT_NAME).js
 	rm -f $(BIN)/$(OUT_NAME).data
+	
+# Makefile.local should define EMSCRIPTEN_PATH
+-include Makefile.local
+
+EMSDK = $(EMSCRIPTEN_PATH)/emsdk
+$(shell $(EMSDK) construct_env)
+
+# Modified by new_project.py
+GLFM_ROOT := ../../..
+APP_ROOT := ../..
