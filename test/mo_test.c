@@ -2,6 +2,7 @@
 #include "ok_mo.h"
 #include "test_common.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 static ok_mo *mo_read(const char *filename) {
@@ -12,9 +13,9 @@ static ok_mo *mo_read(const char *filename) {
 }
 
 void gettext_test(const char *path) {
-    const char *en_file = get_full_path(path, "en", "mo");
-    const char *es_file = get_full_path(path, "es", "mo");
-    const char *zh_file = get_full_path(path, "zh-Hans", "mo");
+    char *en_file = get_full_path(path, "en", "mo");
+    char *es_file = get_full_path(path, "es", "mo");
+    char *zh_file = get_full_path(path, "zh-Hans", "mo");
 
     ok_mo *mo_en = mo_read(en_file);
     if (strcmp("Hello", ok_mo_value(mo_en, "Hello")) != 0) {
@@ -53,4 +54,8 @@ void gettext_test(const char *path) {
     ok_mo_free(mo_zh);
 
     printf("Success: MO (gettext)\n");
+
+    free(en_file);
+    free(es_file);
+    free(zh_file);
 }

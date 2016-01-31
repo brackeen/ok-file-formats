@@ -290,7 +290,7 @@ static struct ok_mo_string *find_value(ok_mo *mo, const char *context, const cha
         strcpy(complete_key, context);
         complete_key[context_length] = 4; // EOT
         strcpy(complete_key + context_length + 1, key);
-        complete_key[complete_key_length] = 0;
+        complete_key[complete_key_length - 1] = 0;
         struct ok_mo_string *r = bsearch(complete_key, mo->strings, mo->num_strings,
                                          sizeof(mo->strings[0]), bsearch_strcmp);
         free(complete_key);

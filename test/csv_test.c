@@ -13,6 +13,7 @@ void csv_test(const char *path) {
     FILE *fp = fopen(test1_file, "rb");
     ok_csv *csv = ok_csv_read(fp, file_input_func);
     fclose(fp);
+    free(test1_file);
 
     if (!csv) {
         printf("Failure: ok_csv is NULL\n");

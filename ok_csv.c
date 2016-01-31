@@ -218,6 +218,7 @@ static void decode_csv(ok_csv *csv, void *input_data, ok_csv_input_func input_fu
 
     decode_csv2(decoder);
 
+    free(decoder->input_buffer.data);
     free(decoder);
 }
 

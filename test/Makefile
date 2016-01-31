@@ -9,6 +9,7 @@ JPG_SUITE = jpg
 INCLUDES = -I .. 
 FILES = *.c ../*.c
 OUT_NAME = ok_file_formats_test
+HAS_VALGRIND := $(shell type valgrind 1>/dev/null 2>&1 ; echo $$?)
 
 # Get all image files
 PNG_SUITE_FILES := $(wildcard $(PNG_SUITE)/*.png)
@@ -17,7 +18,11 @@ RGBA_FILES := $(patsubst $(PNG_SUITE)/%.png, $(GEN)/%.rgba, $(PNG_SUITE_FILES))
 RGBA_FILES += $(patsubst $(JPG_SUITE)/%.jpg, $(GEN)/%.rgba, $(JPG_SUITE_FILES))
 
 test: gen build
+ifeq ($(HAS_VALGRIND),0)
+	valgrind --tool=memcheck --leak-check=full $(BIN)/$(OUT_NAME)
+else
 	$(BIN)/$(OUT_NAME)
+endif	
 	
 build:  
 	$(CC) -o $(BIN)/$(OUT_NAME) -Wall $(INCLUDES) $(FILES)
