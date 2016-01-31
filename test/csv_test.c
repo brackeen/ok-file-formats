@@ -1,20 +1,19 @@
 
 #include "csv_test.h"
-#include "test_common.h"
 #include "ok_csv.h"
 #include "ok_mo.h" // for UTF-8 code
+#include "test_common.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
 void csv_test(const char *path) {
-
     char *test1_file = get_full_path(path, "test1", "csv");
 
     FILE *fp = fopen(test1_file, "rb");
     ok_csv *csv = ok_csv_read(fp, file_input_func);
     fclose(fp);
-    
+
     if (!csv) {
         printf("Failure: ok_csv is NULL\n");
         return;
@@ -27,17 +26,17 @@ void csv_test(const char *path) {
         printf("Failure: Didn't find 10 records\n");
         return;
     }
-    
-    char hello_utf8[] = { 0xe4, 0xbd, 0xa0, 0xe5, 0xa5, 0xbd, 0 };
+
+    char hello_utf8[] = {0xe4, 0xbd, 0xa0, 0xe5, 0xa5, 0xbd, 0};
     unsigned int hello_len = ok_utf8_strlen(hello_utf8);
-    uint32_t *hello = malloc(sizeof(uint32_t) * (hello_len+1));
+    uint32_t *hello = malloc(sizeof(uint32_t) * (hello_len + 1));
     ok_utf8_to_unicode(hello_utf8, hello, hello_len);
     if (!hello || hello[0] != 0x4f60 || hello[1] != 0x597d || hello[2] != 0) {
         printf("Failure: Couldn't convert UTF-8 to unicode\n");
         return;
     }
     free(hello);
-    
+
     if (memcmp(hello_utf8, csv->fields[2][2], 7)) {
         printf("Failure: Couldn't read UTF-8 field\n");
         return;
@@ -50,8 +49,9 @@ void csv_test(const char *path) {
         printf("Failure: Couldn't read field with quotes\n");
         return;
     }
-    
-    if (csv->num_fields[5] != 3 || csv->fields[5][0][0] != 0 || csv->fields[5][1][0] != 0 || csv->fields[5][1][0] != 0) {
+
+    if (csv->num_fields[5] != 3 || csv->fields[5][0][0] != 0 ||
+        csv->fields[5][1][0] != 0 || csv->fields[5][1][0] != 0) {
         printf("Failure: Couldn't read three blank fields\n");
         return;
     }
@@ -73,6 +73,6 @@ void csv_test(const char *path) {
     }
 
     ok_csv_free(csv);
-    
+
     printf("Success: CSV\n");
 }

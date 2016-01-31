@@ -1,12 +1,12 @@
+#include "ok_png.h"
+#include "png_suite_test.h"
+#include "test_common.h"
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include "test_common.h"
-#include "png_suite_test.h"
-#include "ok_png.h"
 #ifdef __APPLE__
 #include <TargetConditionals.h>
 #endif
@@ -206,11 +206,10 @@ static bool test_image(const char *path_to_png_suite,
                        const bool info_only) {
     const bool flip_y = false;
     const bool print_image_on_error = false;
-    
+
     char *rgba_filename = get_full_path(path_to_rgba_files, name, "rgba");
     unsigned long rgba_data_length;
     uint8_t *rgba_data = read_file(rgba_filename, &rgba_data_length);
-    
 
 #if TARGET_OS_IPHONE
     // On iOS, Apple stores PNG data with premultiplied alpha.
@@ -223,8 +222,7 @@ static bool test_image(const char *path_to_png_suite,
             src[0] = 0;
             src[1] = 0;
             src[2] = 0;
-        }
-        else if (a < 255) {
+        } else if (a < 255) {
             src[0] = (a * src[0] + 127) / 255;
             src[1] = (a * src[1] + 127) / 255;
             src[2] = (a * src[2] + 127) / 255;
@@ -233,7 +231,7 @@ static bool test_image(const char *path_to_png_suite,
 #else
     ok_png_color_format color_format = OK_PNG_COLOR_FORMAT_RGBA;
 #endif
-    
+
     // Load via ok_png
     ok_png *png = NULL;
     char *in_filename = get_full_path(path_to_png_suite, name, "png");
@@ -241,48 +239,45 @@ static bool test_image(const char *path_to_png_suite,
     if (fp) {
         if (info_only) {
             png = ok_png_read_info(fp, file_input_func);
-        }
-        else {
+        } else {
             png = ok_png_read(fp, file_input_func, color_format, flip_y);
         }
         fclose(fp);
-    }
-    else {
+    } else {
         printf("Warning: File not found: %s.png\n", name);
         return true;
     }
-    
+
     bool success = compare(name, "png", png->data, png->width, png->height, png->error_message,
                            rgba_data, rgba_data_length, info_only, 0, print_image_on_error);
-    
+
     free(rgba_data);
     free(rgba_filename);
     free(in_filename);
     ok_png_free(png);
-    
+
     return success;
 }
 
 void png_suite_test(const char *path_to_png_suite, const char *path_to_rgba_files) {
-    const int num_files = sizeof(filenames)/sizeof(filenames[0]);
+    const int num_files = sizeof(filenames) / sizeof(filenames[0]);
     printf("Testing %i files in path \"%s\".\n", num_files, path_to_png_suite);
-    
-    double startTime = (double)clock()/CLOCKS_PER_SEC;
+
+    double startTime = (double)clock() / CLOCKS_PER_SEC;
     int num_failures = 0;
     for (int i = 0; i < num_files; i++) {
         bool success = test_image(path_to_png_suite, path_to_rgba_files, filenames[i], true);
         if (!success) {
             num_failures++;
-        }
-        else {
+        } else {
             success = test_image(path_to_png_suite, path_to_rgba_files, filenames[i], false);
             if (!success) {
                 num_failures++;
             }
         }
     }
-    double endTime = (double)clock()/CLOCKS_PER_SEC;
+    double endTime = (double)clock() / CLOCKS_PER_SEC;
     double elapsedTime = endTime - startTime;
-    printf("Success: %i of %i\n", (num_files-num_failures), num_files);
+    printf("Success: %i of %i\n", (num_files - num_failures), num_files);
     printf("Duration: %f seconds\n", (float)elapsedTime);
 }

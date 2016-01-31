@@ -14,28 +14,28 @@
 #if __STDC_VERSION__ >= 199901L
 #define RESTRICT restrict
 #else
-#define RESTRICT 
+#define RESTRICT
 #endif
 
 #ifndef min
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
-#define PNG_TYPE(a, b, c, d) ((a << 24) | (b << 16) | (c << 8) | d )
+#define PNG_TYPE(a, b, c, d) ((a << 24) | (b << 16) | (c << 8) | d)
 
-static const uint32_t CHUNK_IHDR = PNG_TYPE('I','H','D','R');
-static const uint32_t CHUNK_PLTE = PNG_TYPE('P','L','T','E');
-static const uint32_t CHUNK_TRNS = PNG_TYPE('t','R','N','S');
-static const uint32_t CHUNK_IDAT = PNG_TYPE('I','D','A','T');
-static const uint32_t CHUNK_IEND = PNG_TYPE('I','E','N','D');
-static const uint32_t CHUNK_CGBI = PNG_TYPE('C','g','B','I');
+static const uint32_t CHUNK_IHDR = PNG_TYPE('I', 'H', 'D', 'R');
+static const uint32_t CHUNK_PLTE = PNG_TYPE('P', 'L', 'T', 'E');
+static const uint32_t CHUNK_TRNS = PNG_TYPE('t', 'R', 'N', 'S');
+static const uint32_t CHUNK_IDAT = PNG_TYPE('I', 'D', 'A', 'T');
+static const uint32_t CHUNK_IEND = PNG_TYPE('I', 'E', 'N', 'D');
+static const uint32_t CHUNK_CGBI = PNG_TYPE('C', 'g', 'B', 'I');
 
 static const uint8_t COLOR_TYPE_GRAYSCALE = 0;
 static const uint8_t COLOR_TYPE_RGB = 2;
 static const uint8_t COLOR_TYPE_PALETTE = 3;
 static const uint8_t COLOR_TYPE_GRAYSCALE_WITH_ALPHA = 4;
 static const uint8_t COLOR_TYPE_RGB_WITH_ALPHA = 6;
-static const int SAMPLES_PER_PIXEL[] = { 1, 0, 3, 1, 2, 0, 4 };
+static const int SAMPLES_PER_PIXEL[] = {1, 0, 3, 1, 2, 0, 4};
 
 typedef enum {
     FILTER_NONE = 0,
@@ -49,17 +49,17 @@ typedef enum {
 typedef struct {
     // Image
     ok_png *png;
-    
+
     // Input
     void *input_data;
     ok_png_input_func input_func;
-    
+
     // Decode options
     ok_png_color_format color_format;
     bool flip_y;
     bool info_only;
-    
-    // Decoding
+
+// Decoding
 #ifdef USE_ZLIB
     z_stream zlib_stream;
     bool zlib_initialized;
@@ -75,7 +75,7 @@ typedef struct {
     bool ready_for_next_interlace_pass;
     uint8_t *temp_data_row;
     bool decoding_completed;
-    
+
     // PNG data
     uint8_t bit_depth;
     uint8_t color_type;
@@ -85,11 +85,13 @@ typedef struct {
     uint16_t single_transparent_color_key[3];
     bool has_single_transparent_color;
     bool is_ios_format;
-    
+
 } png_decoder;
 
-__attribute__((__format__ (__printf__, 2, 3)))
-static void ok_png_error(ok_png *png, const char *format, ... ) {
+static void ok_png_error(ok_png *png, const char *format, ...)
+    __attribute__((__format__(__printf__, 2, 3)));
+
+static void ok_png_error(ok_png *png, const char *format, ...) {
     if (png) {
         png->width = 0;
         png->height = 0;
@@ -109,8 +111,7 @@ static void ok_png_error(ok_png *png, const char *format, ... ) {
 static bool ok_read(png_decoder *decoder, uint8_t *data, const int length) {
     if (decoder->input_func(decoder->input_data, data, length) == length) {
         return true;
-    }
-    else {
+    } else {
         ok_png_error(decoder->png, "Read error: error calling input function.");
         return false;
     }
@@ -121,7 +122,8 @@ static bool ok_seek(png_decoder *decoder, const int length) {
 }
 
 static ok_png *decode_png(void *user_data, ok_png_input_func input_func,
-                          const ok_png_color_format color_format, const bool flip_y, const bool info_only);
+                          const ok_png_color_format color_format,
+                          const bool flip_y, const bool info_only);
 
 // Public API
 
@@ -159,8 +161,7 @@ static inline void premultiply(uint8_t *dst) {
         dst[0] = 0;
         dst[1] = 0;
         dst[2] = 0;
-    }
-    else if (a < 255) {
+    } else if (a < 255) {
         dst[0] = (a * dst[0] + 127) / 255;
         dst[1] = (a * dst[1] + 127) / 255;
         dst[2] = (a * dst[2] + 127) / 255;
@@ -193,34 +194,32 @@ static bool read_header(png_decoder *decoder, const uint32_t chunk_length) {
     uint8_t compression_method = chunk_data[10];
     uint8_t filter_method = chunk_data[11];
     decoder->interlace_method = chunk_data[12];
-    
+
     if (compression_method != 0) {
         ok_png_error(png, "Invalid compression method: %i", (int)compression_method);
         return false;
-    }
-    else if (filter_method != 0) {
+    } else if (filter_method != 0) {
         ok_png_error(png, "Invalid filter method: %i", (int)filter_method);
         return false;
-    }
-    else if (decoder->interlace_method != 0 && decoder->interlace_method != 1) {
+    } else if (decoder->interlace_method != 0 && decoder->interlace_method != 1) {
         ok_png_error(png, "Invalid interlace method: %i", (int)decoder->interlace_method);
         return false;
     }
-    
+
     const int c = decoder->color_type;
     const int b = decoder->bit_depth;
     const bool valid =
-    (c == COLOR_TYPE_GRAYSCALE && (b == 1 || b == 2 || b == 4 || b == 8 || b == 16)) ||
-    (c == COLOR_TYPE_RGB && (b == 8 || b == 16)) ||
-    (c == COLOR_TYPE_PALETTE && (b == 1 || b == 2 || b == 4 || b == 8)) ||
-    (c == COLOR_TYPE_GRAYSCALE_WITH_ALPHA && (b == 8 || b == 16)) ||
-    (c == COLOR_TYPE_RGB_WITH_ALPHA && (b == 8 || b == 16));
-    
+        (c == COLOR_TYPE_GRAYSCALE && (b == 1 || b == 2 || b == 4 || b == 8 || b == 16)) ||
+        (c == COLOR_TYPE_RGB && (b == 8 || b == 16)) ||
+        (c == COLOR_TYPE_PALETTE && (b == 1 || b == 2 || b == 4 || b == 8)) ||
+        (c == COLOR_TYPE_GRAYSCALE_WITH_ALPHA && (b == 8 || b == 16)) ||
+        (c == COLOR_TYPE_RGB_WITH_ALPHA && (b == 8 || b == 16));
+
     if (!valid) {
         ok_png_error(png, "Invalid combination of color type (%i) and bit depth (%i)", c, b);
         return false;
     }
-    
+
     png->has_alpha = c == COLOR_TYPE_GRAYSCALE_WITH_ALPHA || c == COLOR_TYPE_RGB_WITH_ALPHA;
     decoder->interlace_pass = 0;
     decoder->ready_for_next_interlace_pass = true;
@@ -230,7 +229,7 @@ static bool read_header(png_decoder *decoder, const uint32_t chunk_length) {
 static bool read_palette(png_decoder *decoder, const uint32_t chunk_length) {
     ok_png *png = decoder->png;
     decoder->palette_length = chunk_length / 3;
-    
+
     if (decoder->palette_length > 256 || decoder->palette_length * 3 != chunk_length) {
         ok_png_error(png, "Invalid palette chunk length: %u", chunk_length);
         return false;
@@ -249,8 +248,7 @@ static bool read_palette(png_decoder *decoder, const uint32_t chunk_length) {
             *dst++ = buffer[2];
             *dst++ = buffer[1];
             *dst++ = buffer[0];
-        }
-        else {
+        } else {
             *dst++ = buffer[0];
             *dst++ = buffer[1];
             *dst++ = buffer[2];
@@ -263,13 +261,14 @@ static bool read_palette(png_decoder *decoder, const uint32_t chunk_length) {
 static bool read_transparency(png_decoder *decoder, const uint32_t chunk_length) {
     ok_png *png = decoder->png;
     png->has_alpha = true;
-    
+
     if (decoder->color_type == COLOR_TYPE_PALETTE) {
         if (chunk_length > decoder->palette_length) {
-            ok_png_error(png, "Invalid transparency length for palette color type: %u", chunk_length);
+            ok_png_error(png, "Invalid transparency length for palette color type: %u",
+                         chunk_length);
             return false;
         }
-        
+
         const bool should_premultiply = (decoder->color_format == OK_PNG_COLOR_FORMAT_BGRA_PRE ||
                                          decoder->color_format == OK_PNG_COLOR_FORMAT_RGBA_PRE);
         uint8_t *dst = decoder->palette;
@@ -283,13 +282,12 @@ static bool read_transparency(png_decoder *decoder, const uint32_t chunk_length)
             dst += 4;
         }
         return true;
-    }
-    else if (decoder->color_type == COLOR_TYPE_GRAYSCALE) {
+    } else if (decoder->color_type == COLOR_TYPE_GRAYSCALE) {
         if (chunk_length != 2) {
-            ok_png_error(png, "Invalid transparency length for grayscale color type: %u", chunk_length);
+            ok_png_error(png, "Invalid transparency length for grayscale color type: %u",
+                         chunk_length);
             return false;
-        }
-        else {
+        } else {
             uint8_t buffer[2];
             if (!ok_read(decoder, buffer, sizeof(buffer))) {
                 return false;
@@ -301,13 +299,12 @@ static bool read_transparency(png_decoder *decoder, const uint32_t chunk_length)
             decoder->has_single_transparent_color = true;
             return true;
         }
-    }
-    else if (decoder->color_type == COLOR_TYPE_RGB) {
+    } else if (decoder->color_type == COLOR_TYPE_RGB) {
         if (chunk_length != 6) {
-            ok_png_error(png, "Invalid transparency length for truecolor color type: %u", chunk_length);
+            ok_png_error(png, "Invalid transparency length for truecolor color type: %u",
+                         chunk_length);
             return false;
-        }
-        else {
+        } else {
             uint8_t buffer[6];
             if (!ok_read(decoder, buffer, sizeof(buffer))) {
                 return false;
@@ -318,8 +315,7 @@ static bool read_transparency(png_decoder *decoder, const uint32_t chunk_length)
             decoder->has_single_transparent_color = true;
             return true;
         }
-    }
-    else {
+    } else {
         ok_png_error(png, "Invalid transparency for color type %i", (int)decoder->color_type);
         return false;
     }
@@ -332,16 +328,14 @@ static inline int paeth_predictor(int a, int b, int c) {
     int pc = abs(p - c);
     if (pa <= pb && pa <= pc) {
         return a;
-    }
-    else if (pb <= pc) {
+    } else if (pb <= pc) {
         return b;
-    }
-    else {
+    } else {
         return c;
     }
 }
 
-static void decode_filter(uint8_t * RESTRICT curr, const uint8_t * RESTRICT prev,
+static void decode_filter(uint8_t *RESTRICT curr, const uint8_t *RESTRICT prev,
                           const uint32_t length, const int filter, const int bpp) {
     switch (filter) {
         case FILTER_NONE:
@@ -392,34 +386,35 @@ static void decode_filter(uint8_t * RESTRICT curr, const uint8_t * RESTRICT prev
 static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const uint32_t width) {
     ok_png *png = decoder->png;
     const uint32_t dst_stride = png->width * 4;
-    uint8_t * dst_start;
-    uint8_t * dst_end;
+    uint8_t *dst_start;
+    uint8_t *dst_end;
     if (decoder->interlace_method == 0) {
-        const uint32_t dst_y = decoder->flip_y ? (png->height - decoder->scanline - 1) : decoder->scanline;
+        const uint32_t dst_y =
+            (decoder->flip_y ? (png->height - decoder->scanline - 1) : decoder->scanline);
         dst_start = png->data + (dst_y * dst_stride);
-    }
-    else if (decoder->interlace_pass == 7) {
+    } else if (decoder->interlace_pass == 7) {
         const uint32_t t_scanline = decoder->scanline * 2 + 1;
         const uint32_t dst_y = decoder->flip_y ? (png->height - t_scanline - 1) : t_scanline;
         dst_start = png->data + (dst_y * dst_stride);
-    }
-    else {
+    } else {
         dst_start = decoder->temp_data_row;
     }
     dst_end = dst_start + width * 4;
-    
+
     const int c = decoder->color_type;
     const int d = decoder->bit_depth;
     const bool t = decoder->has_single_transparent_color;
-    const bool has_full_alpha = c == COLOR_TYPE_GRAYSCALE_WITH_ALPHA || c == COLOR_TYPE_RGB_WITH_ALPHA;
+    const bool has_full_alpha = (c == COLOR_TYPE_GRAYSCALE_WITH_ALPHA ||
+                                 c == COLOR_TYPE_RGB_WITH_ALPHA);
     const bool src_is_premultiplied = decoder->is_ios_format;
     const bool dst_is_premultiplied = (decoder->color_format == OK_PNG_COLOR_FORMAT_RGBA_PRE ||
                                        decoder->color_format == OK_PNG_COLOR_FORMAT_BGRA_PRE);
     const bool src_is_bgr = decoder->is_ios_format;
     const bool dst_is_bgr = (decoder->color_format == OK_PNG_COLOR_FORMAT_BGRA ||
                              decoder->color_format == OK_PNG_COLOR_FORMAT_BGRA_PRE);
-    bool should_byteswap = (c == COLOR_TYPE_RGB || c == COLOR_TYPE_RGB_WITH_ALPHA) && src_is_bgr != dst_is_bgr;
-    
+    bool should_byteswap = ((c == COLOR_TYPE_RGB || c == COLOR_TYPE_RGB_WITH_ALPHA) &&
+                            src_is_bgr != dst_is_bgr);
+
     // Simple transforms
     if (c == COLOR_TYPE_GRAYSCALE && d == 8 && !t) {
         uint8_t *dst = dst_start;
@@ -430,8 +425,7 @@ static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const u
             *dst++ = v;
             *dst++ = 0xff;
         }
-    }
-    else if (c == COLOR_TYPE_PALETTE && d == 8) {
+    } else if (c == COLOR_TYPE_PALETTE && d == 8) {
         uint8_t *dst = dst_start;
         const uint8_t *palette = decoder->palette;
         while (dst < dst_end) {
@@ -441,8 +435,7 @@ static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const u
             *dst++ = *psrc++;
             *dst++ = *psrc++;
         }
-    }
-    else if (c == COLOR_TYPE_RGB && d == 8 && !t) {
+    } else if (c == COLOR_TYPE_RGB && d == 8 && !t) {
         if (should_byteswap) {
             uint8_t *dst = dst_start;
             while (dst < dst_end) {
@@ -453,8 +446,7 @@ static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const u
                 src += 3;
             }
             should_byteswap = false;
-        }
-        else {
+        } else {
             uint8_t *dst = dst_start;
             while (dst < dst_end) {
                 *dst++ = *src++;
@@ -463,8 +455,7 @@ static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const u
                 *dst++ = 0xff;
             }
         }
-    }
-    else if (c == COLOR_TYPE_GRAYSCALE_WITH_ALPHA && d == 8) {
+    } else if (c == COLOR_TYPE_GRAYSCALE_WITH_ALPHA && d == 8) {
         uint8_t *dst = dst_start;
         while (dst < dst_end) {
             uint8_t v = *src++;
@@ -474,11 +465,9 @@ static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const u
             *dst++ = v;
             *dst++ = a;
         }
-    }
-    else if (c == COLOR_TYPE_RGB_WITH_ALPHA && d == 8) {
+    } else if (c == COLOR_TYPE_RGB_WITH_ALPHA && d == 8) {
         memcpy(dst_start, src, width * 4);
-    }
-    else {
+    } else {
         // Complex transforms: 1-, 2-, 4- and 16-bit, and 8-bit with single-color transparency.
         const uint8_t *palette = decoder->palette;
         const int bitmask = (1 << d) - 1;
@@ -497,7 +486,7 @@ static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const u
             uint16_t g = 0;
             uint16_t b = 0;
             uint16_t a = 0xffff;
-            
+
             if (d < 8) {
                 if (bit < 0) {
                     bit = 8 - d;
@@ -506,8 +495,7 @@ static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const u
                 int v = (*src >> bit) & bitmask;
                 if (c == COLOR_TYPE_GRAYSCALE) {
                     r = g = b = (uint16_t)(v * (255 / bitmask));
-                }
-                else {
+                } else {
                     const uint8_t *psrc = palette + (v * 4);
                     r = *psrc++;
                     g = *psrc++;
@@ -515,51 +503,42 @@ static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const u
                     a = *psrc++;
                 }
                 bit -= d;
-            }
-            else if (d == 8) {
+            } else if (d == 8) {
                 if (c == COLOR_TYPE_GRAYSCALE) {
                     r = g = b = *src++;
-                }
-                else if (c == COLOR_TYPE_PALETTE) {
+                } else if (c == COLOR_TYPE_PALETTE) {
                     const uint8_t *psrc = palette + (*src++ * 4);
                     r = *psrc++;
                     g = *psrc++;
                     b = *psrc++;
                     a = *psrc++;
-                }
-                else if (c == COLOR_TYPE_GRAYSCALE_WITH_ALPHA) {
+                } else if (c == COLOR_TYPE_GRAYSCALE_WITH_ALPHA) {
                     r = g = b = *src++;
                     a = *src++;
-                }
-                else if (c == COLOR_TYPE_RGB) {
+                } else if (c == COLOR_TYPE_RGB) {
                     r = *src++;
                     g = *src++;
                     b = *src++;
-                }
-                else if (c == COLOR_TYPE_RGB_WITH_ALPHA) {
+                } else if (c == COLOR_TYPE_RGB_WITH_ALPHA) {
                     r = *src++;
                     g = *src++;
                     b = *src++;
                     a = *src++;
                 }
-            }
-            else if (d == 16) {
+            } else if (d == 16) {
                 if (c == COLOR_TYPE_GRAYSCALE) {
                     r = g = b = readBE16(src);
                     src += 2;
-                }
-                else if (c == COLOR_TYPE_GRAYSCALE_WITH_ALPHA) {
+                } else if (c == COLOR_TYPE_GRAYSCALE_WITH_ALPHA) {
                     r = g = b = readBE16(src);
                     a = readBE16(src + 2);
                     src += 4;
-                }
-                else if (c == COLOR_TYPE_RGB) {
+                } else if (c == COLOR_TYPE_RGB) {
                     r = readBE16(src);
                     g = readBE16(src + 2);
                     b = readBE16(src + 4);
                     src += 6;
-                }
-                else if (c == COLOR_TYPE_RGB_WITH_ALPHA) {
+                } else if (c == COLOR_TYPE_RGB_WITH_ALPHA) {
                     r = readBE16(src);
                     g = readBE16(src + 2);
                     b = readBE16(src + 4);
@@ -567,14 +546,14 @@ static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const u
                     src += 8;
                 }
             }
-            
+
             if (t && r == tr && g == tg && b == tb) {
                 a = 0;
                 if (dst_is_premultiplied) {
                     r = b = g = 0;
                 }
             }
-            
+
             if (d == 16) {
                 // This is libpng's formula for scaling 16-bit to 8-bit
                 r = (r * 255 + 32895) >> 16;
@@ -582,14 +561,13 @@ static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const u
                 b = (b * 255 + 32895) >> 16;
                 a = (a * 255 + 32895) >> 16;
             }
-            
+
             if (should_byteswap) {
                 *dst++ = (uint8_t)b;
                 *dst++ = (uint8_t)g;
                 *dst++ = (uint8_t)r;
                 *dst++ = (uint8_t)a;
-            }
-            else {
+            } else {
                 *dst++ = (uint8_t)r;
                 *dst++ = (uint8_t)g;
                 *dst++ = (uint8_t)b;
@@ -609,8 +587,7 @@ static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const u
                 dst[2] = v;
                 unpremultiply(dst);
             }
-        }
-        else if (has_full_alpha && !src_is_premultiplied && dst_is_premultiplied) {
+        } else if (has_full_alpha && !src_is_premultiplied && dst_is_premultiplied) {
             // Convert from BGRA to RGBA_PRE
             for (uint8_t *dst = dst_start; dst < dst_end; dst += 4) {
                 const uint8_t v = dst[0];
@@ -618,8 +595,7 @@ static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const u
                 dst[2] = v;
                 premultiply(dst);
             }
-        }
-        else {
+        } else {
             // Convert from BGRA to RGBA (or BGRA_PRE to RGBA_PRE)
             for (uint8_t *dst = dst_start; dst < dst_end; dst += 4) {
                 const uint8_t v = dst[0];
@@ -627,41 +603,40 @@ static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const u
                 dst[2] = v;
             }
         }
-    }
-    else if (has_full_alpha) {
+    } else if (has_full_alpha) {
         if (src_is_premultiplied && !dst_is_premultiplied) {
             // Convert from RGBA_PRE to RGBA
             for (uint8_t *dst = dst_start; dst < dst_end; dst += 4) {
                 unpremultiply(dst);
             }
-        }
-        else if (!src_is_premultiplied && dst_is_premultiplied) {
+        } else if (!src_is_premultiplied && dst_is_premultiplied) {
             // Convert from RGBA to RGBA_PRE
             for (uint8_t *dst = dst_start; dst < dst_end; dst += 4) {
                 premultiply(dst);
             }
-        }
-        else {
+        } else {
             // Do nothing: Already in correct format, RGBA or RGBA_PRE
         }
     }
-    
+
     // If interlaced, copy from the temp buffer
     if (decoder->interlace_method == 1 && decoder->interlace_pass < 7) {
         const int i = decoder->interlace_pass;
         const uint32_t s = decoder->scanline;
+        // clang-format off
         //                                       1      2      3      4      5      6      7
         static const uint32_t dst_x[]  = {0,     0,     4,     0,     2,     0,     1,     0 };
         static const uint32_t dst_dx[] = {0,     8,     8,     4,     4,     2,     2,     1 };
                const uint32_t dst_y[]  = {0,   s*8,   s*8, 4+s*8,   s*4, 2+s*4,   s*2, 1+s*2 };
-        
+        // clang-format on
+
         uint32_t x = dst_x[i];
         uint32_t y = dst_y[i];
         uint32_t dx = 4 * (dst_dx[i] - 1);
         if (decoder->flip_y) {
             y = (png->height - y - 1);
         }
-        
+
         src = dst_start;
         uint8_t *src_end = dst_end;
         uint8_t *dst = png->data + (y * dst_stride) + (x * 4);
@@ -673,7 +648,7 @@ static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const u
             dst += dx;
         }
     }
-    
+
     return true;
 }
 
@@ -682,7 +657,7 @@ static uint32_t get_width_for_pass(const png_decoder *decoder) {
     if (decoder->interlace_method == 0) {
         return w;
     }
-    
+
     switch (decoder->interlace_pass) {
         case 1:
             return (w + 7) / 8;
@@ -708,7 +683,7 @@ static uint32_t get_height_for_pass(const png_decoder *decoder) {
     if (decoder->interlace_method == 0) {
         return h;
     }
-    
+
     switch (decoder->interlace_pass) {
         case 1:
             return (h + 7) / 8;
@@ -736,7 +711,7 @@ static bool read_data(png_decoder *decoder, uint32_t bytes_remaining) {
     const int bits_per_pixel = decoder->bit_depth * SAMPLES_PER_PIXEL[decoder->color_type];
     const int bytes_per_pixel = (bits_per_pixel + 7) / 8;
     const int max_bytes_per_scanline = 1 + (png->width * bits_per_pixel + 7) / 8;
-    
+
     // Create buffers
     if (!png->data) {
         uint64_t size = (uint64_t)png->width * png->height * 4;
@@ -745,7 +720,8 @@ static bool read_data(png_decoder *decoder, uint32_t bytes_remaining) {
             png->data = malloc(platform_size);
         }
         if (!png->data) {
-            ok_png_error(png, "Couldn't allocate memory for %u x %u image", png->width, png->height);
+            ok_png_error(png, "Couldn't allocate memory for %u x %u image",
+                         png->width, png->height);
             return false;
         }
     }
@@ -766,8 +742,8 @@ static bool read_data(png_decoder *decoder, uint32_t bytes_remaining) {
         ok_png_error(png, "Couldn't allocate buffers");
         return false;
     }
-    
-    // Setup inflater
+
+// Setup inflater
 #ifdef USE_ZLIB
     if (!decoder->zlib_initialized) {
         if (inflateInit2(&decoder->zlib_stream, decoder->is_ios_format ? -15 : 15) != Z_OK) {
@@ -785,13 +761,12 @@ static bool read_data(png_decoder *decoder, uint32_t bytes_remaining) {
         }
     }
 #endif
-    
+
     // Sanity check - this happened with one file in the PNG suite
     if (decoder->decoding_completed) {
         if (bytes_remaining > 0) {
             return ok_seek(decoder, bytes_remaining);
-        }
-        else {
+        } else {
             return true;
         }
     }
@@ -811,8 +786,7 @@ static bool read_data(png_decoder *decoder, uint32_t bytes_remaining) {
                 decoder->decoding_completed = true;
                 if (bytes_remaining > 0) {
                     return ok_seek(decoder, bytes_remaining);
-                }
-                else {
+                } else {
                     return true;
                 }
             }
@@ -822,20 +796,19 @@ static bool read_data(png_decoder *decoder, uint32_t bytes_remaining) {
             if (curr_width == 0 || curr_height == 0) {
                 // No data for this pass - happens if width or height <= 4
                 decoder->ready_for_next_interlace_pass = true;
-            }
-            else {
+            } else {
                 memset(decoder->curr_scanline, 0, curr_bytes_per_scanline);
                 memset(decoder->prev_scanline, 0, curr_bytes_per_scanline);
 #ifdef USE_ZLIB
                 decoder->zlib_stream.next_out = decoder->curr_scanline;
                 decoder->zlib_stream.avail_out = curr_bytes_per_scanline;
-#else 
+#else
                 decoder->inflater_bytes_read = 0;
 #endif
             }
         }
-        
-        // Read compressed data
+
+// Read compressed data
 #ifdef USE_ZLIB
         if (decoder->zlib_stream.avail_in == 0)
 #else
@@ -859,18 +832,18 @@ static bool read_data(png_decoder *decoder, uint32_t bytes_remaining) {
             ok_inflater_set_input(decoder->inflater, decoder->inflate_buffer, len);
 #endif
         }
-        
-        // Decompress data
+
+// Decompress data
 #ifdef USE_ZLIB
         int status = inflate(&decoder->zlib_stream, Z_NO_FLUSH);
         if (status != Z_OK && status != Z_STREAM_END) {
             ok_png_error(png, "Error inflating data");
             return false;
         }
-        
+
         // Get one scanline
         if (decoder->zlib_stream.avail_out == 0)
-#else 
+#else
         intptr_t len = ok_inflater_inflate(decoder->inflater,
                                            decoder->curr_scanline + decoder->inflater_bytes_read,
                                            curr_bytes_per_scanline - decoder->inflater_bytes_read);
@@ -885,10 +858,9 @@ static bool read_data(png_decoder *decoder, uint32_t bytes_remaining) {
             // Apply filter
             const int filter = decoder->curr_scanline[0];
             if (filter > 0 && filter < NUM_FILTERS) {
-                decode_filter(decoder->curr_scanline + 1, decoder->prev_scanline + 1, curr_bytes_per_scanline - 1,
-                              filter, bytes_per_pixel);
-            }
-            else if (filter != 0) {
+                decode_filter(decoder->curr_scanline + 1, decoder->prev_scanline + 1,
+                              curr_bytes_per_scanline - 1, filter, bytes_per_pixel);
+            } else if (filter != 0) {
                 ok_png_error(png, "Invalid filter type: %i", filter);
                 return false;
             }
@@ -897,14 +869,13 @@ static bool read_data(png_decoder *decoder, uint32_t bytes_remaining) {
             if (!transform_scanline(decoder, decoder->curr_scanline + 1, curr_width)) {
                 return false;
             }
-            
+
             // Setup for next scanline or pass
             decoder->scanline++;
             if (decoder->scanline == curr_height) {
                 decoder->ready_for_next_interlace_pass = true;
-            }
-            else {
-                uint8_t* temp = decoder->curr_scanline;
+            } else {
+                uint8_t *temp = decoder->curr_scanline;
                 decoder->curr_scanline = decoder->prev_scanline;
                 decoder->prev_scanline = temp;
 #ifdef USE_ZLIB
@@ -920,18 +891,19 @@ static bool read_data(png_decoder *decoder, uint32_t bytes_remaining) {
 
 static void decode_png2(png_decoder *decoder) {
     ok_png *png = decoder->png;
-    
+
     uint8_t png_header[8];
     if (!ok_read(decoder, png_header, sizeof(png_header))) {
         return;
     }
-    uint8_t png_signature[8] = { 137, 80, 78, 71, 13, 10, 26, 10 };
+    uint8_t png_signature[8] = {137, 80, 78, 71, 13, 10, 26, 10};
     if (memcmp(png_header, png_signature, 8) != 0) {
         ok_png_error(decoder->png, "Invalid signature (not a PNG file)");
         return;
     }
-    
-    // When info_only is true, we only care about the IHDR chunk and whether or not the tRNS chunk exists.
+
+    // When info_only is true, we only care about the IHDR chunk and whether or not
+    // the tRNS chunk exists.
     bool end_found = false;
     while (!end_found) {
         uint8_t chunk_header[8];
@@ -951,50 +923,43 @@ static void decode_png2(png_decoder *decoder) {
                     return;
                 }
             }
-        }
-        else if (chunk_type == CHUNK_CGBI) {
+        } else if (chunk_type == CHUNK_CGBI) {
             success = ok_seek(decoder, chunk_length);
             decoder->is_ios_format = true;
-        }
-        else if (chunk_type == CHUNK_PLTE && !decoder->info_only) {
+        } else if (chunk_type == CHUNK_PLTE && !decoder->info_only) {
             success = read_palette(decoder, chunk_length);
-        }
-        else if (chunk_type == CHUNK_TRNS) {
+        } else if (chunk_type == CHUNK_TRNS) {
             if (decoder->info_only) {
                 // No need to parse this chunk, we have all the info we need.
                 png->has_alpha = true;
                 return;
-            }
-            else {
+            } else {
                 success = read_transparency(decoder, chunk_length);
             }
-        }
-        else if (chunk_type == CHUNK_IDAT) {
+        } else if (chunk_type == CHUNK_IDAT) {
             if (decoder->info_only) {
                 // Both IHDR and tRNS must come before IDAT, so we have all the info we need.
                 return;
             }
             success = read_data(decoder, chunk_length);
-        }
-        else if (chunk_type == CHUNK_IEND) {
+        } else if (chunk_type == CHUNK_IEND) {
             success = ok_seek(decoder, chunk_length);
             end_found = true;
-        }
-        else {
+        } else {
             // Ignore this chunk
             success = ok_seek(decoder, chunk_length);
         }
-        
+
         if (!success) {
             return;
         }
-        
+
         // Read the footer (CRC) and ignore it
         if (!ok_read(decoder, chunk_footer, sizeof(chunk_footer))) {
             return;
         }
     }
-    
+
     // Sanity check
     if (!decoder->decoding_completed) {
         ok_png_error(png, "Missing imaga data");
@@ -1002,8 +967,8 @@ static void decode_png2(png_decoder *decoder) {
 }
 
 static ok_png *decode_png(void *user_data, ok_png_input_func input_func,
-                          const ok_png_color_format color_format, const bool flip_y, const bool info_only) {
-    
+                          const ok_png_color_format color_format,
+                          const bool flip_y, const bool info_only) {
     ok_png *png = calloc(1, sizeof(ok_png));
     if (!png) {
         return NULL;
@@ -1012,7 +977,7 @@ static ok_png *decode_png(void *user_data, ok_png_input_func input_func,
         ok_png_error(png, "Invalid argument: input_func is NULL");
         return png;
     }
-    
+
     png_decoder *decoder = calloc(1, sizeof(png_decoder));
     if (!decoder) {
         ok_png_error(png, "Couldn't allocate decoder.");
@@ -1025,10 +990,10 @@ static ok_png *decode_png(void *user_data, ok_png_input_func input_func,
     decoder->color_format = color_format;
     decoder->flip_y = flip_y;
     decoder->info_only = info_only;
-    
+
     decode_png2(decoder);
-    
-    // Cleanup decoder
+
+// Cleanup decoder
 #ifdef USE_ZLIB
     if (decoder->zlib_initialized) {
         inflateEnd(&decoder->zlib_stream);
@@ -1049,10 +1014,10 @@ static ok_png *decode_png(void *user_data, ok_png_input_func input_func,
         free(decoder->temp_data_row);
     }
     free(decoder);
-    
+
     return png;
 }
-        
+
 //
 // Inflater
 // Written from RFC 1950 and RFC 1951.
@@ -1061,7 +1026,8 @@ static ok_png *decode_png(void *user_data, ok_png_input_func input_func,
 
 #define BUFFER_SIZE_BITS 16
 #if BUFFER_SIZE_BITS != 16
-#error The circular buffer pointers, buffer_start_pos, buffer_end_pos, and buffer_offset, only work with 16-bit buffers.
+#error The circular buffer pointers, buffer_start_pos, buffer_end_pos, and buffer_offset, \
+only work with 16-bit buffers.
 #endif
 
 // 32k for back buffer, 32k for forward buffer
@@ -1071,7 +1037,7 @@ static ok_png *decode_png(void *user_data, ok_png_input_func input_func,
 #define BLOCK_TYPE_NO_COMPRESSION 0
 #define BLOCK_TYPE_FIXED_HUFFMAN 1
 #define BLOCK_TYPE_DYNAMIC_HUFFMAN 2
-        
+
 typedef enum {
     STATE_READY_FOR_HEAD = 0,
     STATE_READY_FOR_NEXT_BLOCK,
@@ -1095,6 +1061,8 @@ typedef enum {
 #define MAX_NUM_CODES 289
 #define MAX_CODE_LENGTH 16
 
+// clang-format off
+
 static const int DISTANCE_TABLE[] = {
     1,    2,    3,    4,    5,    7,    9,    13,    17,    25,
     33,   49,   65,   97,   129,  193,  257,  385,   513,   769,
@@ -1113,6 +1081,8 @@ static const int BIT_LENGTH_TABLE[] = {
 };
 static const int BIT_LENGTH_TABLE_LENGTH = 19;
 
+// clang-format on
+
 typedef struct {
     uint16_t lookup_table[1 << (MAX_CODE_LENGTH - 1)];
     int bits;
@@ -1122,13 +1092,13 @@ typedef struct {
 struct ok_inflater {
     // Options
     bool nowrap;
-    
+
     // Input
     uint8_t *input;
     uint8_t *input_end;
     uint32_t input_buffer;
     int input_buffer_bits;
-    
+
     // Inflate data
     uint8_t *buffer;
     uint16_t buffer_start_pos;
@@ -1138,7 +1108,7 @@ struct ok_inflater {
     int state_count;
     int state_literal;
     int state_distance;
-    
+
     // For dynamic blocks
     int num_literal_codes;
     int num_distance_codes;
@@ -1146,20 +1116,21 @@ struct ok_inflater {
     uint8_t tree_codes[MAX_NUM_CODES];
     huffman_tree *code_length_huffman;
     int huffman_code;
-    
+
     // Huffman
     huffman_tree *literal_huffman;
     huffman_tree *distance_huffman;
     huffman_tree *fixed_literal_huffman;
     huffman_tree *fixed_distance_huffman;
-    
+
     // Error
     char error_message[80];
-    
 };
 
-__attribute__((__format__ (__printf__, 2, 3)))
-static void inflater_error(ok_inflater *inflater, const char *format, ... ) {
+static void inflater_error(ok_inflater *inflater, const char *format, ...)
+    __attribute__((__format__(__printf__, 2, 3)));
+
+static void inflater_error(ok_inflater *inflater, const char *format, ...) {
     if (inflater) {
         inflater->state = STATE_ERROR;
         if (format) {
@@ -1184,11 +1155,9 @@ static void inflater_error(ok_inflater *inflater, const char *format, ... ) {
 inline static uint16_t can_write(const ok_inflater *inflater) {
     if (inflater->buffer_start_pos == 0) {
         return -inflater->buffer_end_pos - 1;
-    }
-    else if (inflater->buffer_start_pos > inflater->buffer_end_pos) {
+    } else if (inflater->buffer_start_pos > inflater->buffer_end_pos) {
         return inflater->buffer_start_pos - inflater->buffer_end_pos - 1;
-    }
-    else {
+    } else {
         return -inflater->buffer_end_pos;
     }
 }
@@ -1202,7 +1171,7 @@ inline static void write_byte(ok_inflater *inflater, const uint8_t b) {
     inflater->buffer_end_pos++;
 }
 
-inline static size_t write_bytes(ok_inflater *inflater, const uint8_t* src, const size_t len) {
+inline static size_t write_bytes(ok_inflater *inflater, const uint8_t *src, const size_t len) {
     size_t bytes_remaining = len;
     while (bytes_remaining > 0) {
         size_t n = min(bytes_remaining, can_write(inflater));
@@ -1239,8 +1208,7 @@ inline static uint16_t can_flush_total(const ok_inflater *inflater) {
 inline static uint16_t can_flush(const ok_inflater *inflater) {
     if (inflater->buffer_start_pos <= inflater->buffer_end_pos) {
         return inflater->buffer_end_pos - inflater->buffer_start_pos;
-    }
-    else {
+    } else {
         return -inflater->buffer_start_pos;
     }
 }
@@ -1306,7 +1274,8 @@ inline static uint32_t reverse_bits(uint32_t value, int num_bits) {
     return rev_value;
 }
 
-static int decode_literal(ok_inflater *inflater, const uint16_t *tree_lookup_table, const int tree_bits) {
+static int decode_literal(ok_inflater *inflater, const uint16_t *tree_lookup_table,
+                          const int tree_bits) {
     if (!load_bits(inflater, tree_bits)) {
         return -1;
     }
@@ -1316,9 +1285,10 @@ static int decode_literal(ok_inflater *inflater, const uint16_t *tree_lookup_tab
     return value & VALUE_BIT_MASK;
 }
 
-static bool make_huffman_tree_from_array(huffman_tree *tree, const uint8_t* code_length, const int length) {
+static bool make_huffman_tree_from_array(huffman_tree *tree, const uint8_t *code_length,
+                                         const int length) {
     tree->bits = 1;
-    
+
     // Count the number of codes for each code length.
     // Let code_length_count[n] be the number of codes of length n, n >= 1.
     int code_length_count[MAX_CODE_LENGTH];
@@ -1329,37 +1299,37 @@ static bool make_huffman_tree_from_array(huffman_tree *tree, const uint8_t* code
     for (i = 0; i < length; i++) {
         code_length_count[code_length[i]]++;
     }
-    
+
     // Find the numerical value of the smallest code for each code length:
     int next_code[MAX_CODE_LENGTH];
     int code = 0;
     for (i = 1; i < MAX_CODE_LENGTH; i++) {
-        code = (code + code_length_count[i-1]) << 1;
+        code = (code + code_length_count[i - 1]) << 1;
         next_code[i] = code;
         if (code_length_count[i] != 0) {
             tree->bits = i;
         }
     }
-    
+
     // Init lookup table
     const int max = 1 << tree->bits;
-    tree->bit_mask = (max) - 1;
+    tree->bit_mask = (max)-1;
     memset(tree->lookup_table, 0, sizeof(tree->lookup_table[0]) * max);
-    
+
     // Assign numerical values to all codes, using consecutive values for all
     // codes of the same length with the base values determined at step 2.
     // Codes that are never used (which have a bit length of zero) must not be
     // assigned a value.
-    for (i = 0;  i < length; i++) {
+    for (i = 0; i < length; i++) {
         int len = code_length[i];
         if (len != 0) {
             code = next_code[len];
             next_code[len]++;
-            
+
             tree->lookup_table[reverse_bits(code, len)] = (uint16_t)(i | (len << VALUE_BITS));
         }
     }
-    
+
     // Fill in the missing parts of the lookup table
     int next_limit = 1;
     int num_bits = 0;
@@ -1374,11 +1344,12 @@ static bool make_huffman_tree_from_array(huffman_tree *tree, const uint8_t* code
             tree->lookup_table[i] = tree->lookup_table[i & mask];
         }
     }
-    
+
     return true;
 }
 
-static bool inflate_huffman_tree(ok_inflater *inflater, huffman_tree *tree, huffman_tree *code_length_huffman,
+static bool inflate_huffman_tree(ok_inflater *inflater, huffman_tree *tree,
+                                 huffman_tree *code_length_huffman,
                                  int num_codes) {
     if (num_codes < 0 || num_codes >= MAX_NUM_CODES) {
         inflater_error(inflater, "Invalid num_codes");
@@ -1402,8 +1373,7 @@ static bool inflate_huffman_tree(ok_inflater *inflater, huffman_tree *tree, huff
         }
         if (inflater->huffman_code <= 15) {
             inflater->tree_codes[inflater->state_count++] = (uint8_t)inflater->huffman_code;
-        }
-        else {
+        } else {
             int value = 0;
             int len;
             int len_bits;
@@ -1415,7 +1385,7 @@ static bool inflate_huffman_tree(ok_inflater *inflater, huffman_tree *tree, huff
                         inflater_error(inflater, "Invalid previous code");
                         return false;
                     }
-                    value = inflater->tree_codes[inflater->state_count-1];
+                    value = inflater->tree_codes[inflater->state_count - 1];
                     break;
                 case 17:
                     len = 3;
@@ -1451,16 +1421,15 @@ static bool inflate_huffman_tree(ok_inflater *inflater, huffman_tree *tree, huff
 static bool inflate_zlib_header(ok_inflater *inflater) {
     if (!load_bits(inflater, 16)) {
         return false;
-    }
-    else {
+    } else {
         int compression_method = read_bits(inflater, 4);
         int compression_info = read_bits(inflater, 4);
         int flag_check = read_bits(inflater, 5);
         int flag_dict = read_bits(inflater, 1);
         int flag_compression_level = read_bits(inflater, 2);
-        
+
         int bits = (compression_info << 12) | (compression_method << 8) |
-        (flag_compression_level << 6) | (flag_dict << 5) |  flag_check;
+            (flag_compression_level << 6) | (flag_dict << 5) | flag_check;
         if (bits % 31 != 0) {
             inflater_error(inflater, "Invalid zlib header");
             return false;
@@ -1477,7 +1446,7 @@ static bool inflate_zlib_header(ok_inflater *inflater) {
             inflater_error(inflater, "Needs external dictionary");
             return false;
         }
-        
+
         inflater->state = STATE_READY_FOR_NEXT_BLOCK;
         return true;
     }
@@ -1525,11 +1494,9 @@ static bool inflate_next_block(ok_inflater *inflater) {
         inflater->state = STATE_DONE;
         skip_byte_align(inflater);
         return true;
-    }
-    else if (!load_bits(inflater, 3)) {
+    } else if (!load_bits(inflater, 3)) {
         return false;
-    }
-    else {
+    } else {
         inflater->final_block = read_bits(inflater, 1);
         int block_type = read_bits(inflater, 2);
         switch (block_type) {
@@ -1539,8 +1506,7 @@ static bool inflate_next_block(ok_inflater *inflater) {
             case BLOCK_TYPE_DYNAMIC_HUFFMAN:
                 inflater->state = STATE_READING_DYNAMIC_BLOCK_HEADER;
                 break;
-            case BLOCK_TYPE_FIXED_HUFFMAN:
-            {
+            case BLOCK_TYPE_FIXED_HUFFMAN: {
                 if (!inflate_init_fixed_huffman(inflater)) {
                     inflater_error(inflater, "Couldn't initilize fixed huffman trees");
                     return false;
@@ -1561,19 +1527,16 @@ static bool inflate_stored_block_header(ok_inflater *inflater) {
     skip_byte_align(inflater);
     if (!load_bits(inflater, 32)) {
         return false;
-    }
-    else {
+    } else {
         int len = read_bits(inflater, 16);
         int clen = read_bits(inflater, 16);
         if ((len & 0xffff) != ((~clen) & 0xffff)) {
             inflater_error(inflater, "Invalid stored block");
             return false;
-        }
-        else if (len == 0) {
+        } else if (len == 0) {
             inflater->state = STATE_READY_FOR_NEXT_BLOCK;
             return true;
-        }
-        else {
+        } else {
             inflater->state = STATE_READING_STORED_BLOCK;
             inflater->state_count = len;
             return true;
@@ -1585,9 +1548,9 @@ static bool inflate_stored_block(ok_inflater *inflater) {
     const size_t can_read = inflater->input_end - inflater->input;
     if (can_read == 0) {
         return false;
-    }
-    else {
-        size_t len = write_bytes(inflater, inflater->input, min(can_read, (size_t)inflater->state_count));
+    } else {
+        size_t len = write_bytes(inflater, inflater->input,
+                                 min(can_read, (size_t)inflater->state_count));
         if (len == 0) {
             // Buffer full
             return false;
@@ -1639,7 +1602,8 @@ static bool inflate_distance(ok_inflater *inflater) {
         }
     }
     if (inflater->state_literal < 0) {
-        huffman_tree *curr_distance_huffman = is_fixed ? inflater->fixed_distance_huffman : inflater->distance_huffman;
+        huffman_tree *curr_distance_huffman =
+            (is_fixed ? inflater->fixed_distance_huffman : inflater->distance_huffman);
         const uint16_t *tree_lookup_table = curr_distance_huffman->lookup_table;
         const int tree_bits = curr_distance_huffman->bits;
         inflater->state_literal = decode_literal(inflater, tree_lookup_table, tree_bits);
@@ -1653,14 +1617,13 @@ static bool inflate_distance(ok_inflater *inflater) {
         if (inflater->state_distance < 0) {
             // Needs input
             return false;
-        }
-        else if (inflater->state_distance == 0 || inflater->state_distance >= BUFFER_SIZE) {
+        } else if (inflater->state_distance == 0 || inflater->state_distance >= BUFFER_SIZE) {
             inflater_error(inflater, "Invalid distance");
             return false;
         }
     }
-    
-     // Copy len bytes from offset to buffer_end_pos
+
+    // Copy len bytes from offset to buffer_end_pos
     if (inflater->state_count > 0) {
         int buffer_offset = (inflater->buffer_end_pos - inflater->state_distance) & BUFFER_SIZE_MASK;
         if (inflater->state_distance == 1) {
@@ -1672,8 +1635,7 @@ static bool inflate_distance(ok_inflater *inflater) {
                 // Full buffer
                 return false;
             }
-        }
-        else  if (buffer_offset + inflater->state_count < BUFFER_SIZE) {
+        } else if (buffer_offset + inflater->state_count < BUFFER_SIZE) {
             // Optimization: the offset won't wrap
             size_t bytes_copyable = inflater->state_distance;
             while (inflater->state_count > 0) {
@@ -1686,9 +1648,8 @@ static bool inflate_distance(ok_inflater *inflater) {
                     return false;
                 }
             }
-        }
-        else {
-            // This could be optimized, but it happens much less often, so it's probably not worth it
+        } else {
+            // This could be optimized, but it happens rarely, so it's probably not worth it
             while (inflater->state_count > 0) {
                 size_t n = min(inflater->state_count, inflater->state_distance);
                 n = min(n, (size_t)(BUFFER_SIZE - buffer_offset));
@@ -1702,11 +1663,10 @@ static bool inflate_distance(ok_inflater *inflater) {
             }
         }
     }
-    
+
     if (is_fixed) {
         inflater->state = STATE_READING_FIXED_COMPRESSED_BLOCK;
-    }
-    else {
+    } else {
         inflater->state = STATE_READING_DYNAMIC_COMPRESSED_BLOCK;
     }
     inflater->huffman_code = -1;
@@ -1716,16 +1676,15 @@ static bool inflate_distance(ok_inflater *inflater) {
 static bool inflate_dynamic_block_header(ok_inflater *inflater) {
     if (!load_bits(inflater, 14)) {
         return false;
-    }
-    else {
+    } else {
         inflater->num_literal_codes = read_bits(inflater, 5) + 257;
-        inflater->num_distance_codes  = read_bits(inflater, 5) + 1;
+        inflater->num_distance_codes = read_bits(inflater, 5) + 1;
         inflater->num_code_length_codes = read_bits(inflater, 4) + 4;
-        
+
         for (int i = inflater->num_code_length_codes; i < BIT_LENGTH_TABLE_LENGTH; i++) {
             inflater->tree_codes[BIT_LENGTH_TABLE[i]] = 0;
         }
-        
+
         inflater->state = STATE_READING_DYNAMIC_CODE_LENGTHS;
         inflater->state_count = inflater->num_code_length_codes;
         return true;
@@ -1743,7 +1702,7 @@ static bool inflate_dynamic_block_code_lengths(ok_inflater *inflater) {
     }
     make_huffman_tree_from_array(inflater->code_length_huffman,
                                  inflater->tree_codes, BIT_LENGTH_TABLE_LENGTH);
-        
+
     inflater->state = STATE_READING_DYNAMIC_LITERAL_TREE;
     inflater->huffman_code = -1;
     inflater->state_count = 0;
@@ -1752,10 +1711,11 @@ static bool inflate_dynamic_block_code_lengths(ok_inflater *inflater) {
 
 static bool inflate_compressed_block(ok_inflater *inflater) {
     const bool is_fixed = inflater->state == STATE_READING_FIXED_COMPRESSED_BLOCK;
-    const huffman_tree *curr_literal_huffman = is_fixed ? inflater->fixed_literal_huffman : inflater->literal_huffman;
-    
+    const huffman_tree *curr_literal_huffman =
+        (is_fixed ? inflater->fixed_literal_huffman : inflater->literal_huffman);
+
     // decode literal/length value from input stream
-    
+
     size_t max_write = can_write_total(inflater);
     if (max_write == 0) {
         return false;
@@ -1767,23 +1727,19 @@ static bool inflate_compressed_block(ok_inflater *inflater) {
         if (value < 0) {
             // Needs input
             return false;
-        }
-        else if (value < 256) {
+        } else if (value < 256) {
             write_byte(inflater, (uint8_t)value);
             max_write--;
             if (max_write == 0) {
                 return false;
             }
-        }
-        else if (value == 256) {
+        } else if (value == 256) {
             inflater->state = STATE_READY_FOR_NEXT_BLOCK;
             return true;
-        }
-        else if (value < 286) {
+        } else if (value < 286) {
             if (is_fixed) {
                 inflater->state = STATE_READING_FIXED_DISTANCE;
-            }
-            else {
+            } else {
                 inflater->state = STATE_READING_DYNAMIC_DISTANCE;
             }
             inflater->huffman_code = value - 257;
@@ -1791,8 +1747,7 @@ static bool inflate_compressed_block(ok_inflater *inflater) {
             inflater->state_literal = -1;
             inflater->state_distance = -1;
             return true;
-        }
-        else {
+        } else {
             inflater_error(inflater, "Invalid literal: %i: ", inflater->huffman_code);
             return false;
         }
@@ -1807,8 +1762,7 @@ static bool inflate_literal_tree(ok_inflater *inflater) {
         inflater->huffman_code = -1;
         inflater->state_count = 0;
         return true;
-    }
-    else {
+    } else {
         return false;
     }
 }
@@ -1820,8 +1774,7 @@ static bool inflate_distance_tree(ok_inflater *inflater) {
         inflater->state = STATE_READING_DYNAMIC_COMPRESSED_BLOCK;
         inflater->huffman_code = -1;
         return true;
-    }
-    else {
+    } else {
         return false;
     }
 }
@@ -1830,12 +1783,11 @@ static bool inflate_noop(ok_inflater *inflater) {
     return false;
 }
 
-bool (*STATE_FUNCTIONS[NUM_STATES]) (ok_inflater *);
+bool (*STATE_FUNCTIONS[NUM_STATES])(ok_inflater *);
 
 // Public Inflater API
 
 ok_inflater *ok_inflater_init(const bool nowrap) {
-    
     STATE_FUNCTIONS[STATE_READY_FOR_HEAD] = inflate_zlib_header;
     STATE_FUNCTIONS[STATE_READY_FOR_NEXT_BLOCK] = inflate_next_block;
     STATE_FUNCTIONS[STATE_READING_STORED_BLOCK_HEADER] = inflate_stored_block_header;
@@ -1850,7 +1802,7 @@ ok_inflater *ok_inflater_init(const bool nowrap) {
     STATE_FUNCTIONS[STATE_READING_FIXED_DISTANCE] = inflate_distance;
     STATE_FUNCTIONS[STATE_DONE] = inflate_noop;
     STATE_FUNCTIONS[STATE_ERROR] = inflate_noop;
-    
+
     ok_inflater *inflater = calloc(1, sizeof(ok_inflater));
     if (inflater) {
         inflater->nowrap = nowrap;
@@ -1859,7 +1811,7 @@ ok_inflater *ok_inflater_init(const bool nowrap) {
         inflater->code_length_huffman = malloc(sizeof(huffman_tree));
         inflater->literal_huffman = malloc(sizeof(huffman_tree));
         inflater->distance_huffman = malloc(sizeof(huffman_tree));
-        
+
         if (!inflater->buffer ||
             !inflater->code_length_huffman ||
             !inflater->literal_huffman ||
@@ -1877,7 +1829,7 @@ void ok_inflater_reset(ok_inflater *inflater) {
         inflater->input_end = NULL;
         inflater->input_buffer = 0;
         inflater->input_buffer_bits = 0;
-        
+
         inflater->buffer_start_pos = 0;
         inflater->buffer_end_pos = 0;
         inflater->final_block = false;
@@ -1917,18 +1869,18 @@ const char *ok_inflater_error_message(const struct ok_inflater *inflater) {
 
 bool ok_inflater_needs_input(const ok_inflater *inflater) {
     return inflater &&
-    inflater->state != STATE_ERROR &&
-    can_flush_total(inflater) == 0 &&
-    inflater->input == inflater->input_end;
+        inflater->state != STATE_ERROR &&
+        can_flush_total(inflater) == 0 &&
+        inflater->input == inflater->input_end;
 }
 
-void ok_inflater_set_input(ok_inflater *inflater, const void *buffer, const unsigned int buffer_length) {
+void ok_inflater_set_input(ok_inflater *inflater, const void *buffer,
+                           const unsigned int buffer_length) {
     if (inflater) {
         if (inflater->input == inflater->input_end) {
-            inflater->input = (uint8_t*)buffer;
+            inflater->input = (uint8_t *)buffer;
             inflater->input_end = inflater->input + buffer_length;
-        }
-        else {
+        } else {
             inflater_error(inflater, "ok_inflater_set_input was called with unread input data.");
         }
     }
@@ -1948,7 +1900,6 @@ int ok_inflater_inflate(ok_inflater *inflater, uint8_t *dst, const unsigned int 
     // 5. An error occured.
     while (can_flush_total(inflater) < dst_len &&
            (*STATE_FUNCTIONS[inflater->state])(inflater)) {
-        
     }
     return flush(inflater, dst, dst_len);
 }

@@ -16,6 +16,7 @@
     misrepresented as being the original software.
  3. This notice may not be removed or altered from any source distribution.
  */
+
 #include "ok_mo.h"
 #include <memory.h>
 #include <stdarg.h>
@@ -39,14 +40,14 @@ struct ok_mo_string {
 
 typedef struct {
     ok_mo *mo;
-    
+
     uint8_t *key_offset_buffer;
     uint8_t *value_offset_buffer;
-    
+
     // Input
     void *input_data;
     ok_mo_input_func input_func;
-    
+
 } mo_decoder;
 
 static void decode_mo2(mo_decoder *decoder);
@@ -64,9 +65,10 @@ static void ok_mo_cleanup(ok_mo *mo) {
         mo->num_strings = 0;
     }
 }
+static void ok_mo_error(ok_mo *mo, const char *format, ...)
+    __attribute__((__format__(__printf__, 2, 3)));
 
-__attribute__((__format__ (__printf__, 2, 3)))
-static void ok_mo_error(ok_mo *mo, const char *format, ... ) {
+static void ok_mo_error(ok_mo *mo, const char *format, ...) {
     if (mo) {
         ok_mo_cleanup(mo);
         if (format) {
@@ -88,9 +90,9 @@ static void decode_mo(ok_mo *mo, void *input_data, ok_mo_input_func input_func) 
         decoder->mo = mo;
         decoder->input_data = input_data;
         decoder->input_func = input_func;
-        
+
         decode_mo2(decoder);
-        
+
         if (decoder->key_offset_buffer) {
             free(decoder->key_offset_buffer);
         }
@@ -104,8 +106,7 @@ static void decode_mo(ok_mo *mo, void *input_data, ok_mo_input_func input_func) 
 static bool ok_read(mo_decoder *decoder, uint8_t *data, const int length) {
     if (decoder->input_func(decoder->input_data, data, length) == length) {
         return true;
-    }
-    else {
+    } else {
         ok_mo_error(decoder->mo, "Read error: error calling input function.");
         return false;
     }
@@ -121,8 +122,7 @@ ok_mo *ok_mo_read(void *user_data, ok_mo_input_func input_func) {
     ok_mo *mo = calloc(1, sizeof(ok_mo));
     if (input_func) {
         decode_mo(mo, user_data, input_func);
-    }
-    else {
+    } else {
         ok_mo_error(mo, "Invalid argument: input_func is NULL");
     }
     return mo;
@@ -140,8 +140,7 @@ void ok_mo_free(ok_mo *mo) {
 static inline uint16_t read16(const uint8_t *data, const bool little_endian) {
     if (little_endian) {
         return (uint16_t)((data[1] << 8) | data[0]);
-    }
-    else {
+    } else {
         return (uint16_t)((data[0] << 8) | data[1]);
     }
 }
@@ -149,8 +148,7 @@ static inline uint16_t read16(const uint8_t *data, const bool little_endian) {
 static inline uint32_t read32(const uint8_t *data, const bool little_endian) {
     if (little_endian) {
         return (uint32_t)((data[3] << 24) | (data[2] << 16) | (data[1] << 8) | data[0]);
-    }
-    else {
+    } else {
         return (uint32_t)((data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3]);
     }
 }
@@ -161,38 +159,36 @@ static void decode_mo2(mo_decoder *decoder) {
     if (!ok_read(decoder, header, sizeof(header))) {
         return;
     }
-    
+
     // Magic number
     uint32_t magic = read32(header, true);
     bool little_endian;
     if (magic == 0x950412de) {
         little_endian = true;
-    }
-    else if (magic == 0xde120495) {
+    } else if (magic == 0xde120495) {
         little_endian = false;
-    }
-    else {
+    } else {
         ok_mo_error(mo, "Not a gettext MO file");
         return;
     }
-    
+
     // Header
     const uint16_t major_version = read16(header + 4, little_endian);
     //const uint16_t minor_version = read16(header + 6, little_endian); // ignore minor_version
     mo->num_strings = read32(header + 8, little_endian);
     const uint32_t key_offset = read32(header + 12, little_endian);
     const uint32_t value_offset = read32(header + 16, little_endian);
-    
+
     if (!(major_version == 0 || major_version == 1)) {
         ok_mo_error(mo, "Not a gettext MO file (version %d)", major_version);
         return;
     }
-    
+
     if (mo->num_strings == 0) {
         ok_mo_error(mo, "No strings found");
         return;
     }
-    
+
     mo->strings = calloc(mo->num_strings, sizeof(struct ok_mo_string));
     decoder->key_offset_buffer = malloc(8 * mo->num_strings);
     decoder->value_offset_buffer = malloc(8 * mo->num_strings);
@@ -200,7 +196,7 @@ static void decode_mo2(mo_decoder *decoder) {
         ok_mo_error(mo, "Couldn't allocate arrays");
         return;
     }
-    
+
     // Read offsets and lengths
     // Using "tell" because the seek functions only support relative seeking.
     int tell = sizeof(header);
@@ -220,13 +216,13 @@ static void decode_mo2(mo_decoder *decoder) {
         return;
     }
     tell = value_offset + 8 * mo->num_strings;
-    
+
     // Read keys
     // Assumes keys are sorted, per the spec.
     for (uint32_t i = 0; i < mo->num_strings; i++) {
         uint32_t length = read32(decoder->key_offset_buffer + 8 * i, little_endian);
         uint32_t offset = read32(decoder->key_offset_buffer + 8 * i + 4, little_endian);
-        
+
         mo->strings[i].key = malloc(length + 1);
         if (!mo->strings[i].key) {
             ok_mo_error(mo, "Couldn't allocate strings");
@@ -235,17 +231,17 @@ static void decode_mo2(mo_decoder *decoder) {
         if (!ok_seek(decoder, offset - tell)) {
             return;
         }
-        if (!ok_read(decoder, (uint8_t*)mo->strings[i].key, length + 1)) {
+        if (!ok_read(decoder, (uint8_t *)mo->strings[i].key, length + 1)) {
             return;
         }
         tell = offset + length + 1;
     }
-    
+
     // Read values
     for (uint32_t i = 0; i < mo->num_strings; i++) {
         uint32_t length = read32(decoder->value_offset_buffer + 8 * i, little_endian);
         uint32_t offset = read32(decoder->value_offset_buffer + 8 * i + 4, little_endian);
-        
+
         mo->strings[i].value = malloc(length + 1);
         if (!mo->strings[i].value) {
             ok_mo_error(mo, "Couldn't allocate strings");
@@ -254,7 +250,7 @@ static void decode_mo2(mo_decoder *decoder) {
         if (!ok_seek(decoder, offset - tell)) {
             return;
         }
-        if (!ok_read(decoder, (uint8_t*)mo->strings[i].value, length + 1)) {
+        if (!ok_read(decoder, (uint8_t *)mo->strings[i].value, length + 1)) {
             return;
         }
         // Count the zeros. It is the number of plural variants.
@@ -274,22 +270,20 @@ static void decode_mo2(mo_decoder *decoder) {
 
 static int bsearch_strcmp(const void *s1, const void *s2) {
     const char *key = s1;
-    const struct ok_mo_string * elem = s2;
+    const struct ok_mo_string *elem = s2;
     return strcmp(key, (elem)->key);
 }
 
 static struct ok_mo_string *find_value(ok_mo *mo, const char *context, const char *key) {
     if (!mo || !key) {
         return NULL;
-    }
-    else if (!context) {
+    } else if (!context) {
         return bsearch(key, mo->strings, mo->num_strings, sizeof(mo->strings[0]), bsearch_strcmp);
-    }
-    else {
+    } else {
         // Complete key is (context + EOT + key)
         const size_t context_length = strlen(context);
         const size_t complete_key_length = context_length + 1 + strlen(key) + 1;
-        char * complete_key = malloc(complete_key_length);
+        char *complete_key = malloc(complete_key_length);
         if (!complete_key) {
             return NULL;
         }
@@ -319,26 +313,26 @@ const char *ok_mo_value_in_context(ok_mo *mo, const char *context, const char *k
 
 static int get_plural_index(const int num_variants, const int n) {
     // This is probably too simple for some languages
-    return n <= 0 ? num_variants : min(n-1, num_variants);
+    return n <= 0 ? num_variants : min(n - 1, num_variants);
 }
 
-const char *ok_mo_plural_value_in_context(ok_mo *mo, const char *context, const char *key, const char *plural_key,
-                                          const int n) {
+const char *ok_mo_plural_value_in_context(ok_mo *mo, const char *context, const char *key,
+                                          const char *plural_key, const int n) {
     struct ok_mo_string *s = find_value(mo, context, key);
     if (s) {
         // This is probably too simple for some languages
         const int plural_index = get_plural_index(s->num_plural_variants, n);
         const char *v = s->value;
         for (int i = 0; i < plural_index; i++) {
-            while (*v++ != 0) { }
+            while (*v++ != 0) {
+                // Skip
+            }
         }
         return v;
-    }
-    else {
+    } else {
         if (get_plural_index(1, n) == 0) {
             return key;
-        }
-        else {
+        } else {
             return plural_key;
         }
     }
@@ -356,14 +350,11 @@ unsigned int ok_utf8_strlen(const char *utf8) {
             int skip;
             if (*in < 0xc0) {
                 skip = 0;
-            }
-            else if (*in < 0xe0) {
+            } else if (*in < 0xe0) {
                 skip = 1;
-            }
-            else if (*in < 0xf0) {
+            } else if (*in < 0xf0) {
                 skip = 2;
-            }
-            else {
+            } else {
                 skip = 3;
             }
             // Sanity check: check for malformed string
@@ -384,24 +375,22 @@ unsigned int ok_utf8_to_unicode(const char *utf8, uint32_t *dest, const unsigned
     if (!utf8 || !dest || n == 0) {
         return 0;
     }
-    
+
     const unsigned char *in = (const unsigned char *)utf8;
     unsigned int len = 0;
     while (len < n && *in != 0) {
         if (*in < 0xc0) {
             dest[len] = in[0];
             in++;
-        }
-        else if (*in < 0xe0) {
+        } else if (*in < 0xe0) {
             dest[len] = ((in[0] & 0x1f) << 6) | (in[1] & 0x3f);
             in += 2;
-        }
-        else if (*in < 0xf0) {
+        } else if (*in < 0xf0) {
             dest[len] = ((in[0] & 0x0f) << 12) | ((in[1] & 0x3f) << 6) | (in[2] & 0x3f);
             in += 3;
-        }
-        else {
-            dest[len] = ((in[0] & 0x07) << 18) | ((in[1] & 0x3f) << 6) | ((in[2] & 0x3f) << 6) | (in[3] & 0x3f);
+        } else {
+            dest[len] = ((in[0] & 0x07) << 18) | ((in[1] & 0x3f) << 6) | ((in[2] & 0x3f) << 6) |
+                (in[3] & 0x3f);
             in += 4;
         }
         len++;

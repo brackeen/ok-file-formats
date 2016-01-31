@@ -1,16 +1,16 @@
+#include "jpg_test.h"
+#include "ok_jpg.h"
+#include "test_common.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
-#include "test_common.h"
-#include "jpg_test.h"
-#include "ok_jpg.h"
 
 const char *filenames[] = {
-    
+
     // grayscale
     "jpg-gray",
     "jpeg400jfif", // has restart markers
-    
+
     // no upsampling
     "creek-after",
     "jpeg444",
@@ -23,13 +23,13 @@ const char *filenames[] = {
     // 1x2 upsampling
     "mandril_color",
     "peppers_color",
-    
+
     // 2x2 upsampling
     "2001-stargate",
     "monkey_monkey",
     "tomatoes",
     "zam",
-    
+
     // Various sizes (2x2 upsampling)
     "jpg-size-1x1",
     "jpg-size-2x2",
@@ -46,7 +46,7 @@ const char *filenames[] = {
     "jpg-size-31x31",
     "jpg-size-32x32",
     "jpg-size-33x33",
-    
+
     // EXIF orientation
     "orientation_none",
     "orientation_1",
@@ -65,11 +65,11 @@ static bool test_image(const char *path_to_jpgs,
                        const bool info_only) {
     const bool flip_y = false;
     const bool print_image_on_error = false;
-    
+
     char *rgba_filename = get_full_path(path_to_rgba_files, name, "rgba");
     unsigned long rgba_data_length;
     uint8_t *rgba_data = read_file(rgba_filename, &rgba_data_length);
-    
+
     // Load via ok_jpg
     ok_jpg *jpg = NULL;
     char *in_filename = get_full_path(path_to_jpgs, name, "jpg");
@@ -77,48 +77,45 @@ static bool test_image(const char *path_to_jpgs,
     if (fp) {
         if (info_only) {
             jpg = ok_jpg_read_info(fp, file_input_func);
-        }
-        else {
+        } else {
             jpg = ok_jpg_read(fp, file_input_func, OK_JPG_COLOR_FORMAT_RGBA, flip_y);
         }
         fclose(fp);
-    }
-    else {
+    } else {
         printf("Warning: File not found: %s.jpg\n", name);
         return true;
     }
-    
+
     bool success = compare(name, "jpg", jpg->data, jpg->width, jpg->height, jpg->error_message,
                            rgba_data, rgba_data_length, info_only, 4, print_image_on_error);
-    
+
     free(rgba_data);
     free(rgba_filename);
     free(in_filename);
     ok_jpg_free(jpg);
-    
+
     return success;
 }
 
 void jpg_test(const char *path_to_jpgs, const char *path_to_rgba_files) {
-    const int num_files = sizeof(filenames)/sizeof(filenames[0]);
+    const int num_files = sizeof(filenames) / sizeof(filenames[0]);
     printf("Testing %i files in path \"%s\".\n", num_files, path_to_jpgs);
-    
-    double startTime = (double)clock()/CLOCKS_PER_SEC;
+
+    double startTime = (double)clock() / CLOCKS_PER_SEC;
     int num_failures = 0;
     for (int i = 0; i < num_files; i++) {
         bool success = test_image(path_to_jpgs, path_to_rgba_files, filenames[i], true);
         if (!success) {
             num_failures++;
-        }
-        else {
+        } else {
             success = test_image(path_to_jpgs, path_to_rgba_files, filenames[i], false);
             if (!success) {
                 num_failures++;
             }
         }
     }
-    double endTime = (double)clock()/CLOCKS_PER_SEC;
+    double endTime = (double)clock() / CLOCKS_PER_SEC;
     double elapsedTime = endTime - startTime;
-    printf("Success: %i of %i\n", (num_files-num_failures), num_files);
+    printf("Success: %i of %i\n", (num_files - num_failures), num_files);
     printf("Duration: %f seconds\n", (float)elapsedTime);
 }

@@ -6,15 +6,17 @@
 
 typedef struct {
     ok_fnt *fnt;
-    
+
     // Input
     void *input_data;
     ok_fnt_input_func input_func;
-    
+
 } fnt_decoder;
 
- __attribute__((__format__ (__printf__, 2, 3)))
-static void ok_fnt_error(ok_fnt *fnt, const char *format, ... ) {
+static void ok_fnt_error(ok_fnt *fnt, const char *format, ...)
+    __attribute__((__format__(__printf__, 2, 3)));
+
+static void ok_fnt_error(ok_fnt *fnt, const char *format, ...) {
     if (fnt) {
         fnt->num_glyphs = 0;
         if (format) {
@@ -29,8 +31,7 @@ static void ok_fnt_error(ok_fnt *fnt, const char *format, ... ) {
 static bool ok_read(fnt_decoder *decoder, uint8_t *data, const int length) {
     if (decoder->input_func(decoder->input_data, data, length) == length) {
         return true;
-    }
-    else {
+    } else {
         ok_fnt_error(decoder->fnt, "Read error: error calling input function.");
         return false;
     }
@@ -44,8 +45,7 @@ ok_fnt *ok_fnt_read(void *user_data, ok_fnt_input_func input_func) {
     ok_fnt *fnt = calloc(1, sizeof(ok_fnt));
     if (input_func) {
         decode_fnt(fnt, user_data, input_func);
-    }
-    else {
+    } else {
         ok_fnt_error(fnt, "Invalid argument: input_func is NULL");
     }
     return fnt;
@@ -94,7 +94,7 @@ typedef enum {
 
 static void decode_fnt2(fnt_decoder *decoder) {
     ok_fnt *fnt = decoder->fnt;
-    
+
     uint8_t header[4];
     if (!ok_read(decoder, header, sizeof(header))) {
         return;
@@ -104,16 +104,18 @@ static void decode_fnt2(fnt_decoder *decoder) {
         return;
     }
     if (header[3] != 3) {
-        ok_fnt_error(fnt, "Version %i of AngelCode binary FNT file not supported (only version 3 supported).",
-                      header[3]);
+        ok_fnt_error(
+            fnt,
+            "Version %i of AngelCode binary FNT file not supported (only version 3 supported).",
+            header[3]);
         return;
     }
-    
+
     uint32_t block_types_found = 0;
     while (true) {
-        
         uint8_t block_header[5];
-        if (decoder->input_func(decoder->input_data, block_header, sizeof(block_header)) != sizeof(block_header)) {
+        if (decoder->input_func(decoder->input_data, block_header,
+            sizeof(block_header)) != sizeof(block_header)) {
             // Don't give an error if all required blocks have been found.
             const bool all_required_blocks_found = (block_types_found & 0x1E) == 0x1E;
             if (!all_required_blocks_found) {
@@ -124,10 +126,9 @@ static void decode_fnt2(fnt_decoder *decoder) {
 
         block_type block_type = block_header[0];
         uint32_t block_length = readLE32(block_header + 1);
-        
+
         block_types_found |= (1 << block_type);
         switch (block_type) {
-                
             case BLOCK_TYPE_INFO: {
                 uint8_t info_header[14];
                 const int name_buffer_length = block_length - sizeof(info_header);
@@ -140,21 +141,21 @@ static void decode_fnt2(fnt_decoder *decoder) {
                 }
                 // Get the fnt size, ignore the rest
                 fnt->size = readLE16(info_header);
-                
+
                 // Get the fnt name
                 fnt->name = malloc(name_buffer_length);
                 if (!fnt->name) {
                     ok_fnt_error(fnt, "Couldn't allocate font name");
                     return;
                 }
-                if (!ok_read(decoder, (uint8_t*)fnt->name, name_buffer_length)) {
+                if (!ok_read(decoder, (uint8_t *)fnt->name, name_buffer_length)) {
                     return;
                 }
                 // Sanity check - make sure the string has a null-terminator
                 fnt->name[name_buffer_length - 1] = 0;
                 break;
             }
-                
+
             case BLOCK_TYPE_COMMON: {
                 uint8_t common[15];
                 if (block_length != sizeof(common)) {
@@ -170,13 +171,12 @@ static void decode_fnt2(fnt_decoder *decoder) {
                 fnt->num_pages = readLE16(common + 8);
                 break;
             }
-                
+
             case BLOCK_TYPE_PAGES: {
                 if (fnt->num_pages <= 0 || block_length == 0) {
                     ok_fnt_error(fnt, "Couldn't get page names");
                     return;
-                }
-                else {
+                } else {
                     fnt->page_names = calloc(fnt->num_pages, sizeof(char *));
                     if (!fnt->page_names) {
                         fnt->num_pages = 0;
@@ -190,14 +190,14 @@ static void decode_fnt2(fnt_decoder *decoder) {
                         ok_fnt_error(fnt, "Couldn't allocate memory for page names");
                         return;
                     }
-                    if (!ok_read(decoder, (uint8_t*)fnt->page_names[0], block_length)) {
+                    if (!ok_read(decoder, (uint8_t *)fnt->page_names[0], block_length)) {
                         return;
                     }
                     char *pos = fnt->page_names[0];
-                    char * const end_pos = pos + block_length;
+                    char *const end_pos = pos + block_length;
                     // Sanity check - make sure there is a null terminator
                     *(end_pos - 1) = 0;
-                    
+
                     // Set up pointers for each page name
                     int next_index = 1;
                     while (pos + 1 < end_pos && next_index < fnt->num_pages) {
@@ -214,7 +214,7 @@ static void decode_fnt2(fnt_decoder *decoder) {
                 }
                 break;
             }
-                
+
             case BLOCK_TYPE_CHARS: {
                 uint8_t data[20];
                 fnt->num_glyphs = block_length / sizeof(data);
@@ -224,8 +224,8 @@ static void decode_fnt2(fnt_decoder *decoder) {
                     ok_fnt_error(fnt, "Couldn't allocate memory for glyphs");
                     return;
                 }
-                // On little-endian systems we could just load the entire block into memory, but we'll assume
-                // the byte order is unknown here.
+                // On little-endian systems we could just load the entire block into memory, but
+                // we'll assume the byte order is unknown here.
                 for (int i = 0; i < fnt->num_glyphs; i++) {
                     if (!ok_read(decoder, data, sizeof(data))) {
                         return;
@@ -244,7 +244,7 @@ static void decode_fnt2(fnt_decoder *decoder) {
                 }
                 break;
             }
-                
+
             case BLOCK_TYPE_KERNING: {
                 uint8_t data[10];
                 fnt->num_kerning_pairs = block_length / sizeof(data);
@@ -254,8 +254,8 @@ static void decode_fnt2(fnt_decoder *decoder) {
                     ok_fnt_error(fnt, "Couldn't allocate memory for kerning");
                     return;
                 }
-                // On little-endian systems we could just load the entire block into memory, but we'll assume
-                // the byte order is unknown here.
+                // On little-endian systems we could just load the entire block into memory, but
+                // we'll assume the byte order is unknown here.
                 for (int i = 0; i < fnt->num_kerning_pairs; i++) {
                     if (!ok_read(decoder, data, sizeof(data))) {
                         return;
@@ -267,7 +267,7 @@ static void decode_fnt2(fnt_decoder *decoder) {
                 }
                 break;
             }
-                
+
             default:
                 ok_fnt_error(fnt, "Unknown block type: %i", block_type);
                 return;
@@ -285,10 +285,9 @@ static void decode_fnt(ok_fnt *fnt, void *input_data, ok_fnt_input_func input_fu
         decoder->fnt = fnt;
         decoder->input_data = input_data;
         decoder->input_func = input_func;
-        
+
         decode_fnt2(decoder);
-        
+
         free(decoder);
     }
 }
-

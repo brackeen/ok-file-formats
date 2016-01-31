@@ -1,9 +1,9 @@
+#include "ok_jpg.h"
+#include "ok_png.h"
+#include "test_common.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "test_common.h"
-#include "ok_png.h"
-#include "ok_jpg.h"
 
 #ifndef min
 #define min(a, b) ((a) < (b) ? (a) : (b))
@@ -20,7 +20,7 @@ static void print_image(const uint8_t *data, const uint32_t width, const uint32_
                 if ((x & 3) == 0) {
                     printf("|");
                 }
-                uint8_t b = data[y * (width*4) + x];
+                uint8_t b = data[y * (width * 4) + x];
                 printf("%02x", b);
             }
             printf("\n");
@@ -33,7 +33,7 @@ static void print_image_diff(const uint8_t *data, const uint32_t width, const ui
         for (uint32_t y = 0; y < height; y++) {
             int max_diff = 0;
             for (uint32_t x = 0; x < width * 4; x++) {
-                max_diff = max(max_diff, data[y * (width*4) + x]);
+                max_diff = max(max_diff, data[y * (width * 4) + x]);
                 if (((x + 1) & 3) == 0) {
                     printf("%01x", min(15, max_diff));
                     max_diff = 0;
@@ -43,7 +43,6 @@ static void print_image_diff(const uint8_t *data, const uint32_t width, const ui
         }
     }
 }
-
 
 char *get_full_path(const char *path, const char *name, const char *ext) {
     size_t path_len = strlen(path);
@@ -61,15 +60,14 @@ char *get_full_path(const char *path, const char *name, const char *ext) {
 uint8_t *read_file(const char *filename, unsigned long *length) {
     uint8_t *buffer;
     FILE *fp = fopen(filename, "rb");
-    
+
     if (fp) {
         fseek(fp, 0, SEEK_END);
         long tell = ftell(fp);
         if (tell < 0) {
             buffer = NULL;
             *length = 0;
-        }
-        else {
+        } else {
             *length = (unsigned long)tell;
             fseek(fp, 0, SEEK_SET);
             buffer = malloc(*length);
@@ -78,12 +76,11 @@ uint8_t *read_file(const char *filename, unsigned long *length) {
             }
         }
         fclose(fp);
-    }
-    else {
+    } else {
         buffer = NULL;
         *length = 0;
     }
-    
+
     return buffer;
 }
 
@@ -91,11 +88,9 @@ int file_input_func(void *user_data, unsigned char *buffer, const int count) {
     FILE *fp = (FILE *)user_data;
     if (buffer && count > 0) {
         return (int)fread(buffer, 1, (size_t)count, fp);
-    }
-    else if (fseek(fp, count, SEEK_CUR) == 0) {
+    } else if (fseek(fp, count, SEEK_CUR) == 0) {
         return count;
-    }
-    else {
+    } else {
         return 0;
     }
 }
@@ -104,8 +99,7 @@ static bool fuzzy_memcmp(const uint8_t *data1, const uint8_t *data2, const size_
                          const uint8_t fuzziness, float *p_identical, int *peak_diff) {
     if (fuzziness == 0) {
         return memcmp(data1, data2, length) == 0;
-    }
-    else {
+    } else {
         *peak_diff = 0;
         bool success = true;
         int identical = 0;
@@ -139,35 +133,33 @@ bool compare(const char *name, const char *ext,
     bool success = false;
     if (info_only) {
         if (rgba_data_length > 0 && image_width * image_height * 4 != rgba_data_length) {
-            printf("Failure: Incorrect dimensions for %s.%s (%u x %u - data length should be %lu but is %u)\n",
-                   name, ext, image_width, image_height, rgba_data_length, (image_width * image_height * 4));
-        }
-        else {
-            printf("Success: %16.16s.%s (Info only: %u x %u)\n", name, ext, image_width, image_height);
+            printf("Failure: Incorrect dimensions for %s.%s "
+                   "(%u x %u - data length should be %lu but is %u)\n",
+                   name, ext, image_width, image_height, rgba_data_length,
+                   (image_width * image_height * 4));
+        } else {
+            printf("Success: %16.16s.%s (Info only: %u x %u)\n", name, ext,
+                   image_width, image_height);
             success = true;
         }
-    }
-    else if (!image_data && (!rgba_data || rgba_data_length == 0)) {
+    } else if (!image_data && (!rgba_data || rgba_data_length == 0)) {
         printf("Success: %16.16s.%s (invalid file correctly detected).\n", name, ext);
         success = true;
-    }
-    else if (!image_data) {
+    } else if (!image_data) {
         printf("Failure: Couldn't load %s.%s. %s\n", name, ext, image_error_message);
-    }
-    else if (!rgba_data) {
+    } else if (!rgba_data) {
         printf("Warning: Couldn't load %s.rgba. Possibly invalid file.\n", name);
         success = true;
-    }
-    else if (image_width * image_height * 4 != rgba_data_length) {
-        printf("Failure: Incorrect dimensions for %s.%s (%u x %u - data length should be %lu but is %u)\n", name, ext,
+    } else if (image_width * image_height * 4 != rgba_data_length) {
+        printf("Failure: Incorrect dimensions for %s.%s "
+               "(%u x %u - data length should be %lu but is %u)\n", name, ext,
                image_width, image_height, rgba_data_length, (image_width * image_height * 4));
-    }
-    else if (!fuzzy_memcmp(image_data, rgba_data, rgba_data_length, fuzziness, &p_identical, &peak_diff)) {
+    } else if (!fuzzy_memcmp(image_data, rgba_data, rgba_data_length, fuzziness,
+                             &p_identical, &peak_diff)) {
         if (fuzziness > 0) {
             printf("Failure: Data is different for image %s.%s (%f%% diff<=1, peak diff=%i)\n",
                    name, ext, (p_identical * 100), peak_diff);
-        }
-        else {
+        } else {
             printf("Failure: Data is different for image %s.%s\n", name, ext);
         }
         if (print_image_on_error) {
@@ -183,12 +175,11 @@ bool compare(const char *name, const char *ext,
             print_image_diff(diff_data, image_width, image_height);
             free(diff_data);
         }
-    }
-    else if (fuzziness > 0) {
-        printf("Success: %16.16s.%s (%9.5f%% diff<=1, peak diff=%i)\n", name, ext, (p_identical * 100), peak_diff);
+    } else if (fuzziness > 0) {
+        printf("Success: %16.16s.%s (%9.5f%% diff<=1, peak diff=%i)\n", name, ext,
+               (p_identical * 100), peak_diff);
         success = true;
-    }
-    else {
+    } else {
         printf("Success: %16.16s.%s\n", name, ext);
         success = true;
     }

@@ -1,13 +1,13 @@
 /*
  ok-file-formats
  Copyright (c) 2014 David Brackeen
- 
+
  This software is provided 'as-is', without any express or implied warranty.
  In no event will the authors be held liable for any damages arising from the
  use of this software. Permission is granted to anyone to use this software
  for any purpose, including commercial applications, and to alter it and
  redistribute it freely, subject to the following restrictions:
- 
+
  1. The origin of this software must not be misrepresented; you must not
     claim that you wrote the original software. If you use this software in a
     product, an acknowledgment in the product documentation would be appreciated
@@ -16,37 +16,43 @@
     misrepresented as being the original software.
  3. This notice may not be removed or altered from any source distribution.
  */
+
 #ifndef _OK_CSV_H_
 #define _OK_CSV_H_
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-    
-    typedef struct {
-        int num_records;         /// Number of records (rows)
-        int *num_fields;         /// Number of fields (columns) for each record.
-        char ***fields;          /// Fields. The value fields[record][field] is a NULL-terminated string.
-        char error_message[80];  /// Error message (if num_records is 0)
-    } ok_csv;
-    
-    /**
-     Input function provided to the ok_csv_read function.
-     Reads 'count' bytes into buffer. Returns number of bytes actually read.
-     If buffer is NULL or 'count' is negative, this function should perform a relative seek.
-     */
-    typedef int (*ok_csv_input_func)(void *user_data, unsigned char *buffer, const int count);
-    
-    /**
-     Reads CSV (Comma-Separated Values) files.
-     Properly handles escaped fields.
-     Same as RFC 4180, with the addition of allowing UTF-8 strings (as exported from Apple Numbers and Google Docs).
-     On success, num_records will be > 0.
-     */
-    ok_csv *ok_csv_read(void *user_data, ok_csv_input_func input_func);
 
-    void ok_csv_free(ok_csv *csv);
-    
+typedef struct {
+    /// Number of records (rows)
+    int num_records;
+    /// Number of fields (columns) for each record.
+    int *num_fields;
+    /// Fields. The value fields[record][field] is a NULL-terminated string.
+    char ***fields;
+    /// Error message (if num_records is 0)
+    char error_message[80];
+} ok_csv;
+
+/**
+ * Input function provided to the ok_csv_read function.
+ * Reads 'count' bytes into buffer. Returns number of bytes actually read.
+ * If buffer is NULL or 'count' is negative, this function should perform a relative seek.
+ */
+typedef int (*ok_csv_input_func)(void *user_data, unsigned char *buffer, const int count);
+
+/**
+ * Reads CSV (Comma-Separated Values) files.
+ * Properly handles escaped fields.
+ * Same as RFC 4180, with the addition of allowing UTF-8 strings (as exported from Apple Numbers and
+ * Google Docs).
+ * On success, num_records will be > 0.
+ */
+ok_csv *ok_csv_read(void *user_data, ok_csv_input_func input_func);
+
+void ok_csv_free(ok_csv *csv);
+
 #ifdef __cplusplus
 }
 #endif
