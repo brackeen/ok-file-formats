@@ -1,6 +1,6 @@
 # Requires ImageMagick
 #
-CC = clang -Wall -O3 -std=c99
+CC = clang -O3 -std=c99 -Wall -Wextra -Wdocumentation -Wdocumentation-unknown-command
 
 BIN = bin
 GEN = gen

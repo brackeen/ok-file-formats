@@ -1780,6 +1780,7 @@ static bool inflate_distance_tree(ok_inflater *inflater) {
 }
 
 static bool inflate_noop(ok_inflater *inflater) {
+    (void)inflater;
     return false;
 }
 
