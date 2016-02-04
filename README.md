@@ -11,54 +11,33 @@ A few file format decoders. No external dependencies.
 The files do not depend on one another, and there are no dependencies on external libraries. If all you need is to read a PNG file, just grab `ok_png.h` and `ok_png.c` and you're good to go.
 
 
-## Example: Decode PNG and upload to OpenGL
-This example decodes a PNG from a stdio file and uploads the data to OpenGL. The color format is optimized for iOS devices.
+## Example: Decode PNG
+
 
 ```C
+#include <stdio.h>
 #include "ok_png.h"
 
-static int file_input_func(void *user_data, unsigned char *buffer, const int count) {
+static int file_input_func(void *user_data, uint8_t *buffer, const int count) {
     FILE *fp = (FILE *)user_data;
     if (buffer && count > 0) {
-        return (int)fread(buffer, 1, count, fp);
-    }
-    else if (fseek(fp, count, SEEK_CUR) == 0) {
+        return (int)fread(buffer, 1, (size_t)count, fp);
+    } else if (fseek(fp, count, SEEK_CUR) == 0) {
         return count;
-    }
-    else {
+    } else {
         return 0;
     }
 }
 
-GLuint load_texture(const char *file_name, const bool flip_y) {
-#if GL_APPLE_texture_format_BGRA8888 && GL_BGRA_EXT
-    GLenum glFormat = GL_BGRA_EXT;
-    ok_color_format ok_format = OK_COLOR_FORMAT_BGRA_PRE;
-#else
-    GLenum glFormat = GL_RGBA;
-    ok_color_format ok_format = OK_COLOR_FORMAT_RGBA_PRE;
-#endif
-    FILE *fp = fopen(file_name, "rb");
-    ok_image *image = ok_png_read(fp, file_input_func, ok_format, flip_y);
+int main() {
+    FILE *fp = fopen("my_image.png", "rb");
+    ok_png *image = ok_png_read(fp, file_input_func, OK_PNG_COLOR_FORMAT_RGBA, false);
     fclose(fp);
-    
-    GLuint textureId = 0;
-    if (!image->data) {
-        printf("Error: %s\n", image->error_message);
+    if (image->data) {
+        printf("Got image! Size: %li x %li\n", (long)image->width, (long)image->height);
     }
-    else {
-        glGenTextures(1, &textureId);
-        glBindTexture(GL_TEXTURE_2D, textureId);
-        glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, image->width, image->height, 0,
-                     glFormat, GL_UNSIGNED_BYTE, image->data);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    }
-    ok_image_free(image);
-    return textureId;
+    ok_png_free(image);
+    return 0;
 }
 ```
 
