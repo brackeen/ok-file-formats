@@ -1,6 +1,7 @@
 /*
  ok-file-formats
- Copyright (c) 2014 David Brackeen
+ https://github.com/brackeen/ok-file-formats
+ Copyright (c) 2014-2016 David Brackeen
 
  This software is provided 'as-is', without any express or implied warranty.
  In no event will the authors be held liable for any damages arising from the
@@ -19,6 +20,12 @@
 
 #ifndef _OK_FNT_H_
 #define _OK_FNT_H_
+
+/**
+ * @file
+ * Functions to read AngelCode BMFont files.
+ * Binary format, version 3, from AngelCode Bitmap Font Generator v1.10 or newer.
+ */
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -46,6 +53,10 @@ typedef struct {
     int16_t amount;
 } ok_fnt_kerning;
 
+/**
+ * The data returned from #ok_fnt_read(). For details, see
+ * http://www.angelcode.com/products/bmfont/doc/file_format.html
+ */
 typedef struct {
     char *name;
     int size;
@@ -61,16 +72,27 @@ typedef struct {
 } ok_fnt;
 
 /**
- * Input function provided to the ok_fnt_read function.
- * Reads 'count' bytes into buffer. Returns number of bytes actually read.
- * If buffer is NULL or 'count' is negative, this function should perform a relative seek.
+ * Input function provided to the #ok_fnt_read() function.
+ * This function must read bytes from its source (typically `user_data`) and copy the data to
+ * `buffer`.
+ *
+ * @param user_data The parameter that was passed to the #ok_fnt_read() function.
+ * @param buffer The data buffer to copy bytes to. If `NULL`, this function should perform a
+ * relative seek.
+ * @param count The number of bytes to read. If negative, this function should perform a
+ * relative seek.
+ * @return The number of bytes read or skipped. Should return 0 on error.
  */
-typedef int (*ok_fnt_input_func)(void *user_data, unsigned char *buffer, const int count);
+typedef int (*ok_fnt_input_func)(void *user_data, unsigned char *buffer, int count);
 
 /**
- * Reads an AngelCode bitmap font file (binary format, version 3, from AngelCode Bitmap Font
- * Generator v1.10.)
- * If an error occurs, the num_glyphs will be 0.
+ * Reads a FNT file.
+ * On failure, #ok_fnt.num_glyphs is 0 and #ok_fnt.error_message is set.
+ *
+ * @param user_data The parameter to be passed to the `input_func`.
+ * @param input_func The input function to read a FNT file from.
+ * @return a new #ok_fnt object. Never returns `NULL`. The object should be freed with
+ * #ok_fnt_free().
  */
 ok_fnt *ok_fnt_read(void *user_data, ok_fnt_input_func input_func);
 

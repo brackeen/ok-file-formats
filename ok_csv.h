@@ -1,6 +1,7 @@
 /*
  ok-file-formats
- Copyright (c) 2014 David Brackeen
+ https://github.com/brackeen/ok-file-formats
+ Copyright (c) 2014-2016 David Brackeen
 
  This software is provided 'as-is', without any express or implied warranty.
  In no event will the authors be held liable for any damages arising from the
@@ -20,10 +21,22 @@
 #ifndef _OK_CSV_H_
 #define _OK_CSV_H_
 
+/**
+ * @file
+ * Functions to read CSV (Comma-Separated Values) files.
+ * - Reads CSV files as defined by RFC 4180.
+ * - Properly handles escaped fields.
+ */
+
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+/**
+ * The data returned from #ok_csv_read().
+ */
 typedef struct {
     /// Number of records (rows)
     int num_records;
@@ -36,21 +49,34 @@ typedef struct {
 } ok_csv;
 
 /**
- * Input function provided to the ok_csv_read function.
- * Reads 'count' bytes into buffer. Returns number of bytes actually read.
- * If buffer is NULL or 'count' is negative, this function should perform a relative seek.
+ * Input function provided to the #ok_csv_read() function.
+ * This function must read bytes from its source (typically `user_data`) and copy the data to
+ * `buffer`.
+ *
+ * @param user_data The parameter that was passed to the #ok_csv_read() function.
+ * @param buffer The data buffer to copy bytes to. If `NULL`, this function should perform a
+ * relative seek.
+ * @param count The number of bytes to read. If negative, this function should perform a
+ * relative seek.
+ * @return The number of bytes read or skipped. Should return 0 on error.
  */
-typedef int (*ok_csv_input_func)(void *user_data, unsigned char *buffer, const int count);
+typedef int (*ok_csv_input_func)(void *user_data, uint8_t *buffer, int count);
 
 /**
- * Reads CSV (Comma-Separated Values) files.
- * Properly handles escaped fields.
- * Same as RFC 4180, with the addition of allowing UTF-8 strings (as exported from Apple Numbers and
- * Google Docs).
- * On success, num_records will be > 0.
+ * Reads a CSV file.
+ * On failure, #ok_csv.num_records is zero and #ok_csv.error_message is set.
+ *
+ * @param user_data The parameter to be passed to the `input_func`.
+ * @param input_func The input function to read a CSV file from.
+ * @return a new #ok_csv object. Never returns `NULL`. The object should be freed with
+ * #ok_csv_free().
  */
 ok_csv *ok_csv_read(void *user_data, ok_csv_input_func input_func);
 
+/**
+ * Frees the CSV data. This function should always be called when done with the CSV data, even if
+ * reading failed.
+ */
 void ok_csv_free(ok_csv *csv);
 
 #ifdef __cplusplus

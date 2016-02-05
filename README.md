@@ -1,18 +1,18 @@
-#ok-file-formats
+# ok-file-formats
+
 A few file format decoders. No external dependencies.
 
-* **PNG** - Reads any PNG file. 
+* **PNG** - Reads any PNG file.
 * **JPG** - Reads most JPEG files. Baseline only, no progressive support.
-* **WAV** - Reads WAV or CAF files. PCM format only. 
+* **WAV** - Reads WAV or CAF files. PCM format only.
 * **FNT** - Reads AngelCode BMFont files.
-* **CSV** - Reads Comma-Separated Values files. 
-* **MO** - Reads gettext MO files. 
+* **CSV** - Reads Comma-Separated Values files.
+* **MO** - Reads gettext MO files.
 
-The files do not depend on one another, and there are no dependencies on external libraries. If all you need is to read a PNG file, just grab `ok_png.h` and `ok_png.c` and you're good to go.
-
+The files do not depend on one another, and there are no dependencies on external libraries. If all
+you need is to read a PNG file, just grab `ok_png.h` and `ok_png.c` and you're good to go.
 
 ## Example: Decode PNG
-
 
 ```C
 #include <stdio.h>
@@ -43,13 +43,13 @@ int main() {
 
 ## More Info
 ### ok_png
-* Reads any PNG file. 
+* Reads any PNG file.
 * All color formats, all bit depths, all transparency types.
 * Complex formats like interlacing and multiple `IDAT` chunks.
 * Reads Apple's proprietary `CgBI` chunk for iOS devices.
 * Ignores `gAMA` chunks.
 * Option to get the image dimensions without decoding.
-* Options to premultiply alpha and flip the image vertically. 
+* Options to premultiply alpha and flip the image vertically.
 * Tested against the PngSuite.
 
 ### ok_jpg
@@ -57,11 +57,11 @@ int main() {
 * Baseline only (no progressive JPEGs)
 * Interprets EXIF orientation tags.
 * Option to get the image dimensions without decoding.
-* Option to flip the image vertically. 
+* Option to flip the image vertically.
 * Tested with several JPEG files against IJG's jpeg-8d library.
 
 ### ok_wav
-* Reads WAV or CAF files. 
+* Reads WAV or CAF files.
 * PCM format only.
 
 ### ok_fnt
@@ -69,8 +69,8 @@ int main() {
 * Binary format, version 3, from AngelCode Bitmap Font Generator v1.10 or newer.
 
 ### ok_csv
-* Reads Comma-Separated Values files. 
-* Properly handles escaped fields. 
+* Reads Comma-Separated Values files.
+* Properly handles escaped fields.
 
 ### ok_mo
 * Reads gettext MO files.

@@ -1,7 +1,8 @@
 /*
  ok-file-formats
- Copyright (c) 2014 David Brackeen
- 
+ https://github.com/brackeen/ok-file-formats
+ Copyright (c) 2014-2016 David Brackeen
+
  This software is provided 'as-is', without any express or implied warranty.
  In no event will the authors be held liable for any damages arising from the
  use of this software. Permission is granted to anyone to use this software
@@ -20,6 +21,11 @@
 #ifndef _OK_WAV_H_
 #define _OK_WAV_H_
 
+/**
+ * @file
+ * Functions to read WAV and CAF files. PCM format only.
+ */
+
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -27,7 +33,9 @@
 extern "C" {
 #endif
 
-/** PCM audio data. The length of the data is (num_channels * num_frames * (bit_depth/8)) */
+/**
+ * The data returned from #ok_wav_read().
+ */
 typedef struct {
     double sample_rate;
     uint8_t num_channels;
@@ -40,21 +48,33 @@ typedef struct {
 } ok_wav;
 
 /**
- * Input function provided to the ok_wav_read function.
- * Reads 'count' bytes into buffer. Returns number of bytes actually read.
- * If buffer is NULL or 'count' is negative, this function should perform a relative seek.
+ * Input function provided to the #ok_wav_read() function.
+ * This function must read bytes from its source (typically `user_data`) and copy the data to
+ * `buffer`.
+ *
+ * @param user_data The parameter that was passed to the #ok_wav_read() function.
+ * @param buffer The data buffer to copy bytes to. If `NULL`, this function should perform a
+ * relative seek.
+ * @param count The number of bytes to read. If negative, this function should perform a
+ * relative seek.
+ * @return The number of bytes read or skipped. Should return 0 on error.
  */
-typedef int (*ok_wav_input_func)(void *user_data, unsigned char *buffer, const int count);
+typedef int (*ok_wav_input_func)(void *user_data, uint8_t *buffer, int count);
 
 /**
- * Reads a WAV (or CAF) audio file (PCM format only). If convert_to_system_endian is true, the
- * data is converted to the endianness of the system (needed for OpenAL), otherwise, the data is
- * left as is.
+ * Reads a WAV (or CAF) audio file.
+ * On success, #ok_wav.data has a length of `(num_channels * num_frames * (bit_depth/8))`.
  *
- * If an error occurs, data is NULL.
+ * On failure, #ok_wav.data is `NULL` and #ok_wav.error_message is set.
+ *
+ * @param user_data The parameter to be passed to the `input_func`.
+ * @param input_func The input function to read a WAV file from.
+ * @param convert_to_system_endian If true, the data is converted to the endianness of the system 
+ * (required for OpenAL). Otherwise, the data is left as is.
+ * @return a new #ok_wav object. Never returns `NULL`. The object should be freed with
+ * #ok_wav_free().
  */
-ok_wav *ok_wav_read(void *user_data, ok_wav_input_func input_func,
-                    const bool convert_to_system_endian);
+ok_wav *ok_wav_read(void *user_data, ok_wav_input_func input_func, bool convert_to_system_endian);
 
 /**
  * Frees the audio. This function should always be called when done with the audio, even if reading 
