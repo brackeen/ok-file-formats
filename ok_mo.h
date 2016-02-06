@@ -24,6 +24,34 @@
 /**
  * @file
  * Functions to read GNU gettext MO files. Includes UTF-8 support.
+ *
+ * Example:
+ *
+ *     #include <stdio.h>
+ *     #include "ok_mo.h"
+ *
+ *     static int file_input_func(void *user_data, uint8_t *buffer, const int count) {
+ *         FILE *fp = (FILE *)user_data;
+ *         if (buffer && count > 0) {
+ *             return (int)fread(buffer, 1, (size_t)count, fp);
+ *         } else if (fseek(fp, count, SEEK_CUR) == 0) {
+ *             return count;
+ *         } else {
+ *             return 0;
+ *         }
+ *     }
+ *
+ *     int main() {
+ *         FILE *fp = fopen("my_strings.mo", "rb");
+ *         ok_mo *mo = ok_mo_read(fp, file_input_func);
+ *         fclose(fp);
+ *         if (mo->num_strings > 0) {
+ *             printf("Got MO! %i strings\n", mo->num_strings);
+ *             printf("Value for 'Hello': '%s'\n", ok_mo_value(mo, "Hello"));
+ *         }
+ *         ok_mo_free(mo);
+ *         return 0;
+ *     }
  */
 #include <stdint.h>
 

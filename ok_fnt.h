@@ -25,6 +25,35 @@
  * @file
  * Functions to read AngelCode BMFont files.
  * Binary format, version 3, from AngelCode Bitmap Font Generator v1.10 or newer.
+ *
+ * Example:
+ *
+ *     #include <stdio.h>
+ *     #include "ok_fnt.h"
+ *
+ *     static int file_input_func(void *user_data, uint8_t *buffer, const int count) {
+ *         FILE *fp = (FILE *)user_data;
+ *         if (buffer && count > 0) {
+ *             return (int)fread(buffer, 1, (size_t)count, fp);
+ *         } else if (fseek(fp, count, SEEK_CUR) == 0) {
+ *             return count;
+ *         } else {
+ *             return 0;
+ *         }
+ *     }
+ *
+ *     int main() {
+ *         FILE *fp = fopen("my_font.fnt", "rb");
+ *         ok_fnt *fnt = ok_fnt_read(fp, file_input_func);
+ *         fclose(fp);
+ *         if (fnt->num_glyphs > 0) {
+ *             printf("Got FNT! %i glyphs\n", fnt->num_glyphs);
+ *             printf("First glyph is '%c' in page '%s'.\n", fnt->glyphs[0].ch,
+ *                    fnt->page_names[fnt->glyphs[0].page]);
+ *         }
+ *         ok_fnt_free(fnt);
+ *         return 0;
+ *     }
  */
 
 #include <stdbool.h>

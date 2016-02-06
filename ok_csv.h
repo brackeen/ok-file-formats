@@ -26,6 +26,36 @@
  * Functions to read CSV (Comma-Separated Values) files.
  * - Reads CSV files as defined by RFC 4180.
  * - Properly handles escaped fields.
+ *
+ * Example:
+ *
+ *     #include <stdio.h>
+ *     #include "ok_csv.h"
+ *
+ *     static int file_input_func(void *user_data, uint8_t *buffer, const int count) {
+ *         FILE *fp = (FILE *)user_data;
+ *         if (buffer && count > 0) {
+ *             return (int)fread(buffer, 1, (size_t)count, fp);
+ *         } else if (fseek(fp, count, SEEK_CUR) == 0) {
+ *             return count;
+ *         } else {
+ *             return 0;
+ *         }
+ *     }
+ *
+ *     int main() {
+ *         FILE *fp = fopen("my_data.csv", "rb");
+ *         ok_csv *csv = ok_csv_read(fp, file_input_func);
+ *         fclose(fp);
+ *         if (csv->num_records > 0) {
+ *             printf("Got CSV! %i records\n", csv->num_records);
+ *             if (csv->num_fields[0] > 2) {
+ *                 printf("Third field in first record: '%s'\n", csv->fields[0][2]);
+ *             }
+ *         }
+ *         ok_csv_free(csv);
+ *         return 0;
+ *     }
  */
 
 #include <stdint.h>
