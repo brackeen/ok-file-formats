@@ -1,6 +1,6 @@
 # ok-file-formats
 
-A few file format decoders. No external dependencies.
+C functions for reading a few different file formats. No external dependencies.
 
 * **PNG** - Reads any PNG file.
 * **JPG** - Reads most JPEG files. Baseline only, no progressive support.
@@ -9,8 +9,8 @@ A few file format decoders. No external dependencies.
 * **CSV** - Reads Comma-Separated Values files.
 * **MO** - Reads gettext MO files.
 
-The files do not depend on one another, and there are no dependencies on external libraries. If all
-you need is to read a PNG file, just grab `ok_png.h` and `ok_png.c` and you're good to go.
+The files do not depend on one another. If all you need is to read a PNG file, just
+grab `ok_png.h` and `ok_png.c` and you're good to go.
 
 ## Example: Decode PNG
 
