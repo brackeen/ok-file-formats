@@ -19,10 +19,8 @@
  */
 
 #include "ok_wav.h"
-#include <memory.h>
-#include <stdarg.h>
-#include <stdio.h> // For vsnprintf
 #include <stdlib.h>
+#include <string.h>
 
 #ifndef min
 #define min(a, b) ((a) < (b) ? (a) : (b))
@@ -40,21 +38,14 @@ typedef struct {
 
 } pcm_decoder;
 
-static void ok_wav_error(ok_wav *wav, const char *format, ...)
-    __attribute__((__format__(__printf__, 2, 3)));
-
-static void ok_wav_error(ok_wav *wav, const char *format, ...) {
+static void ok_wav_error(ok_wav *wav, const char *message) {
     if (wav) {
-        if (wav->data) {
-            free(wav->data);
-            wav->data = NULL;
-        }
-        if (format) {
-            va_list args;
-            va_start(args, format);
-            vsnprintf(wav->error_message, sizeof(wav->error_message), format, args);
-            va_end(args);
-        }
+        free(wav->data);
+        wav->data = NULL;
+
+        const size_t len = sizeof(wav->error_message) - 1;
+        strncpy(wav->error_message, message, len);
+        wav->error_message[len] = 0;
     }
 }
 
@@ -141,8 +132,7 @@ static void decode_pcm_data(pcm_decoder *decoder) {
         wav->data = malloc(platform_data_length);
     }
     if (!wav->data) {
-        ok_wav_error(wav, "Couldn't allocate memory for audio with %llu frames",
-                     (unsigned long long)wav->num_frames);
+        ok_wav_error(wav, "Couldn't allocate memory for audio");
         return;
     }
 
@@ -283,10 +273,10 @@ static void decode_caf(pcm_decoder *decoder) {
     if (!ok_read(decoder, header, sizeof(header))) {
         return;
     }
-    uint16_t file_version = readBE16(header);
 
+    uint16_t file_version = readBE16(header);
     if (file_version != 1) {
-        ok_wav_error(wav, "Not a CAF file (version %i)", file_version);
+        ok_wav_error(wav, "Not a CAF file");
         return;
     }
 

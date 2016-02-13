@@ -19,12 +19,9 @@
  */
 
 #include "ok_csv.h"
-#include <memory.h>
-#include <stdarg.h>
 #include <stdbool.h>
-#include <stdint.h>
-#include <stdio.h> // For vsnprintf
 #include <stdlib.h>
+#include <string.h>
 
 #ifndef min
 #define min(a, b) ((a) < (b) ? (a) : (b))
@@ -127,8 +124,6 @@ typedef struct {
 
 static void decode_csv(ok_csv *csv, void *input_data, ok_csv_input_func input_func);
 static void decode_csv2(csv_decoder *decoder);
-static void ok_csv_error(ok_csv *csv, const char *format, ...)
-    __attribute__((__format__(__printf__, 2, 3)));
 
 static void ok_csv_cleanup(ok_csv *csv) {
     if (csv) {
@@ -148,15 +143,12 @@ static void ok_csv_cleanup(ok_csv *csv) {
     }
 }
 
-static void ok_csv_error(ok_csv *csv, const char *format, ...) {
+static void ok_csv_error(ok_csv *csv, const char *message) {
     if (csv) {
         ok_csv_cleanup(csv);
-        if (format) {
-            va_list args;
-            va_start(args, format);
-            vsnprintf(csv->error_message, sizeof(csv->error_message), format, args);
-            va_end(args);
-        }
+        const size_t len = sizeof(csv->error_message) - 1;
+        strncpy(csv->error_message, message, len);
+        csv->error_message[len] = 0;
     }
 }
 

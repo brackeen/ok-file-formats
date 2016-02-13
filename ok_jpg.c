@@ -28,10 +28,8 @@
  */
 
 #include "ok_jpg.h"
-#include <memory.h>
-#include <stdarg.h>
-#include <stdio.h> // For vsnprintf
 #include <stdlib.h>
+#include <string.h>
 
 #ifndef min
 #define min(a, b) ((a) < (b) ? (a) : (b))
@@ -109,23 +107,16 @@ typedef struct {
     huffman_table huffman_tables[2][4];
 } jpg_decoder;
 
-static void ok_jpg_error(ok_jpg *jpg, const char *format, ...)
-    __attribute__((__format__(__printf__, 2, 3)));
-
-static void ok_jpg_error(ok_jpg *jpg, const char *format, ...) {
+static void ok_jpg_error(ok_jpg *jpg, const char *message) {
     if (jpg) {
+        free(jpg->data);
+        jpg->data = NULL;
         jpg->width = 0;
         jpg->height = 0;
-        if (jpg->data) {
-            free(jpg->data);
-            jpg->data = NULL;
-        }
-        if (format) {
-            va_list args;
-            va_start(args, format);
-            vsnprintf(jpg->error_message, sizeof(jpg->error_message), format, args);
-            va_end(args);
-        }
+
+        const size_t len = sizeof(jpg->error_message) - 1;
+        strncpy(jpg->error_message, message, len);
+        jpg->error_message[len] = 0;
     }
 }
 
@@ -894,25 +885,25 @@ static bool read_sof(jpg_decoder *decoder) {
     int length = readBE16(buffer) - 8;
     int P = buffer[2];
     if (P != 8) {
-        ok_jpg_error(jpg, "Invalid JPEG (component size=%i)", P);
+        ok_jpg_error(jpg, "Invalid component size");
         return false;
     }
     decoder->in_height = readBE16(buffer + 3);
     decoder->in_width = readBE16(buffer + 5);
     if (decoder->in_width == 0 || decoder->in_height == 0) {
-        ok_jpg_error(jpg, "Invalid JPEG dimensions %ix%i", decoder->in_width, decoder->in_height);
+        ok_jpg_error(jpg, "Invalid image dimensions");
         return false;
     }
     jpg->width = decoder->rotate ? decoder->in_height : decoder->in_width;
     jpg->height = decoder->rotate ? decoder->in_width : decoder->in_height;
     decoder->num_components = buffer[7];
     if (decoder->num_components != 1 && decoder->num_components != 3) {
-        ok_jpg_error(jpg, "Invalid JPEG (num_components=%i)", decoder->num_components);
+        ok_jpg_error(jpg, "Invalid component count");
         return false;
     }
 
     if (length < 3 * decoder->num_components) {
-        ok_jpg_error(jpg, "Invalid JPEG (SOF segment too short)");
+        ok_jpg_error(jpg, "SOF segment too short");
         return false;
     }
     if (!ok_read(decoder, buffer, 3 * decoder->num_components)) {
@@ -929,12 +920,12 @@ static bool read_sof(jpg_decoder *decoder) {
         c->Tq = buffer[i * 3 + 2];
 
         if (c->H == 0 || c->V == 0 || c->H > 4 || c->V > 4 || c->Tq > 3) {
-            ok_jpg_error(jpg, "Invalid JPEG (Bad component)");
+            ok_jpg_error(jpg, "Bad component");
             return false;
         }
 
         if (c->H > MAX_SAMPLING_FACTOR || c->V > MAX_SAMPLING_FACTOR) {
-            ok_jpg_error(jpg, "Unsupported sampling factor: %ix%i", c->H, c->V);
+            ok_jpg_error(jpg, "Unsupported sampling factor");
             return false;
         }
 
@@ -964,8 +955,7 @@ static bool read_sof(jpg_decoder *decoder) {
         } else if (c->H * 2 == maxH && c->V == maxV) {
             c->idct = idct_16x8;
         } else {
-            ok_jpg_error(jpg, "Unsupported sampling factor: %ix%i in max %ix%i", c->H, c->V, maxH,
-                         maxV);
+            ok_jpg_error(jpg, "Unsupported IDCT sampling factor");
             return false;
         }
     }
@@ -983,8 +973,7 @@ static bool read_sof(jpg_decoder *decoder) {
             jpg->data = malloc(platform_size);
         }
         if (!jpg->data) {
-            ok_jpg_error(jpg, "Couldn't allocate memory for %u x %u JPEG image",
-                         jpg->width, jpg->height);
+            ok_jpg_error(jpg, "Couldn't allocate memory for image");
             return false;
         }
     }
@@ -1288,7 +1277,7 @@ static void decode_jpg2(jpg_decoder *decoder) {
                 return;
             }
             if (buffer[0] != 0xFF) {
-                ok_jpg_error(jpg, "Invalid JPG marker 0x%02X%02X", buffer[0], buffer[1]);
+                ok_jpg_error(jpg, "Invalid JPG marker");
                 return;
             }
             marker = buffer[1];
@@ -1344,12 +1333,10 @@ static void decode_jpg2(jpg_decoder *decoder) {
             // APP or Comment
             success = skip_segment(decoder);
         } else if ((marker & 0xF0) == 0xC0) {
-            ok_jpg_error(jpg,
-                         "Unsupported JPEG (marker 0xFF%02X) - progressive, extended, or lossless",
-                         marker);
+            ok_jpg_error(jpg, "Unsupported JPEG: progressive, extended, or lossless");
             success = false;
         } else {
-            ok_jpg_error(jpg, "Unsupported or corrupt JPEG (marker 0xFF%02X)", marker);
+            ok_jpg_error(jpg, "Unsupported or corrupt JPEG");
             success = false;
         }
 

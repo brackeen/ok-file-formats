@@ -19,10 +19,8 @@
  */
 
 #include "ok_fnt.h"
-#include <memory.h>
-#include <stdarg.h>
-#include <stdio.h> // For vsnprintf
 #include <stdlib.h>
+#include <string.h>
 
 typedef struct {
     ok_fnt *fnt;
@@ -33,18 +31,12 @@ typedef struct {
 
 } fnt_decoder;
 
-static void ok_fnt_error(ok_fnt *fnt, const char *format, ...)
-    __attribute__((__format__(__printf__, 2, 3)));
-
-static void ok_fnt_error(ok_fnt *fnt, const char *format, ...) {
+static void ok_fnt_error(ok_fnt *fnt, const char *message) {
     if (fnt) {
         fnt->num_glyphs = 0;
-        if (format) {
-            va_list args;
-            va_start(args, format);
-            vsnprintf(fnt->error_message, sizeof(fnt->error_message), format, args);
-            va_end(args);
-        }
+        const size_t len = sizeof(fnt->error_message) - 1;
+        strncpy(fnt->error_message, message, len);
+        fnt->error_message[len] = 0;
     }
 }
 
@@ -116,10 +108,8 @@ static void decode_fnt2(fnt_decoder *decoder) {
         return;
     }
     if (header[3] != 3) {
-        ok_fnt_error(
-            fnt,
-            "Version %i of AngelCode binary FNT file not supported (only version 3 supported).",
-            header[3]);
+        ok_fnt_error(fnt, "Unsupported version of AngelCode binary FNT file "
+                     "(only version 3 supported).");
         return;
     }
 
@@ -281,7 +271,7 @@ static void decode_fnt2(fnt_decoder *decoder) {
             }
 
             default:
-                ok_fnt_error(fnt, "Unknown block type: %i", block_type);
+                ok_fnt_error(fnt, "Unknown block type");
                 return;
         }
     }

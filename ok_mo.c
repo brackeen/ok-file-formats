@@ -19,11 +19,9 @@
  */
 
 #include "ok_mo.h"
-#include <memory.h>
-#include <stdarg.h>
 #include <stdbool.h>
-#include <stdio.h> // For vsnprintf
 #include <stdlib.h>
+#include <string.h>
 
 #ifndef min
 #define min(a, b) ((a) < (b) ? (a) : (b))
@@ -66,18 +64,13 @@ static void ok_mo_cleanup(ok_mo *mo) {
         mo->num_strings = 0;
     }
 }
-static void ok_mo_error(ok_mo *mo, const char *format, ...)
-    __attribute__((__format__(__printf__, 2, 3)));
 
-static void ok_mo_error(ok_mo *mo, const char *format, ...) {
+static void ok_mo_error(ok_mo *mo, const char *message) {
     if (mo) {
         ok_mo_cleanup(mo);
-        if (format) {
-            va_list args;
-            va_start(args, format);
-            vsnprintf(mo->error_message, sizeof(mo->error_message), format, args);
-            va_end(args);
-        }
+        const size_t len = sizeof(mo->error_message) - 1;
+        strncpy(mo->error_message, message, len);
+        mo->error_message[len] = 0;
     }
 }
 
@@ -181,7 +174,7 @@ static void decode_mo2(mo_decoder *decoder) {
     const uint32_t value_offset = read32(header + 16, little_endian);
 
     if (!(major_version == 0 || major_version == 1)) {
-        ok_mo_error(mo, "Not a gettext MO file (version %d)", major_version);
+        ok_mo_error(mo, "Unsupported gettext MO file. Only version 0 or 1 supported");
         return;
     }
 

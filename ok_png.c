@@ -19,10 +19,8 @@
  */
 
 #include "ok_png.h"
-#include <memory.h>
-#include <stdarg.h>
-#include <stdio.h> // For vsnprintf
 #include <stdlib.h>
+#include <string.h>
 
 // Set this to use the regular zlib library instead of the internal inflater
 //#define USE_ZLIB
@@ -108,23 +106,16 @@ typedef struct {
 
 } png_decoder;
 
-static void ok_png_error(ok_png *png, const char *format, ...)
-    __attribute__((__format__(__printf__, 2, 3)));
-
-static void ok_png_error(ok_png *png, const char *format, ...) {
+static void ok_png_error(ok_png *png, const char *message) {
     if (png) {
+        free(png->data);
+        png->data = NULL;
         png->width = 0;
         png->height = 0;
-        if (png->data) {
-            free(png->data);
-            png->data = NULL;
-        }
-        if (format) {
-            va_list args;
-            va_start(args, format);
-            vsnprintf(png->error_message, sizeof(png->error_message), format, args);
-            va_end(args);
-        }
+
+        const size_t len = sizeof(png->error_message) - 1;
+        strncpy(png->error_message, message, len);
+        png->error_message[len] = 0;
     }
 }
 
@@ -198,7 +189,7 @@ static inline void unpremultiply(uint8_t *dst) {
 static bool read_header(png_decoder *decoder, const uint32_t chunk_length) {
     ok_png *png = decoder->png;
     if (chunk_length != 13) {
-        ok_png_error(png, "Invalid IHDR chunk length: %u", chunk_length);
+        ok_png_error(png, "Invalid IHDR chunk length");
         return false;
     }
     uint8_t chunk_data[13];
@@ -214,13 +205,13 @@ static bool read_header(png_decoder *decoder, const uint32_t chunk_length) {
     decoder->interlace_method = chunk_data[12];
 
     if (compression_method != 0) {
-        ok_png_error(png, "Invalid compression method: %i", (int)compression_method);
+        ok_png_error(png, "Invalid compression method");
         return false;
     } else if (filter_method != 0) {
-        ok_png_error(png, "Invalid filter method: %i", (int)filter_method);
+        ok_png_error(png, "Invalid filter method");
         return false;
     } else if (decoder->interlace_method != 0 && decoder->interlace_method != 1) {
-        ok_png_error(png, "Invalid interlace method: %i", (int)decoder->interlace_method);
+        ok_png_error(png, "Invalid interlace method");
         return false;
     }
 
@@ -234,7 +225,7 @@ static bool read_header(png_decoder *decoder, const uint32_t chunk_length) {
         (c == COLOR_TYPE_RGB_WITH_ALPHA && (b == 8 || b == 16));
 
     if (!valid) {
-        ok_png_error(png, "Invalid combination of color type (%i) and bit depth (%i)", c, b);
+        ok_png_error(png, "Invalid combination of color type and bit depth");
         return false;
     }
 
@@ -249,7 +240,7 @@ static bool read_palette(png_decoder *decoder, const uint32_t chunk_length) {
     decoder->palette_length = chunk_length / 3;
 
     if (decoder->palette_length > 256 || decoder->palette_length * 3 != chunk_length) {
-        ok_png_error(png, "Invalid palette chunk length: %u", chunk_length);
+        ok_png_error(png, "Invalid palette chunk length");
         return false;
     }
     const bool src_is_bgr = decoder->is_ios_format;
@@ -282,8 +273,7 @@ static bool read_transparency(png_decoder *decoder, const uint32_t chunk_length)
 
     if (decoder->color_type == COLOR_TYPE_PALETTE) {
         if (chunk_length > decoder->palette_length) {
-            ok_png_error(png, "Invalid transparency length for palette color type: %u",
-                         chunk_length);
+            ok_png_error(png, "Invalid transparency length for palette color type");
             return false;
         }
 
@@ -302,8 +292,7 @@ static bool read_transparency(png_decoder *decoder, const uint32_t chunk_length)
         return true;
     } else if (decoder->color_type == COLOR_TYPE_GRAYSCALE) {
         if (chunk_length != 2) {
-            ok_png_error(png, "Invalid transparency length for grayscale color type: %u",
-                         chunk_length);
+            ok_png_error(png, "Invalid transparency length for grayscale color type");
             return false;
         } else {
             uint8_t buffer[2];
@@ -319,8 +308,7 @@ static bool read_transparency(png_decoder *decoder, const uint32_t chunk_length)
         }
     } else if (decoder->color_type == COLOR_TYPE_RGB) {
         if (chunk_length != 6) {
-            ok_png_error(png, "Invalid transparency length for truecolor color type: %u",
-                         chunk_length);
+            ok_png_error(png, "Invalid transparency length for truecolor color type");
             return false;
         } else {
             uint8_t buffer[6];
@@ -334,7 +322,7 @@ static bool read_transparency(png_decoder *decoder, const uint32_t chunk_length)
             return true;
         }
     } else {
-        ok_png_error(png, "Invalid transparency for color type %i", (int)decoder->color_type);
+        ok_png_error(png, "Invalid transparency for color type");
         return false;
     }
 }
@@ -738,8 +726,7 @@ static bool read_data(png_decoder *decoder, uint32_t bytes_remaining) {
             png->data = malloc(platform_size);
         }
         if (!png->data) {
-            ok_png_error(png, "Couldn't allocate memory for %u x %u image",
-                         png->width, png->height);
+            ok_png_error(png, "Couldn't allocate memory for image");
             return false;
         }
     }
@@ -866,7 +853,7 @@ static bool read_data(png_decoder *decoder, uint32_t bytes_remaining) {
                                            decoder->curr_scanline + decoder->inflater_bytes_read,
                                            curr_bytes_per_scanline - decoder->inflater_bytes_read);
         if (len < 0) {
-            ok_png_error(png, "inflater: %s", ok_inflater_error_message(decoder->inflater));
+            ok_png_error(png, ok_inflater_error_message(decoder->inflater));
             return false;
         }
         decoder->inflater_bytes_read += len;
@@ -879,7 +866,7 @@ static bool read_data(png_decoder *decoder, uint32_t bytes_remaining) {
                 decode_filter(decoder->curr_scanline + 1, decoder->prev_scanline + 1,
                               curr_bytes_per_scanline - 1, filter, bytes_per_pixel);
             } else if (filter != 0) {
-                ok_png_error(png, "Invalid filter type: %i", filter);
+                ok_png_error(png, "Invalid filter type");
                 return false;
             }
 
@@ -1019,18 +1006,10 @@ static ok_png *decode_png(void *user_data, ok_png_input_func input_func,
 #else
     ok_inflater_free(decoder->inflater);
 #endif
-    if (decoder->curr_scanline) {
-        free(decoder->curr_scanline);
-    }
-    if (decoder->prev_scanline) {
-        free(decoder->prev_scanline);
-    }
-    if (decoder->inflate_buffer) {
-        free(decoder->inflate_buffer);
-    }
-    if (decoder->temp_data_row) {
-        free(decoder->temp_data_row);
-    }
+    free(decoder->curr_scanline);
+    free(decoder->prev_scanline);
+    free(decoder->inflate_buffer);
+    free(decoder->temp_data_row);
     free(decoder);
 
     return png;
@@ -1145,18 +1124,12 @@ struct ok_inflater {
     char error_message[80];
 };
 
-static void inflater_error(ok_inflater *inflater, const char *format, ...)
-    __attribute__((__format__(__printf__, 2, 3)));
-
-static void inflater_error(ok_inflater *inflater, const char *format, ...) {
+static void inflater_error(ok_inflater *inflater, const char *message) {
     if (inflater) {
         inflater->state = STATE_ERROR;
-        if (format) {
-            va_list args;
-            va_start(args, format);
-            vsnprintf(inflater->error_message, sizeof(inflater->error_message), format, args);
-            va_end(args);
-        }
+        const size_t len = sizeof(inflater->error_message) - 1;
+        strncpy(inflater->error_message, message, len);
+        inflater->error_message[len] = 0;
     }
 }
 
@@ -1453,11 +1426,11 @@ static bool inflate_zlib_header(ok_inflater *inflater) {
             return false;
         }
         if (compression_method != 8) {
-            inflater_error(inflater, "Invalid compression method: %i", compression_method);
+            inflater_error(inflater, "Invalid inflater compression method");
             return false;
         }
         if (compression_info > 7) {
-            inflater_error(inflater, "Invalid window size: %i", compression_info);
+            inflater_error(inflater, "Invalid window size");
             return false;
         }
         if (flag_dict) {
@@ -1534,7 +1507,7 @@ static bool inflate_next_block(ok_inflater *inflater) {
                 break;
             }
             default:
-                inflater_error(inflater, "Invalid block type: %i", block_type);
+                inflater_error(inflater, "Invalid block type");
                 break;
         }
         return true;
@@ -1766,7 +1739,7 @@ static bool inflate_compressed_block(ok_inflater *inflater) {
             inflater->state_distance = -1;
             return true;
         } else {
-            inflater_error(inflater, "Invalid literal: %i: ", inflater->huffman_code);
+            inflater_error(inflater, "Invalid inflater literal");
             return false;
         }
     }
