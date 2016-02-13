@@ -159,9 +159,7 @@ ok_jpg *ok_jpg_read(void *user_data, ok_jpg_input_func input_func,
 
 void ok_jpg_free(ok_jpg *jpg) {
     if (jpg) {
-        if (jpg->data) {
-            free(jpg->data);
-        }
+        free(jpg->data);
         free(jpg);
     }
 }

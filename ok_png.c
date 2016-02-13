@@ -158,9 +158,7 @@ ok_png *ok_png_read(void *user_data, ok_png_input_func input_func,
 
 void ok_png_free(ok_png *png) {
     if (png) {
-        if (png->data) {
-            free(png->data);
-        }
+        free(png->data);
         free(png);
     }
 }
@@ -1862,24 +1860,12 @@ void ok_inflater_reset(ok_inflater *inflater) {
 
 void ok_inflater_free(ok_inflater *inflater) {
     if (inflater) {
-        if (inflater->buffer) {
-            free(inflater->buffer);
-        }
-        if (inflater->code_length_huffman) {
-            free(inflater->code_length_huffman);
-        }
-        if (inflater->literal_huffman) {
-            free(inflater->literal_huffman);
-        }
-        if (inflater->distance_huffman) {
-            free(inflater->distance_huffman);
-        }
-        if (inflater->fixed_literal_huffman) {
-            free(inflater->fixed_literal_huffman);
-        }
-        if (inflater->fixed_distance_huffman) {
-            free(inflater->fixed_distance_huffman);
-        }
+        free(inflater->buffer);
+        free(inflater->code_length_huffman);
+        free(inflater->literal_huffman);
+        free(inflater->distance_huffman);
+        free(inflater->fixed_literal_huffman);
+        free(inflater->fixed_distance_huffman);
         free(inflater);
     }
 }

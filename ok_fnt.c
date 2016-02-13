@@ -73,23 +73,15 @@ ok_fnt *ok_fnt_read(void *user_data, ok_fnt_input_func input_func) {
 
 void ok_fnt_free(ok_fnt *fnt) {
     if (fnt) {
-        if (fnt->name) {
-            free(fnt->name);
-        }
+        free(fnt->name);
         if (fnt->page_names) {
             // The memory was only allocated for the first item;
             // the remaining items are pointers within the first, so they shouldn't be freed.
-            if (fnt->page_names[0]) {
-                free(fnt->page_names[0]);
-            }
+            free(fnt->page_names[0]);
             free(fnt->page_names);
         }
-        if (fnt->glyphs) {
-            free(fnt->glyphs);
-        }
-        if (fnt->kerning_pairs) {
-            free(fnt->kerning_pairs);
-        }
+        free(fnt->glyphs);
+        free(fnt->kerning_pairs);
         free(fnt);
     }
 }

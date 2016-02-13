@@ -89,10 +89,7 @@ ok_wav *ok_wav_read(void *user_data, ok_wav_input_func input_func,
 
 void ok_wav_free(ok_wav *wav) {
     if (wav) {
-        if (wav->data) {
-            free(wav->data);
-            wav->data = NULL;
-        }
+        free(wav->data);
         free(wav);
     }
 }
