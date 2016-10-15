@@ -1,6 +1,6 @@
 # Requires ImageMagick
 #
-CC = clang -g -std=c99 -Wall -Wextra -Wdocumentation -Wdocumentation-unknown-command
+CC = clang -Weverything -Wno-padded -Wno-covered-switch-default -g -std=c99
 
 BIN = bin
 GEN = gen
@@ -25,7 +25,7 @@ else
 endif	
 	
 build:  
-	$(CC) -o $(BIN)/$(OUT_NAME) -Wall $(INCLUDES) $(FILES)
+	$(CC) -o $(BIN)/$(OUT_NAME) $(INCLUDES) $(FILES)
 
 # Convert png files to raw RGBA8888 format, ignoring the gAMA chunk.
 # The "-intensity Average" setting prevents ImageMagick from 

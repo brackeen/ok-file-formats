@@ -1,5 +1,5 @@
-#ifndef _JPG_TEST_H_
-#define _JPG_TEST_H_
+#ifndef JPG_TEST_H
+#define JPG_TEST_H
 
 #include <stdbool.h>
 

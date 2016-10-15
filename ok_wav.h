@@ -18,8 +18,8 @@
  3. This notice may not be removed or altered from any source distribution.
  */
 
-#ifndef _OK_WAV_H_
-#define _OK_WAV_H_
+#ifndef OK_WAV_H
+#define OK_WAV_H
 
 /**
  * @file

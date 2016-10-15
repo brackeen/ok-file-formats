@@ -11,10 +11,6 @@
 #include <TargetConditionals.h>
 #endif
 
-#ifndef min
-#define min(a, b) ((a) < (b) ? (a) : (b))
-#endif
-
 // This is just copied form a directory listing of the PNG Suite files
 static const char *filenames[] = {
     "basi0g01",
@@ -263,7 +259,7 @@ void png_suite_test(const char *path_to_png_suite, const char *path_to_rgba_file
     const int num_files = sizeof(filenames) / sizeof(filenames[0]);
     printf("Testing %i files in path \"%s\".\n", num_files, path_to_png_suite);
 
-    double startTime = (double)clock() / CLOCKS_PER_SEC;
+    double startTime = clock() / (double)CLOCKS_PER_SEC;
     int num_failures = 0;
     for (int i = 0; i < num_files; i++) {
         bool success = test_image(path_to_png_suite, path_to_rgba_files, filenames[i], true);
@@ -276,8 +272,8 @@ void png_suite_test(const char *path_to_png_suite, const char *path_to_rgba_file
             }
         }
     }
-    double endTime = (double)clock() / CLOCKS_PER_SEC;
+    double endTime = clock() / (double)CLOCKS_PER_SEC;
     double elapsedTime = endTime - startTime;
     printf("Success: %i of %i\n", (num_files - num_failures), num_files);
-    printf("Duration: %f seconds\n", (float)elapsedTime);
+    printf("Duration: %f seconds\n", elapsedTime);
 }

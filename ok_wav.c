@@ -22,10 +22,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#ifndef min
-#define min(a, b) ((a) < (b) ? (a) : (b))
-#endif
-
 typedef struct {
     ok_wav *wav;
 
@@ -141,12 +137,12 @@ static void decode_pcm_data(pcm_decoder *decoder) {
     }
 
     const int n = 1;
-    const bool system_is_little_endian = *(char *)&n == 1;
+    const bool system_is_little_endian = *(const char *)&n == 1;
     if (decoder->convert_to_system_endian && wav->little_endian != system_is_little_endian &&
         wav->bit_depth > 8) {
         // Swap data
         uint8_t *data = wav->data;
-        const uint8_t *data_end = wav->data + platform_data_length;
+        const uint8_t *data_end = (const uint8_t *)wav->data + platform_data_length;
         if (wav->bit_depth == 16) {
             while (data < data_end) {
                 const uint8_t t = data[0];

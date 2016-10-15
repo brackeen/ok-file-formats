@@ -18,8 +18,8 @@
  3. This notice may not be removed or altered from any source distribution.
  */
 
-#ifndef _OK_JPG_H_
-#define _OK_JPG_H_
+#ifndef OK_JPG_H
+#define OK_JPG_H
 
 /**
  * @file

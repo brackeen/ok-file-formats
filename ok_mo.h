@@ -18,8 +18,8 @@
  3. This notice may not be removed or altered from any source distribution.
  */
 
-#ifndef _OK_MO_H_
-#define _OK_MO_H_
+#ifndef OK_MO_H
+#define OK_MO_H
 
 /**
  * @file

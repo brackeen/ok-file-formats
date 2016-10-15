@@ -5,7 +5,7 @@
 #include <stdlib.h>
 #include <time.h>
 
-const char *filenames[] = {
+static const char *filenames[] = {
 
     // grayscale
     "jpg-gray",
@@ -101,7 +101,7 @@ void jpg_test(const char *path_to_jpgs, const char *path_to_rgba_files) {
     const int num_files = sizeof(filenames) / sizeof(filenames[0]);
     printf("Testing %i files in path \"%s\".\n", num_files, path_to_jpgs);
 
-    double startTime = (double)clock() / CLOCKS_PER_SEC;
+    double startTime = clock() / (double)CLOCKS_PER_SEC;
     int num_failures = 0;
     for (int i = 0; i < num_files; i++) {
         bool success = test_image(path_to_jpgs, path_to_rgba_files, filenames[i], true);
@@ -114,8 +114,8 @@ void jpg_test(const char *path_to_jpgs, const char *path_to_rgba_files) {
             }
         }
     }
-    double endTime = (double)clock() / CLOCKS_PER_SEC;
+    double endTime = clock() / (double)CLOCKS_PER_SEC;
     double elapsedTime = endTime - startTime;
     printf("Success: %i of %i\n", (num_files - num_failures), num_files);
-    printf("Duration: %f seconds\n", (float)elapsedTime);
+    printf("Duration: %f seconds\n", elapsedTime);
 }

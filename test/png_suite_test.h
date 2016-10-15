@@ -1,5 +1,5 @@
-#ifndef _PNG_SUITE_TEST_H_
-#define _PNG_SUITE_TEST_H_
+#ifndef PNG_SUITE_TEST_H
+#define PNG_SUITE_TEST_H
 
 #include <stdbool.h>
 

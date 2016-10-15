@@ -18,8 +18,8 @@
  3. This notice may not be removed or altered from any source distribution.
  */
 
-#ifndef _OK_FNT_H_
-#define _OK_FNT_H_
+#ifndef OK_FNT_H
+#define OK_FNT_H
 
 /**
  * @file

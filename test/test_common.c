@@ -96,7 +96,7 @@ int file_input_func(void *user_data, uint8_t *buffer, const int count) {
 }
 
 static bool fuzzy_memcmp(const uint8_t *data1, const uint8_t *data2, const size_t length,
-                         const uint8_t fuzziness, float *p_identical, int *peak_diff) {
+                         const uint8_t fuzziness, double *p_identical, int *peak_diff) {
     if (fuzziness == 0) {
         return memcmp(data1, data2, length) == 0;
     } else {
@@ -118,7 +118,7 @@ static bool fuzzy_memcmp(const uint8_t *data1, const uint8_t *data2, const size_
             data1++;
             data2++;
         }
-        *p_identical = (float)identical / length;
+        *p_identical = (double)identical / length;
         return success;
     }
 }
@@ -128,7 +128,7 @@ bool compare(const char *name, const char *ext,
              const char *image_error_message,
              const uint8_t *rgba_data, const unsigned long rgba_data_length,
              const bool info_only, const uint8_t fuzziness, const bool print_image_on_error) {
-    float p_identical;
+    double p_identical;
     int peak_diff;
     bool success = false;
     if (info_only) {
@@ -158,7 +158,7 @@ bool compare(const char *name, const char *ext,
                              &p_identical, &peak_diff)) {
         if (fuzziness > 0) {
             printf("Failure: Data is different for image %s.%s (%f%% diff<=1, peak diff=%i)\n",
-                   name, ext, (p_identical * 100), peak_diff);
+                   name, ext, (p_identical * 100.0), peak_diff);
         } else {
             printf("Failure: Data is different for image %s.%s\n", name, ext);
         }
@@ -177,7 +177,7 @@ bool compare(const char *name, const char *ext,
         }
     } else if (fuzziness > 0) {
         printf("Success: %16.16s.%s (%9.5f%% diff<=1, peak diff=%i)\n", name, ext,
-               (p_identical * 100), peak_diff);
+               (p_identical * 100.0), peak_diff);
         success = true;
     } else {
         printf("Success: %16.16s.%s\n", name, ext);

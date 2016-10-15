@@ -1091,8 +1091,8 @@ struct ok_inflater {
     bool nowrap;
 
     // Input
-    uint8_t *input;
-    uint8_t *input_end;
+    const uint8_t *input;
+    const uint8_t *input_end;
     uint32_t input_buffer;
     int input_buffer_bits;
 
@@ -1775,7 +1775,7 @@ static bool inflate_noop(ok_inflater *inflater) {
     return false;
 }
 
-bool (*STATE_FUNCTIONS[NUM_STATES])(ok_inflater *);
+static bool (*STATE_FUNCTIONS[NUM_STATES])(ok_inflater *);
 
 // Public Inflater API
 
@@ -1858,7 +1858,7 @@ void ok_inflater_set_input(ok_inflater *inflater, const void *buffer,
                            const unsigned int buffer_length) {
     if (inflater) {
         if (inflater->input == inflater->input_end) {
-            inflater->input = (uint8_t *)buffer;
+            inflater->input = (const uint8_t *)buffer;
             inflater->input_end = inflater->input + buffer_length;
         } else {
             inflater_error(inflater, "ok_inflater_set_input was called with unread input data.");
