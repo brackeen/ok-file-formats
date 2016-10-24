@@ -44,16 +44,28 @@ static void print_image_diff(const uint8_t *data, const uint32_t width, const ui
     }
 }
 
+char *append_path(const char *path, const char *name) {
+    return get_full_path(path, name, "");
+}
+
 char *get_full_path(const char *path, const char *name, const char *ext) {
+#ifdef _WIN32
+    const char *sep = "\\";
+#else
+    const char *sep = "/";
+#endif
     size_t path_len = strlen(path);
-    char *file_name = malloc(path_len + 1 + strlen(name) + 1 + strlen(ext) + 1);
+    size_t ext_len = strlen(ext);
+    char *file_name = malloc(path_len + 1 + strlen(name) + 1 + ext_len + 1);
     strcpy(file_name, path);
-    if (path_len > 0 && path[path_len - 1] != '/') {
-        strcat(file_name, "/");
+    if (path_len > 0 && path[path_len - 1] != sep[0]) {
+        strcat(file_name, sep);
     }
     strcat(file_name, name);
-    strcat(file_name, ".");
-    strcat(file_name, ext);
+    if (ext_len > 0) {
+        strcat(file_name, ".");
+        strcat(file_name, ext);
+    }
     return file_name;
 }
 

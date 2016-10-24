@@ -1,6 +1,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+char *append_path(const char *path, const char *name);
+
 char *get_full_path(const char *path, const char *name, const char *ext);
 
 uint8_t *read_file(const char *filename, unsigned long *length);
