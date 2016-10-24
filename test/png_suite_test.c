@@ -274,6 +274,6 @@ void png_suite_test(const char *path_to_png_suite, const char *path_to_rgba_file
     }
     double endTime = clock() / (double)CLOCKS_PER_SEC;
     double elapsedTime = endTime - startTime;
-    printf("Success: %i of %i\n", (num_files - num_failures), num_files);
+    printf("Success: PNG %i of %i\n", (num_files - num_failures), num_files);
     printf("Duration: %f seconds\n", elapsedTime);
 }

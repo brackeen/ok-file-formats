@@ -116,6 +116,6 @@ void jpg_test(const char *path_to_jpgs, const char *path_to_rgba_files) {
     }
     double endTime = clock() / (double)CLOCKS_PER_SEC;
     double elapsedTime = endTime - startTime;
-    printf("Success: %i of %i\n", (num_files - num_failures), num_files);
+    printf("Success: JPEG %i of %i\n", (num_files - num_failures), num_files);
     printf("Duration: %f seconds\n", elapsedTime);
 }
