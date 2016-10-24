@@ -63,8 +63,7 @@ static void decode_pcm(ok_wav *wav, void *input_data, ok_wav_input_func input_fu
 
 // Public API
 
-ok_wav *ok_wav_read(void *user_data, ok_wav_input_func input_func,
-                    const bool convert_to_system_endian) {
+ok_wav *ok_wav_read(void *user_data, ok_wav_input_func input_func, bool convert_to_system_endian) {
     ok_wav *wav = calloc(1, sizeof(ok_wav));
     if (input_func) {
         decode_pcm(wav, user_data, input_func, convert_to_system_endian);

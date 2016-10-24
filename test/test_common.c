@@ -96,7 +96,7 @@ uint8_t *read_file(const char *filename, unsigned long *length) {
     return buffer;
 }
 
-int file_input_func(void *user_data, uint8_t *buffer, const int count) {
+int file_input_func(void *user_data, uint8_t *buffer, int count) {
     FILE *fp = (FILE *)user_data;
     if (buffer && count > 0) {
         return (int)fread(buffer, 1, (size_t)count, fp);

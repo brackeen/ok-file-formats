@@ -144,7 +144,7 @@ ok_jpg *ok_jpg_read_info(void *user_data, ok_jpg_input_func input_func) {
 }
 
 ok_jpg *ok_jpg_read(void *user_data, ok_jpg_input_func input_func,
-                    const ok_jpg_color_format color_format, const bool flip_y) {
+                    ok_jpg_color_format color_format, bool flip_y) {
     return decode_jpg(user_data, input_func, color_format, flip_y, false);
 }
 

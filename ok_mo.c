@@ -296,7 +296,7 @@ const char *ok_mo_value(ok_mo *mo, const char *key) {
     return ok_mo_value_in_context(mo, NULL, key);
 }
 
-const char *ok_mo_plural_value(ok_mo *mo, const char *key, const char *plural_key, const int n) {
+const char *ok_mo_plural_value(ok_mo *mo, const char *key, const char *plural_key, int n) {
     return ok_mo_plural_value_in_context(mo, NULL, key, plural_key, n);
 }
 
@@ -311,7 +311,7 @@ static int get_plural_index(const int num_variants, const int n) {
 }
 
 const char *ok_mo_plural_value_in_context(ok_mo *mo, const char *context, const char *key,
-                                          const char *plural_key, const int n) {
+                                          const char *plural_key, int n) {
     struct ok_mo_string *s = find_value(mo, context, key);
     if (s) {
         // This is probably too simple for some languages
@@ -365,7 +365,7 @@ unsigned int ok_utf8_strlen(const char *utf8) {
     return len;
 }
 
-unsigned int ok_utf8_to_unicode(const char *utf8, uint32_t *dest, const unsigned int n) {
+unsigned int ok_utf8_to_unicode(const char *utf8, uint32_t *dest, unsigned int n) {
     if (!utf8 || !dest || n == 0) {
         return 0;
     }

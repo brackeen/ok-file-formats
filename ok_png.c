@@ -143,7 +143,7 @@ ok_png *ok_png_read_info(void *user_data, ok_png_input_func input_func) {
 }
 
 ok_png *ok_png_read(void *user_data, ok_png_input_func input_func,
-                    const ok_png_color_format color_format, const bool flip_y) {
+                    ok_png_color_format color_format, bool flip_y) {
     return decode_png(user_data, input_func, color_format, flip_y, false);
 }
 
@@ -1779,7 +1779,7 @@ static bool (*STATE_FUNCTIONS[NUM_STATES])(ok_inflater *);
 
 // Public Inflater API
 
-ok_inflater *ok_inflater_init(const bool nowrap) {
+ok_inflater *ok_inflater_init(bool nowrap) {
     STATE_FUNCTIONS[STATE_READY_FOR_HEAD] = inflate_zlib_header;
     STATE_FUNCTIONS[STATE_READY_FOR_NEXT_BLOCK] = inflate_next_block;
     STATE_FUNCTIONS[STATE_READING_STORED_BLOCK_HEADER] = inflate_stored_block_header;
@@ -1854,8 +1854,7 @@ bool ok_inflater_needs_input(const ok_inflater *inflater) {
         inflater->input == inflater->input_end;
 }
 
-void ok_inflater_set_input(ok_inflater *inflater, const void *buffer,
-                           const unsigned int buffer_length) {
+void ok_inflater_set_input(ok_inflater *inflater, const void *buffer, unsigned int buffer_length) {
     if (inflater) {
         if (inflater->input == inflater->input_end) {
             inflater->input = (const uint8_t *)buffer;
@@ -1866,7 +1865,7 @@ void ok_inflater_set_input(ok_inflater *inflater, const void *buffer,
     }
 }
 
-int ok_inflater_inflate(ok_inflater *inflater, uint8_t *dst, const unsigned int dst_len) {
+int ok_inflater_inflate(ok_inflater *inflater, uint8_t *dst, unsigned int dst_len) {
     if (!inflater || inflater->state == STATE_ERROR) {
         return -1;
     }
