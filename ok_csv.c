@@ -412,6 +412,9 @@ static void decode_csv2(csv_decoder *decoder) {
                             *field_ptr++ = '\"';
                             dquote_escape = false;
                             *field_ptr++ = ch;
+                        } else if (ch == '\n' && field_ptr > field && *(field_ptr - 1) == '\r') {
+                            // Convert "\r\n" to "\n". Maybe this should be an option.
+                            *(field_ptr - 1) = '\n';
                         } else {
                             *field_ptr++ = ch;
                         }
