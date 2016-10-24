@@ -648,8 +648,8 @@ static inline void idct_1d_16(int *out, const int out_shift,
 // 1. Converted to integer (fixed-point)
 // 2. Scaled output by sqrt(2).
 static void idct_wxh(const int *const input, uint8_t *output, const int w, const int h) {
-    int temp[16 * h];
-    int temp_row[w];
+    int temp[16 * 16];
+    int temp_row[16];
     const int *in = input;
     int *out = temp;
 
@@ -992,11 +992,11 @@ static bool read_exif(jpg_decoder *decoder) {
     int length = readBE16(buffer) - 2;
 
     // Check for Exif header
-    const int exif_header_length = 6;
+    uint8_t exif_header[6];
+    const int exif_header_length = sizeof(exif_header);
     if (length < exif_header_length) {
         return ok_seek(decoder, length);
     }
-    uint8_t exif_header[exif_header_length];
 
     if (!ok_read(decoder, exif_header, exif_header_length)) {
         return false;
@@ -1008,11 +1008,11 @@ static bool read_exif(jpg_decoder *decoder) {
 
     // Check for TIFF header
     bool little_endian;
-    const int tiff_header_length = 4;
+    uint8_t tiff_header[4];
+    const int tiff_header_length = sizeof(tiff_header);
     if (length < tiff_header_length) {
         return ok_seek(decoder, length);
     }
-    uint8_t tiff_header[tiff_header_length];
     if (!ok_read(decoder, tiff_header, tiff_header_length)) {
         return false;
     }
@@ -1056,8 +1056,8 @@ static bool read_exif(jpg_decoder *decoder) {
     int num_tags = little_endian ? readLE16(buffer) : readBE16(buffer);
 
     // Read tags, searching for orientation (0x112)
-    const int tag_length = 12;
-    uint8_t tag_buffer[tag_length];
+    uint8_t tag_buffer[12];
+    const int tag_length = sizeof(tag_buffer);
     for (int i = 0; i < num_tags; i++) {
         if (length < tag_length) {
             return ok_seek(decoder, length);
@@ -1201,8 +1201,12 @@ static bool read_dht(jpg_decoder *decoder) {
 
 static bool read_sos(jpg_decoder *decoder) {
     ok_jpg *jpg = decoder->jpg;
-    int expected_size = 6 + decoder->num_components * 2;
-    uint8_t buffer[expected_size];
+    const int expected_size = 6 + decoder->num_components * 2;
+    uint8_t buffer[16];
+    if ((int)sizeof(buffer) < expected_size) {
+        ok_jpg_error(jpg, "Too many components for buffer");
+        return false;
+    }
     if (!ok_read(decoder, buffer, expected_size)) {
         return false;
     }

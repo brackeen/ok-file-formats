@@ -1447,8 +1447,7 @@ static bool inflate_init_fixed_huffman(ok_inflater *inflater) {
     if (!inflater->fixed_literal_huffman) {
         huffman_tree *tree = malloc(sizeof(huffman_tree));
         if (tree) {
-            const int num_codes = 288;
-            uint8_t code_length[num_codes];
+            uint8_t code_length[288];
             int i;
             for (i = 0; i < 144; i++) {
                 code_length[i] = 8;
@@ -1462,7 +1461,8 @@ static bool inflate_init_fixed_huffman(ok_inflater *inflater) {
             for (i = 280; i < 288; i++) {
                 code_length[i] = 8;
             }
-            make_huffman_tree_from_array(tree, code_length, num_codes);
+            make_huffman_tree_from_array(tree, code_length,
+                                         sizeof(code_length) / sizeof(code_length[0]));
             inflater->fixed_literal_huffman = tree;
         }
     }
