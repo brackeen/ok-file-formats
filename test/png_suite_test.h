@@ -1,8 +1,6 @@
 #ifndef PNG_SUITE_TEST_H
 #define PNG_SUITE_TEST_H
 
-#include <stdbool.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif

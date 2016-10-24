@@ -229,7 +229,6 @@
 		E33C0259195A12DF0003201B /* zam.rgba in Resources */ = {isa = PBXBuildFile; fileRef = E33C019C195A12DF0003201B /* zam.rgba */; };
 		E35A634E1948F54900CEBD42 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = E35A634D1948F54900CEBD42 /* main.m */; };
 		E35A63511948F54900CEBD42 /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = E35A63501948F54900CEBD42 /* AppDelegate.m */; };
-		E35A63531948F54900CEBD42 /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = E35A63521948F54900CEBD42 /* Images.xcassets */; };
 		E35A65921948F5D600CEBD42 /* ok_fnt.c in Sources */ = {isa = PBXBuildFile; fileRef = E35A63711948F5D500CEBD42 /* ok_fnt.c */; };
 		E35A65941948F5D600CEBD42 /* ok_png.c in Sources */ = {isa = PBXBuildFile; fileRef = E35A63731948F5D500CEBD42 /* ok_png.c */; };
 		E35A65951948F5D600CEBD42 /* ok_wav.c in Sources */ = {isa = PBXBuildFile; fileRef = E35A63741948F5D500CEBD42 /* ok_wav.c */; };
@@ -404,6 +403,7 @@
 		E388A3641991AD1F003BC626 /* zh-Hans.po in Resources */ = {isa = PBXBuildFile; fileRef = E388A3601991AD1F003BC626 /* zh-Hans.po */; };
 		E388A3671991CB71003BC626 /* es.mo in Resources */ = {isa = PBXBuildFile; fileRef = E388A3651991CB71003BC626 /* es.mo */; };
 		E388A3681991CB71003BC626 /* es.po in Resources */ = {isa = PBXBuildFile; fileRef = E388A3661991CB71003BC626 /* es.po */; };
+		E3CDB1201DBDA40100D8C6F1 /* Launch Screen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = E3CDB11F1DBDA40100D8C6F1 /* Launch Screen.storyboard */; };
 		E3E663F41A244F1C00105FF6 /* orientation_1.jpg in Resources */ = {isa = PBXBuildFile; fileRef = E3E663EB1A244F1C00105FF6 /* orientation_1.jpg */; };
 		E3E663F51A244F1C00105FF6 /* orientation_2.jpg in Resources */ = {isa = PBXBuildFile; fileRef = E3E663EC1A244F1C00105FF6 /* orientation_2.jpg */; };
 		E3E663F61A244F1C00105FF6 /* orientation_3.jpg in Resources */ = {isa = PBXBuildFile; fileRef = E3E663ED1A244F1C00105FF6 /* orientation_3.jpg */; };
@@ -654,7 +654,6 @@
 		E35A634D1948F54900CEBD42 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
 		E35A634F1948F54900CEBD42 /* AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = AppDelegate.h; sourceTree = "<group>"; };
 		E35A63501948F54900CEBD42 /* AppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = AppDelegate.m; sourceTree = "<group>"; };
-		E35A63521948F54900CEBD42 /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Images.xcassets; sourceTree = "<group>"; };
 		E35A636D1948F5D500CEBD42 /* ok_fnt.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ok_fnt.h; path = ../../ok_fnt.h; sourceTree = "<group>"; };
 		E35A636F1948F5D500CEBD42 /* ok_png.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ok_png.h; path = ../../ok_png.h; sourceTree = "<group>"; };
 		E35A63701948F5D500CEBD42 /* ok_wav.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ok_wav.h; path = ../../ok_wav.h; sourceTree = "<group>"; };
@@ -838,6 +837,7 @@
 		E388A3601991AD1F003BC626 /* zh-Hans.po */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = "zh-Hans.po"; sourceTree = "<group>"; };
 		E388A3651991CB71003BC626 /* es.mo */ = {isa = PBXFileReference; lastKnownFileType = file; path = es.mo; sourceTree = "<group>"; };
 		E388A3661991CB71003BC626 /* es.po */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = es.po; sourceTree = "<group>"; };
+		E3CDB11F1DBDA40100D8C6F1 /* Launch Screen.storyboard */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = file.storyboard; path = "Launch Screen.storyboard"; sourceTree = "<group>"; };
 		E3E663EB1A244F1C00105FF6 /* orientation_1.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = orientation_1.jpg; sourceTree = "<group>"; };
 		E3E663EC1A244F1C00105FF6 /* orientation_2.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = orientation_2.jpg; sourceTree = "<group>"; };
 		E3E663ED1A244F1C00105FF6 /* orientation_3.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = orientation_3.jpg; sourceTree = "<group>"; };
@@ -1109,7 +1109,7 @@
 			children = (
 				E35A634F1948F54900CEBD42 /* AppDelegate.h */,
 				E35A63501948F54900CEBD42 /* AppDelegate.m */,
-				E35A63521948F54900CEBD42 /* Images.xcassets */,
+				E3CDB11F1DBDA40100D8C6F1 /* Launch Screen.storyboard */,
 				E35A634B1948F54900CEBD42 /* Supporting Files */,
 			);
 			path = OkFileFormatsTest;
@@ -1454,6 +1454,7 @@
 				E388A3681991CB71003BC626 /* es.po in Resources */,
 				E35A66A61948F5D600CEBD42 /* PngSuite.png in Resources */,
 				E33C023D195A12DF0003201B /* s36n3p04.rgba in Resources */,
+				E3CDB1201DBDA40100D8C6F1 /* Launch Screen.storyboard in Resources */,
 				E33C022D195A12DF0003201B /* s06n3p02.rgba in Resources */,
 				E35A665F1948F5D600CEBD42 /* bgai4a08.png in Resources */,
 				E35A66D91948F5D600CEBD42 /* tbwn3p08.png in Resources */,
@@ -1833,7 +1834,6 @@
 				E35A66601948F5D600CEBD42 /* bgai4a16.png in Resources */,
 				E3E664071A244F8200105FF6 /* orientation_2.rgba in Resources */,
 				E33C01C3195A12DF0003201B /* bgwn6a08.rgba in Resources */,
-				E35A63531948F54900CEBD42 /* Images.xcassets in Resources */,
 				E33C01EA195A12DF0003201B /* g03n0g16.rgba in Resources */,
 				E33C021A195A12DF0003201B /* peppers_color.rgba in Resources */,
 				E35A66BE1948F5D600CEBD42 /* s09i3p02.png in Resources */,
@@ -1972,8 +1972,6 @@
 		E35A63631948F54900CEBD42 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME = LaunchImage;
 				CLANG_WARN_ASSIGN_ENUM = YES;
 				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
 				CLANG_WARN_SUSPICIOUS_IMPLICIT_CONVERSION = YES;
@@ -1991,14 +1989,17 @@
 				OTHER_CFLAGS = "";
 				PRODUCT_BUNDLE_IDENTIFIER = "com.brackeen.${PRODUCT_NAME:rfc1034identifier}";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				WARNING_CFLAGS = (
+					"-Weverything",
+					"-Wno-padded",
+					"-Wno-covered-switch-default",
+				);
 			};
 			name = Debug;
 		};
 		E35A63641948F54900CEBD42 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_LAUNCHIMAGE_NAME = LaunchImage;
 				CLANG_WARN_ASSIGN_ENUM = YES;
 				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
 				CLANG_WARN_SUSPICIOUS_IMPLICIT_CONVERSION = YES;
@@ -2016,6 +2017,11 @@
 				OTHER_CFLAGS = "";
 				PRODUCT_BUNDLE_IDENTIFIER = "com.brackeen.${PRODUCT_NAME:rfc1034identifier}";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				WARNING_CFLAGS = (
+					"-Weverything",
+					"-Wno-padded",
+					"-Wno-covered-switch-default",
+				);
 			};
 			name = Release;
 		};

@@ -1,8 +1,6 @@
 #ifndef JPG_TEST_H
 #define JPG_TEST_H
 
-#include <stdbool.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif
