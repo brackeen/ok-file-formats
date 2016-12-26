@@ -53,11 +53,11 @@ do
     sox $IN/sound.wav --endian big --encoding floating-point --bits 32 --channels $channels $OUT/sound-BEF32-${channels}ch.wav
     sox $IN/sound.wav --endian big --encoding floating-point --bits 64 --channels $channels $OUT/sound-BEF64-${channels}ch.wav
     
-    sox $OUT/sound-BEI16-${channels}ch.wav $OUT/sound-BEI16-${channels}ch.raw
-    sox $OUT/sound-BEI24-${channels}ch.wav $OUT/sound-BEI24-${channels}ch.raw
-    sox $OUT/sound-BEI32-${channels}ch.wav $OUT/sound-BEI32-${channels}ch.raw
-    sox $OUT/sound-BEF32-${channels}ch.wav $OUT/sound-BEF32-${channels}ch.raw
-    sox $OUT/sound-BEF64-${channels}ch.wav $OUT/sound-BEF64-${channels}ch.raw
+    sox $OUT/sound-BEI16-${channels}ch.wav --endian big $OUT/sound-BEI16-${channels}ch.raw
+    sox $OUT/sound-BEI24-${channels}ch.wav --endian big $OUT/sound-BEI24-${channels}ch.raw
+    sox $OUT/sound-BEI32-${channels}ch.wav --endian big $OUT/sound-BEI32-${channels}ch.raw
+    sox $OUT/sound-BEF32-${channels}ch.wav --endian big $OUT/sound-BEF32-${channels}ch.raw
+    sox $OUT/sound-BEF64-${channels}ch.wav --endian big $OUT/sound-BEF64-${channels}ch.raw
 
 done
 

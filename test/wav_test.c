@@ -9,7 +9,7 @@
 
 static ok_wav *wav_read(const char *filename) {
     FILE *fp = fopen(filename, "rb");
-    ok_wav *wav = ok_wav_read(fp, file_input_func, true);
+    ok_wav *wav = ok_wav_read(fp, file_input_func, false);
     fclose(fp);
     return wav;
 }
