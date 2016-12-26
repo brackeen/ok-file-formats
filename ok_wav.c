@@ -200,8 +200,10 @@ static void decode_pcm_data(pcm_decoder *decoder) {
     }
 }
 
-static void decode_wav(pcm_decoder *decoder) {
+static void decode_wav(pcm_decoder *decoder, bool is_little_endian) {
     ok_wav *wav = decoder->wav;
+    wav->little_endian = is_little_endian;
+
     uint8_t header[8];
     if (!ok_read(decoder, header, sizeof(header))) {
         return;
@@ -220,21 +222,35 @@ static void decode_wav(pcm_decoder *decoder) {
             return;
         }
 
-        uint32_t chunk_length = readLE32(chunk_header + 4);
+        uint32_t chunk_length = (is_little_endian ? readLE32(chunk_header + 4) :
+                                 readBE32(chunk_header + 4));
 
         if (memcmp("fmt ", chunk_header, 4) == 0) {
-            if (chunk_length != 16) {
+            if (!(chunk_length == 16 || chunk_length == 18 || chunk_length == 40)) {
                 ok_wav_error(wav, "Invalid WAV file (not PCM)");
                 return;
             }
-            uint8_t chunk_data[16];
-            if (!ok_read(decoder, chunk_data, sizeof(chunk_data))) {
+            uint8_t chunk_data[40];
+            if (!ok_read(decoder, chunk_data, chunk_length)) {
                 return;
             }
-            uint16_t format = readLE16(chunk_data);
-            wav->num_channels = (uint8_t)readLE16(chunk_data + 2);
-            wav->sample_rate = readLE32(chunk_data + 4);
-            wav->bit_depth = (uint8_t)readLE16(chunk_data + 14);
+            uint16_t format;
+            if (is_little_endian) {
+                format = readLE16(chunk_data);
+                wav->num_channels = (uint8_t)readLE16(chunk_data + 2);
+                wav->sample_rate = readLE32(chunk_data + 4);
+                wav->bit_depth = (uint8_t)readLE16(chunk_data + 14);
+            } else {
+                format = readBE16(chunk_data);
+                wav->num_channels = (uint8_t)readBE16(chunk_data + 2);
+                wav->sample_rate = readBE32(chunk_data + 4);
+                wav->bit_depth = (uint8_t)readBE16(chunk_data + 14);
+            }
+
+            if (format == 65534 && chunk_length == 40) {
+                format = is_little_endian ? readLE16(chunk_data + 24) : readBE16(chunk_data + 24);
+            }
+
             wav->is_float = format == 3;
 
             bool validFormat = ((format == 1 || format == 3) && valid_bit_depth(wav) &&
@@ -371,11 +387,9 @@ static void decode_pcm(ok_wav *wav, void *input_data, ok_wav_input_func input_fu
     if (ok_read(decoder, header, sizeof(header))) {
         //printf("File '%.4s'\n", header);
         if (memcmp("RIFF", header, 4) == 0) {
-            wav->little_endian = true;
-            decode_wav(decoder);
+            decode_wav(decoder, true);
         } else if (memcmp("RIFX", header, 4) == 0) {
-            wav->little_endian = false;
-            decode_wav(decoder);
+            decode_wav(decoder, false);
         } else if (memcmp("caff", header, 4) == 0) {
             decode_caf(decoder);
         } else {
