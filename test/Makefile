@@ -1,6 +1,7 @@
 # Requires ImageMagick
 #
-CC = clang -Weverything -Wno-padded -Wno-covered-switch-default -g -std=c99
+# TODO: Fix sign-conversion warnings
+CC = clang -Weverything -Wno-padded -Wno-covered-switch-default -Wno-sign-conversion -g -std=c99
 
 BIN = bin
 GEN = gen
@@ -10,6 +11,8 @@ INCLUDES = -I ..
 FILES = *.c ../*.c
 OUT_NAME = ok_file_formats_test
 HAS_VALGRIND := $(shell type valgrind 1>/dev/null 2>&1 ; echo $$?)
+HAS_AFCONVERT := $(shell type afconvert 1>/dev/null 2>&1 ; echo $$?)
+HAS_SOX := $(shell type sox 1>/dev/null 2>&1 ; echo $$?)
 
 # Get all image files
 PNG_SUITE_FILES := $(wildcard $(PNG_SUITE)/*.png)
@@ -22,7 +25,7 @@ ifeq ($(HAS_VALGRIND),0)
 	valgrind --tool=memcheck --leak-check=full $(BIN)/$(OUT_NAME)
 else
 	$(BIN)/$(OUT_NAME)
-endif	
+endif
 	
 build:  
 	$(CC) -o $(BIN)/$(OUT_NAME) $(INCLUDES) $(FILES)
@@ -47,7 +50,14 @@ $(GEN)/%.rgba: $(PNG_SUITE)/%.png
 $(GEN)/%.rgba: $(JPG_SUITE)/%.jpg
 	convert -auto-orient $< $@
 
-gen: init $(RGBA_FILES)
+gen_sounds:
+	@if [[ $(HAS_AFCONVERT) -eq 0 ]] && [[ $(HAS_SOX) -eq 0 ]]; then \
+		wav/convert.sh; \
+	else \
+        echo "Couldn't generate sound test files: requires afconvert and sox"; \
+	fi
+
+gen: init gen_sounds $(RGBA_FILES)
 
 init:
 	@mkdir -p $(BIN)

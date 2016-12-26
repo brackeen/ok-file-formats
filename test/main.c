@@ -2,6 +2,7 @@
 #include "jpg_test.h"
 #include "mo_test.h"
 #include "png_suite_test.h"
+#include "wav_test.h"
 #include "test_common.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,6 +33,7 @@ int main() {
         jpg_test(path_jpg, path_gen);
         csv_test(path_csv);
         gettext_test(path_gettext);
+        wav_test(path_gen);
 
         free(path_png);
         free(path_jpg);

@@ -227,6 +227,7 @@
 		E33C0257195A12DF0003201B /* z06n2c08.rgba in Resources */ = {isa = PBXBuildFile; fileRef = E33C019A195A12DF0003201B /* z06n2c08.rgba */; };
 		E33C0258195A12DF0003201B /* z09n2c08.rgba in Resources */ = {isa = PBXBuildFile; fileRef = E33C019B195A12DF0003201B /* z09n2c08.rgba */; };
 		E33C0259195A12DF0003201B /* zam.rgba in Resources */ = {isa = PBXBuildFile; fileRef = E33C019C195A12DF0003201B /* zam.rgba */; };
+		E359EEE21E10BE8C0040AE53 /* wav_test.c in Sources */ = {isa = PBXBuildFile; fileRef = E359EEE01E10BE8C0040AE53 /* wav_test.c */; };
 		E35A634E1948F54900CEBD42 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = E35A634D1948F54900CEBD42 /* main.m */; };
 		E35A63511948F54900CEBD42 /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = E35A63501948F54900CEBD42 /* AppDelegate.m */; };
 		E35A65921948F5D600CEBD42 /* ok_fnt.c in Sources */ = {isa = PBXBuildFile; fileRef = E35A63711948F5D500CEBD42 /* ok_fnt.c */; };
@@ -649,6 +650,8 @@
 		E33C019A195A12DF0003201B /* z06n2c08.rgba */ = {isa = PBXFileReference; lastKnownFileType = file; path = z06n2c08.rgba; sourceTree = "<group>"; };
 		E33C019B195A12DF0003201B /* z09n2c08.rgba */ = {isa = PBXFileReference; lastKnownFileType = file; path = z09n2c08.rgba; sourceTree = "<group>"; };
 		E33C019C195A12DF0003201B /* zam.rgba */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = zam.rgba; sourceTree = "<group>"; };
+		E359EEE01E10BE8C0040AE53 /* wav_test.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = wav_test.c; sourceTree = "<group>"; };
+		E359EEE11E10BE8C0040AE53 /* wav_test.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = wav_test.h; sourceTree = "<group>"; };
 		E35A63481948F54900CEBD42 /* OkFileFormatsTest.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OkFileFormatsTest.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E35A634C1948F54900CEBD42 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		E35A634D1948F54900CEBD42 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
@@ -1158,6 +1161,8 @@
 				E388A35A1991ACB2003BC626 /* mo_test.h */,
 				E35A64291948F5D500CEBD42 /* png_suite_test.c */,
 				E35A642A1948F5D500CEBD42 /* png_suite_test.h */,
+				E359EEE01E10BE8C0040AE53 /* wav_test.c */,
+				E359EEE11E10BE8C0040AE53 /* wav_test.h */,
 				E388A35C1991AD1F003BC626 /* gettext */,
 				E337120919870B34001F4DBF /* csv */,
 				E3F35E4119511DFF004E7952 /* jpg */,
@@ -1873,6 +1878,7 @@
 				E35A6A69194A7EB700CEBD42 /* ok_jpg.c in Sources */,
 				E388A35B1991ACB2003BC626 /* mo_test.c in Sources */,
 				E35A65921948F5D600CEBD42 /* ok_fnt.c in Sources */,
+				E359EEE21E10BE8C0040AE53 /* wav_test.c in Sources */,
 				E3371208198707C9001F4DBF /* csv_test.c in Sources */,
 				E35A65941948F5D600CEBD42 /* ok_png.c in Sources */,
 				E388A35819917097003BC626 /* ok_mo.c in Sources */,

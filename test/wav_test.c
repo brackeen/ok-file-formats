@@ -1,0 +1,95 @@
+#include "wav_test.h"
+#include "ok_wav.h"
+#include "test_common.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+
+static ok_wav *wav_read(const char *filename) {
+    FILE *fp = fopen(filename, "rb");
+    ok_wav *wav = ok_wav_read(fp, file_input_func, true);
+    fclose(fp);
+    return wav;
+}
+
+static bool test_wav(const char *path, const char *container_type, const char *format, int channels) {
+
+    char src_filename[256];
+    bool success = false;
+
+    // Load ok_wav
+    sprintf(src_filename, "sound-%s-%dch", format, channels);
+    char *src_path = get_full_path(path, src_filename, container_type);
+    ok_wav *wav = wav_read(src_path);
+    free(src_path);
+
+    if (!wav->data) {
+        printf("File:    %16.16s.%s (Couldn't load data. %s).\n", src_filename, container_type, wav->error_message);
+    } else {
+        // Load raw
+        char *raw_path = get_full_path(path, src_filename, "raw");
+        unsigned long expected_length = 0;
+        void *raw_data = read_file(raw_path, &expected_length);
+        free(raw_path);
+
+        // Compare
+        unsigned long length = wav->num_frames * wav->num_channels * (wav->bit_depth / 8);
+
+        if (expected_length != length) {
+            printf("File:    %16.16s.%s (Invalid data length: Expected %lu, got %lu).\n",
+                   src_filename, container_type, expected_length, length);
+        } else {
+            success = memcmp(wav->data, raw_data, length) == 0;
+            if (!success) {
+                printf("File:    %16.16s.%s (Data mismatch).\n", src_filename, container_type);
+            }
+        }
+    }
+
+    // Done
+    ok_wav_free(wav);
+
+    return success;
+}
+
+void wav_test(const char *path) {
+    const int channels[] = { 1, 2 };
+    const char *caf_data_formats[] = { "I8",
+        "BEI16", "BEI24", "BEI32", "BEF32", "BEF64",
+        "LEI16", "LEI24", "LEI32", "LEF32", "LEF64" };
+    const char *wav_data_formats[] = { "UI8",
+        "BEI16", "BEI24", "BEI32", "BEF32", "BEF64",
+        "LEI16", "LEI24", "LEI32", "LEF32", "LEF64" };
+
+    const int num_channels = sizeof(channels) / sizeof(channels[0]);
+    const int num_caf_types = sizeof(caf_data_formats) / sizeof(caf_data_formats[0]);
+    const int num_wav_types = sizeof(wav_data_formats) / sizeof(wav_data_formats[0]);
+
+    const int num_files = (num_caf_types + num_wav_types) * num_channels;
+    printf("Testing %i files in path \"%s\".\n", num_files, path);
+
+    double startTime = clock() / (double)CLOCKS_PER_SEC;
+    int num_failures = 0;
+    for (int i = 0; i < num_channels; i++) {
+        for (int j = 0; j < num_caf_types; j++) {
+            bool success = test_wav(path, "caf", caf_data_formats[j], channels[i]);
+            if (!success) {
+                num_failures++;
+            }
+        }
+
+        for (int j = 0; j < num_wav_types; j++) {
+            bool success = test_wav(path, "wav", wav_data_formats[j], channels[i]);
+            if (!success) {
+                num_failures++;
+            }
+        }
+    }
+
+    double endTime = clock() / (double)CLOCKS_PER_SEC;
+    double elapsedTime = endTime - startTime;
+    printf("Success: WAV %i of %i\n", (num_files - num_failures), num_files);
+    printf("Duration: %f seconds\n", elapsedTime);
+}
