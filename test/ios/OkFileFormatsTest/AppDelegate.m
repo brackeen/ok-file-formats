@@ -4,6 +4,7 @@
 #include "jpg_test.h"
 #include "csv_test.h"
 #include "mo_test.h"
+#include "wav_test.h"
 
 @interface AppDelegate ()
 
@@ -23,6 +24,7 @@
     jpg_test(path, path);
     csv_test(path);
     gettext_test(path);
+    wav_test(path);
     
     return YES;
 }
