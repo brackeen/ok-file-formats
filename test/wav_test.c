@@ -6,23 +6,20 @@
 #include <string.h>
 #include <time.h>
 
-
-static ok_wav *wav_read(const char *filename) {
-    FILE *fp = fopen(filename, "rb");
-    ok_wav *wav = ok_wav_read(fp, file_input_func, false);
-    fclose(fp);
-    return wav;
-}
-
 static bool test_wav(const char *path, const char *container_type, const char *format, int channels) {
-
     char src_filename[256];
     bool success = false;
 
     // Load ok_wav
     sprintf(src_filename, "sound-%s-%dch", format, channels);
     char *src_path = get_full_path(path, src_filename, container_type);
-    ok_wav *wav = wav_read(src_path);
+    FILE *fp = fopen(src_path, "rb");
+    if (!fp) {
+        printf("Warning: %16.16s.%s not found.\n", src_filename, container_type);
+        return true;
+    }
+    ok_wav *wav = ok_wav_read(fp, file_input_func, false);
+    fclose(fp);
     free(src_path);
 
     if (!wav->data) {

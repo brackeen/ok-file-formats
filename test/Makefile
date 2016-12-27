@@ -11,7 +11,6 @@ INCLUDES = -I ..
 FILES = *.c ../*.c
 OUT_NAME = ok_file_formats_test
 HAS_VALGRIND := $(shell type valgrind 1>/dev/null 2>&1 ; echo $$?)
-HAS_AFCONVERT := $(shell type afconvert 1>/dev/null 2>&1 ; echo $$?)
 HAS_SOX := $(shell type sox 1>/dev/null 2>&1 ; echo $$?)
 
 # Get all image files
@@ -51,8 +50,8 @@ $(GEN)/%.rgba: $(JPG_SUITE)/%.jpg
 	convert -auto-orient $< $@
 
 gen_sounds:
-	@if [[ $(HAS_AFCONVERT) -eq 0 ]] && [[ $(HAS_SOX) -eq 0 ]]; then \
-		wav/convert.sh; \
+	@if [[ $(HAS_SOX) -eq 0 ]]; then \
+		wav/wav_convert.sh; \
 	else \
         echo "Couldn't generate sound test files: requires afconvert and sox"; \
 	fi
