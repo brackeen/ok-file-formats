@@ -6,6 +6,30 @@
 #include <string.h>
 #include <time.h>
 
+#ifndef min
+#define min(a, b) ((a) < (b) ? (a) : (b))
+#endif
+
+static void print_diff(const uint8_t *data1, const uint8_t *data2, const unsigned long length) {
+    if (data1 && data2) {
+        unsigned long i = 0;
+        while (i < length) {
+            unsigned long count = min(length - i, 16);
+            for (unsigned long j = 0; j < count; j++) {
+                uint8_t b = data1[i + j];
+                printf("%02x ", b);
+            }
+            printf("| ");
+            for (unsigned long j = 0; j < count; j++) {
+                uint8_t b = data2[i + j];
+                printf("%02x ", b);
+            }
+            printf("\n");
+            i += count;
+        }
+    }
+}
+
 static bool test_wav(const char *path, const char *container_type, const char *format, int channels) {
     char src_filename[256];
     bool success = false;
@@ -41,6 +65,8 @@ static bool test_wav(const char *path, const char *container_type, const char *f
             success = memcmp(wav->data, raw_data, length) == 0;
             if (!success) {
                 printf("File:    %16.16s.%s (Data mismatch).\n", src_filename, container_type);
+                printf("*************************************************************************************************\n");
+                print_diff(raw_data, wav->data, length);
             }
         }
     }
@@ -53,10 +79,12 @@ static bool test_wav(const char *path, const char *container_type, const char *f
 
 void wav_test(const char *path) {
     const int channels[] = { 1, 2 };
-    const char *caf_data_formats[] = { "I8",
+    const char *caf_data_formats[] = {
+        "I8", "ulaw", "alaw",
         "BEI16", "BEI24", "BEI32", "BEF32", "BEF64",
         "LEI16", "LEI24", "LEI32", "LEF32", "LEF64" };
-    const char *wav_data_formats[] = { "UI8",
+    const char *wav_data_formats[] = {
+        "UI8", "ulaw-wav", "alaw-wav",
         "BEI16", "BEI24", "BEI32", "BEF32", "BEF64",
         "LEI16", "LEI24", "LEI32", "LEF32", "LEF64" };
 
