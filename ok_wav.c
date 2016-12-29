@@ -22,8 +22,21 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifndef min
+#define min(a, b) ((a) < (b) ? (a) : (b))
+#endif
+
+enum encoding {
+    ENCODING_UNKNOWN,
+    ENCODING_PCM,
+    ENCODING_ULAW,
+    ENCODING_ALAW,
+};
+
 typedef struct {
     ok_wav *wav;
+
+    enum encoding encoding;
 
     // Decode options
     bool convert_to_system_endian;
@@ -119,11 +132,136 @@ static bool valid_bit_depth(const ok_wav *wav) {
                 wav->bit_depth == 48 || wav->bit_depth == 64);
     }
 }
+
+// See g711.c common available on the internet
+// http://web.mit.edu/audio/src/build/i386_linux2/sox-11gamma-cb/g711.c
+
+static const int16_t ulaw_table[256] = {
+    -32124, -31100, -30076, -29052, -28028, -27004, -25980, -24956,
+    -23932, -22908, -21884, -20860, -19836, -18812, -17788, -16764,
+    -15996, -15484, -14972, -14460, -13948, -13436, -12924, -12412,
+    -11900, -11388, -10876, -10364, -9852, -9340, -8828, -8316,
+    -7932, -7676, -7420, -7164, -6908, -6652, -6396, -6140,
+    -5884, -5628, -5372, -5116, -4860, -4604, -4348, -4092,
+    -3900, -3772, -3644, -3516, -3388, -3260, -3132, -3004,
+    -2876, -2748, -2620, -2492, -2364, -2236, -2108, -1980,
+    -1884, -1820, -1756, -1692, -1628, -1564, -1500, -1436,
+    -1372, -1308, -1244, -1180, -1116, -1052, -988, -924,
+    -876, -844, -812, -780, -748, -716, -684, -652,
+    -620, -588, -556, -524, -492, -460, -428, -396,
+    -372, -356, -340, -324, -308, -292, -276, -260,
+    -244, -228, -212, -196, -180, -164, -148, -132,
+    -120, -112, -104, -96, -88, -80, -72, -64,
+    -56, -48, -40, -32, -24, -16, -8, 0,
+    32124, 31100, 30076, 29052, 28028, 27004, 25980, 24956,
+    23932, 22908, 21884, 20860, 19836, 18812, 17788, 16764,
+    15996, 15484, 14972, 14460, 13948, 13436, 12924, 12412,
+    11900, 11388, 10876, 10364, 9852, 9340, 8828, 8316,
+    7932, 7676, 7420, 7164, 6908, 6652, 6396, 6140,
+    5884, 5628, 5372, 5116, 4860, 4604, 4348, 4092,
+    3900, 3772, 3644, 3516, 3388, 3260, 3132, 3004,
+    2876, 2748, 2620, 2492, 2364, 2236, 2108, 1980,
+    1884, 1820, 1756, 1692, 1628, 1564, 1500, 1436,
+    1372, 1308, 1244, 1180, 1116, 1052, 988, 924,
+    876, 844, 812, 780, 748, 716, 684, 652,
+    620, 588, 556, 524, 492, 460, 428, 396,
+    372, 356, 340, 324, 308, 292, 276, 260,
+    244, 228, 212, 196, 180, 164, 148, 132,
+    120, 112, 104, 96, 88, 80, 72, 64,
+    56, 48, 40, 32, 24, 16, 8, 0,
+};
+
+static const int16_t alaw_table[256] = {
+    -5504, -5248, -6016, -5760, -4480, -4224, -4992, -4736,
+    -7552, -7296, -8064, -7808, -6528, -6272, -7040, -6784,
+    -2752, -2624, -3008, -2880, -2240, -2112, -2496, -2368,
+    -3776, -3648, -4032, -3904, -3264, -3136, -3520, -3392,
+    -22016, -20992, -24064, -23040, -17920, -16896, -19968, -18944,
+    -30208, -29184, -32256, -31232, -26112, -25088, -28160, -27136,
+    -11008, -10496, -12032, -11520, -8960, -8448, -9984, -9472,
+    -15104, -14592, -16128, -15616, -13056, -12544, -14080, -13568,
+    -344, -328, -376, -360, -280, -264, -312, -296,
+    -472, -456, -504, -488, -408, -392, -440, -424,
+    -88, -72, -120, -104, -24, -8, -56, -40,
+    -216, -200, -248, -232, -152, -136, -184, -168,
+    -1376, -1312, -1504, -1440, -1120, -1056, -1248, -1184,
+    -1888, -1824, -2016, -1952, -1632, -1568, -1760, -1696,
+    -688, -656, -752, -720, -560, -528, -624, -592,
+    -944, -912, -1008, -976, -816, -784, -880, -848,
+    5504, 5248, 6016, 5760, 4480, 4224, 4992, 4736,
+    7552, 7296, 8064, 7808, 6528, 6272, 7040, 6784,
+    2752, 2624, 3008, 2880, 2240, 2112, 2496, 2368,
+    3776, 3648, 4032, 3904, 3264, 3136, 3520, 3392,
+    22016, 20992, 24064, 23040, 17920, 16896, 19968, 18944,
+    30208, 29184, 32256, 31232, 26112, 25088, 28160, 27136,
+    11008, 10496, 12032, 11520, 8960, 8448, 9984, 9472,
+    15104, 14592, 16128, 15616, 13056, 12544, 14080, 13568,
+    344, 328, 376, 360, 280, 264, 312, 296,
+    472, 456, 504, 488, 408, 392, 440, 424,
+    88, 72, 120, 104, 24, 8, 56, 40,
+    216, 200, 248, 232, 152, 136, 184, 168,
+    1376, 1312, 1504, 1440, 1120, 1056, 1248, 1184,
+    1888, 1824, 2016, 1952, 1632, 1568, 1760, 1696,
+    688, 656, 752, 720, 560, 528, 624, 592,
+    944, 912, 1008, 976, 816, 784, 880, 848,
+};
+
+static void decode_logarithmic_pcm_data(pcm_decoder *decoder, const int16_t table[256]) {
+    static const unsigned int buffer_size = 1024;
+
+    ok_wav *wav = decoder->wav;
+    if (wav->bit_depth != 8) {
+        ok_wav_error(wav, "U-law and a-law sounds must be 8 bit");
+        return;
+    }
+
+    // Allocate buffers
+    uint64_t input_data_length = wav->num_frames * wav->num_channels;
+    uint64_t output_data_length = input_data_length * 2;
+    size_t platform_data_length = (size_t)output_data_length;
+    uint8_t *buffer = malloc(buffer_size);
+    if (!buffer) {
+        ok_wav_error(wav, "Couldn't allocate buffer");
+        return;
+    }
+    if (platform_data_length > 0 && platform_data_length == output_data_length) {
+        wav->data = malloc(platform_data_length);
+    }
+    if (!wav->data) {
+        ok_wav_error(wav, "Couldn't allocate memory for audio");
+        free(buffer);
+        return;
+    }
+
+    // Decode
+    int16_t *output = wav->data;
+    while (input_data_length > 0) {
+        int bytes_to_read = (int)min(input_data_length, buffer_size);
+        if (!ok_read(decoder, buffer, bytes_to_read)) {
+            free(buffer);
+            return;
+        }
+        input_data_length -= bytes_to_read;
+        for (int i = 0; i < bytes_to_read; i++) {
+            *output++ = table[buffer[i]];
+        }
+    }
+
+    // Set endian
+    const int n = 1;
+    const bool system_is_little_endian = *(const char *)&n == 1;
+    wav->little_endian = system_is_little_endian;
+    wav->bit_depth = 16;
+
+    // Cleanup
+    free(buffer);
+}
+
 static void decode_pcm_data(pcm_decoder *decoder) {
     ok_wav *wav = decoder->wav;
     uint64_t data_length = wav->num_frames * wav->num_channels * (wav->bit_depth / 8);
     int platform_data_length = (int)data_length;
-    if (platform_data_length > 0 && (unsigned int)platform_data_length == data_length) {
+    if (platform_data_length > 0 && (size_t)platform_data_length == data_length) {
         wav->data = malloc(platform_data_length);
     }
     if (!wav->data) {
@@ -251,10 +389,19 @@ static void decode_wav(pcm_decoder *decoder, bool is_little_endian) {
                 format = is_little_endian ? readLE16(chunk_data + 24) : readBE16(chunk_data + 24);
             }
 
-            wav->is_float = format == 3;
+            if (format == 1 || format == 3) {
+                decoder->encoding = ENCODING_PCM;
+                wav->is_float = format == 3;
+            } else if (format == 6) {
+                decoder->encoding = ENCODING_ALAW;
+            } else if (format == 7) {
+                decoder->encoding = ENCODING_ULAW;
+            } else {
+                decoder->encoding = ENCODING_UNKNOWN;
+            }
 
-            bool validFormat = ((format == 1 || format == 3) && valid_bit_depth(wav) &&
-                                wav->num_channels > 0);
+            bool validFormat = (decoder->encoding != ENCODING_UNKNOWN &&
+                                valid_bit_depth(wav) && wav->num_channels > 0);
             if (!validFormat) {
                 ok_wav_error(wav, "Invalid WAV format. Must be PCM, and a bit depth of "
                                   "8, 16, 32, 48, or 64-bit.");
@@ -266,7 +413,13 @@ static void decode_wav(pcm_decoder *decoder, bool is_little_endian) {
                 return;
             }
             wav->num_frames = chunk_length / ((wav->bit_depth / 8) * wav->num_channels);
-            decode_pcm_data(decoder);
+            if (decoder->encoding == ENCODING_ALAW) {
+                decode_logarithmic_pcm_data(decoder, alaw_table);
+            } else if (decoder->encoding == ENCODING_ULAW) {
+                decode_logarithmic_pcm_data(decoder, ulaw_table);
+            } else {
+                decode_pcm_data(decoder);
+            }
             return;
         } else {
             // Skip ignored chunk
@@ -331,7 +484,17 @@ static void decode_caf(pcm_decoder *decoder) {
             wav->little_endian = (format_flags & 2) != 0;
             wav->bit_depth = (uint8_t)bits_per_channel;
 
-            bool valid_format = (memcmp("lpcm", format_id, 4) == 0 &&
+            if (memcmp("lpcm", format_id, 4) == 0) {
+                decoder->encoding = ENCODING_PCM;
+            } else if (memcmp("ulaw", format_id, 4) == 0) {
+                decoder->encoding = ENCODING_ULAW;
+            } else if (memcmp("alaw", format_id, 4) == 0) {
+                decoder->encoding = ENCODING_ALAW;
+            } else {
+                decoder->encoding = ENCODING_UNKNOWN;
+            }
+
+            bool valid_format = (decoder->encoding != ENCODING_UNKNOWN &&
                                  (sample_rate.value > 0) &&
                                  (channels_per_frame > 0) &&
                                  (bytes_per_packet == bytes_per_channel * channels_per_frame) &&
@@ -355,7 +518,13 @@ static void decode_caf(pcm_decoder *decoder) {
             // Read the data and return (skip any remaining chunks)
             uint64_t data_length = chunk_length - 4;
             wav->num_frames = data_length / ((wav->bit_depth / 8) * wav->num_channels);
-            decode_pcm_data(decoder);
+            if (decoder->encoding == ENCODING_ALAW) {
+                decode_logarithmic_pcm_data(decoder, alaw_table);
+            } else if (decoder->encoding == ENCODING_ULAW) {
+                decode_logarithmic_pcm_data(decoder, ulaw_table);
+            } else {
+                decode_pcm_data(decoder);
+            }
             return;
         } else {
             // Skip ignored chunk
