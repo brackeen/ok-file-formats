@@ -12,14 +12,16 @@ OUT=gen
 
 mkdir -p $OUT
 
-caf_data_formats=( I8 ulaw alaw BEI16 BEI24 BEI32 BEF32 BEF64 LEI16 LEI24 LEI32 LEF32 LEF64 )
+caf_data_formats=( I8 ulaw alaw ima4 BEI16 BEI24 BEI32 BEF32 BEF64 LEI16 LEI24 LEI32 LEF32 LEF64 )
+
+# Set this to "big" if you're testing on a big-endian system... but you're not, so don't.
+system_endian=little
 
 # TODO:
 # WAV: IMA-ADPCM 
 # WAV: MS-ADPCM
-# CAF: IMA4 
 
-# CAF files (requires afconvert - SoX (14.4.2) doesn't create 64-bit floating-point CAF files correctly)
+# CAF files (requires afconvert - SoX doesn't handle all possible CAF formats)
 if command -v afconvert >/dev/null 2>&1; then
     echo ${0##*/}: Generating CAF sounds...
 
@@ -31,9 +33,13 @@ if command -v afconvert >/dev/null 2>&1; then
         done
     
         # CAF-only raw files
-        sox $OUT/sound-I8-${channels}ch.caf $OUT/sound-I8-${channels}ch.raw
-        sox $OUT/sound-ulaw-${channels}ch.caf --endian little --encoding signed-integer --bits 16 --channels $channels $OUT/sound-ulaw-${channels}ch.raw
-        sox $OUT/sound-alaw-${channels}ch.caf --endian little --encoding signed-integer --bits 16 --channels $channels $OUT/sound-alaw-${channels}ch.raw    
+        sox $OUT/sound-I8-${channels}ch.caf --channels $channels $OUT/sound-I8-${channels}ch.raw
+        sox $OUT/sound-ulaw-${channels}ch.caf --endian $system_endian --encoding signed-integer --bits 16 --channels $channels $OUT/sound-ulaw-${channels}ch.raw
+        sox $OUT/sound-alaw-${channels}ch.caf --endian $system_endian --encoding signed-integer --bits 16 --channels $channels $OUT/sound-alaw-${channels}ch.raw
+        
+        afconvert -f caff -c $channels -d LEI16 $OUT/sound-ima4-${channels}ch.caf $OUT/temp.wav
+        sox $OUT/temp.wav --endian $system_endian $OUT/sound-ima4-${channels}ch.raw
+        rm $OUT/temp.wav
     done
 fi
 
@@ -48,8 +54,8 @@ do
     
     # 8-bit RAW files
     sox $OUT/sound-UI8-${channels}ch.wav --channels $channels $OUT/sound-UI8-${channels}ch.raw
-    sox $OUT/sound-ulaw-wav-${channels}ch.wav --endian little --encoding signed-integer --bits 16 --channels $channels $OUT/sound-ulaw-wav-${channels}ch.raw
-    sox $OUT/sound-alaw-wav-${channels}ch.wav --endian little --encoding signed-integer --bits 16 --channels $channels $OUT/sound-alaw-wav-${channels}ch.raw
+    sox $OUT/sound-ulaw-wav-${channels}ch.wav --endian $system_endian --encoding signed-integer --bits 16 --channels $channels $OUT/sound-ulaw-wav-${channels}ch.raw
+    sox $OUT/sound-alaw-wav-${channels}ch.wav --endian $system_endian --encoding signed-integer --bits 16 --channels $channels $OUT/sound-alaw-wav-${channels}ch.raw
     
     # Little endian WAVE files
     sox $IN/sound.wav --endian little --encoding signed-integer --bits 16 --channels $channels $OUT/sound-LEI16-${channels}ch.wav
@@ -78,7 +84,6 @@ do
     sox $OUT/sound-BEI32-${channels}ch.wav --endian big $OUT/sound-BEI32-${channels}ch.raw
     sox $OUT/sound-BEF32-${channels}ch.wav --endian big $OUT/sound-BEF32-${channels}ch.raw
     sox $OUT/sound-BEF64-${channels}ch.wav --endian big $OUT/sound-BEF64-${channels}ch.raw
-
 done
 
 echo ${0##*/}: Done.

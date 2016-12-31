@@ -80,7 +80,7 @@ static bool test_wav(const char *path, const char *container_type, const char *f
 void wav_test(const char *path) {
     const int channels[] = { 1, 2 };
     const char *caf_data_formats[] = {
-        "I8", "ulaw", "alaw",
+        "I8", "ulaw", "alaw", "ima4",
         "BEI16", "BEI24", "BEI32", "BEF32", "BEF64",
         "LEI16", "LEI24", "LEI32", "LEF32", "LEF64" };
     const char *wav_data_formats[] = {
