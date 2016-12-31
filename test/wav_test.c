@@ -11,22 +11,33 @@
 #endif
 
 static void print_diff(const uint8_t *data1, const uint8_t *data2, const unsigned long length) {
+    printf("Expected:                                         Actual:\n");
     if (data1 && data2) {
         unsigned long i = 0;
         while (i < length) {
+            printf("\x1B[39m"); // Default color
             unsigned long count = min(length - i, 16);
             for (unsigned long j = 0; j < count; j++) {
                 uint8_t b = data1[i + j];
                 printf("%02x ", b);
             }
+            for (unsigned long j = count; j < 16; j++) {
+                printf("   ");
+            }
             printf("| ");
             for (unsigned long j = 0; j < count; j++) {
                 uint8_t b = data2[i + j];
+                if (b == data1[i + j]) {
+                    printf("\x1B[39m"); // Default color
+                } else {
+                    printf("\x1B[31m"); // Red
+                }
                 printf("%02x ", b);
             }
             printf("\n");
             i += count;
         }
+        printf("\x1B[39m"); // Default color
     }
 }
 
@@ -65,7 +76,6 @@ static bool test_wav(const char *path, const char *container_type, const char *f
             success = memcmp(wav->data, raw_data, length) == 0;
             if (!success) {
                 printf("File:    %16.16s.%s (Data mismatch).\n", src_filename, container_type);
-                printf("*************************************************************************************************\n");
                 print_diff(raw_data, wav->data, length);
             }
         }
