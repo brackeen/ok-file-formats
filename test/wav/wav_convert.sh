@@ -9,6 +9,7 @@
 
 # Mono sound with even number of frames, Stereo sound with odd number of frames
 IN_WAVS=( wav/sound.wav wav/sound2.wav )
+IN_FRAMES=( 44086 44085 )
 OUT=gen
 
 mkdir -p $OUT
@@ -88,6 +89,14 @@ do
     sox $OUT/sound-BEI32-${channels}ch.wav --endian big $OUT/sound-BEI32-${channels}ch.raw
     sox $OUT/sound-BEF32-${channels}ch.wav --endian big $OUT/sound-BEF32-${channels}ch.raw
     sox $OUT/sound-BEF64-${channels}ch.wav --endian big $OUT/sound-BEF64-${channels}ch.raw
+    
+    # ADPCM files
+    # NOTE: The SoX decoder may add extra frames when converting from ima-adpcm to raw. Use `head` to truncate.
+    # (The encoder appears to work correctly).
+    sox $IN_WAV --encoding ima-adpcm --channels $channels $OUT/sound-ima-adpcm-${channels}ch.wav
+    sox $OUT/sound-ima-adpcm-${channels}ch.wav --endian $system_endian --encoding signed-integer --bits 16 --channels $channels -t raw - \
+        | head -c $(( ${IN_FRAMES[$channels - 1]} * $channels * 2)) \
+        > $OUT/sound-ima-adpcm-${channels}ch.raw
 done
 
 echo ${0##*/}: Done.

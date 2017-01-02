@@ -50,7 +50,7 @@ static bool test_wav(const char *path, const char *container_type, const char *f
     char *src_path = get_full_path(path, src_filename, container_type);
     FILE *fp = fopen(src_path, "rb");
     if (!fp) {
-        printf("Warning: %16.16s.%s not found.\n", src_filename, container_type);
+        printf("Warning: %24.24s.%s not found.\n", src_filename, container_type);
         return true;
     }
     ok_wav *wav = ok_wav_read(fp, file_input_func, false);
@@ -58,7 +58,7 @@ static bool test_wav(const char *path, const char *container_type, const char *f
     free(src_path);
 
     if (!wav->data) {
-        printf("File:    %16.16s.%s (Couldn't load data. %s).\n", src_filename, container_type, wav->error_message);
+        printf("File:    %24.24s.%s (Couldn't load data. %s).\n", src_filename, container_type, wav->error_message);
     } else {
         // Load raw
         char *raw_path = get_full_path(path, src_filename, "raw");
@@ -70,12 +70,12 @@ static bool test_wav(const char *path, const char *container_type, const char *f
         unsigned long length = wav->num_frames * wav->num_channels * (wav->bit_depth / 8);
 
         if (expected_length != length) {
-            printf("File:    %16.16s.%s (Invalid data length: Expected %lu, got %lu).\n",
+            printf("File:    %24.24s.%s (Invalid data length: Expected %lu, got %lu).\n",
                    src_filename, container_type, expected_length, length);
         } else {
             success = memcmp(wav->data, raw_data, length) == 0;
             if (!success) {
-                printf("File:    %16.16s.%s (Data mismatch).\n", src_filename, container_type);
+                printf("File:    %24.24s.%s (Data mismatch).\n", src_filename, container_type);
                 print_diff(raw_data, wav->data, length);
             }
         }
@@ -94,7 +94,7 @@ void wav_test(const char *path) {
         "BEI16", "BEI24", "BEI32", "BEF32", "BEF64",
         "LEI16", "LEI24", "LEI32", "LEF32", "LEF64" };
     const char *wav_data_formats[] = {
-        "UI8", "ulaw-wav", "alaw-wav",
+        "UI8", "ulaw-wav", "alaw-wav", "ima-adpcm",
         "BEI16", "BEI24", "BEI32", "BEF32", "BEF64",
         "LEI16", "LEI24", "LEI32", "LEF32", "LEF64" };
 
