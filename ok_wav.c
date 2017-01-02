@@ -1,7 +1,7 @@
 /*
  ok-file-formats
  https://github.com/brackeen/ok-file-formats
- Copyright (c) 2014-2016 David Brackeen
+ Copyright (c) 2014-2017 David Brackeen
 
  This software is provided 'as-is', without any express or implied warranty.
  In no event will the authors be held liable for any damages arising from the
@@ -77,15 +77,15 @@ static bool ok_seek(pcm_decoder *decoder, const int length) {
     return ok_read(decoder, NULL, length);
 }
 
-static void decode_pcm(ok_wav *wav, void *input_data, ok_wav_input_func input_func,
-                       const bool convert_to_system_endian);
+static void decode_file(ok_wav *wav, void *input_data, ok_wav_input_func input_func,
+                        bool convert_to_system_endian);
 
-// Public API
+// MARK: Public API
 
 ok_wav *ok_wav_read(void *user_data, ok_wav_input_func input_func, bool convert_to_system_endian) {
     ok_wav *wav = calloc(1, sizeof(ok_wav));
     if (input_func) {
-        decode_pcm(wav, user_data, input_func, convert_to_system_endian);
+        decode_file(wav, user_data, input_func, convert_to_system_endian);
     } else {
         ok_wav_error(wav, "Invalid argument: input_func is NULL");
     }
@@ -99,7 +99,7 @@ void ok_wav_free(ok_wav *wav) {
     }
 }
 
-// Decoding
+// MARK: Input helpers
 
 static inline uint16_t readBE16(const uint8_t *data) {
     return (uint16_t)((data[0] << 8) | data[1]);
@@ -129,23 +129,7 @@ static inline uint32_t readLE32(const uint8_t *data) {
     return (data[3] << 24) | (data[2] << 16) | (data[1] << 8) | data[0];
 }
 
-static bool valid_bit_depth(const ok_wav *wav, enum encoding encoding) {
-    if (encoding == ENCODING_ULAW || encoding == ENCODING_ALAW) {
-        return (wav->bit_depth == 8 && wav->is_float == false);
-    } else if (encoding == ENCODING_APPLE_IMA_ADPCM) {
-        return wav->is_float == false;
-    } else if (encoding == ENCODING_MS_IMA_ADPCM) {
-        return (wav->bit_depth == 4 && wav->is_float == false);
-    } else {
-        if (wav->is_float) {
-            return (wav->bit_depth == 32 || wav->bit_depth == 64);
-        } else {
-            return (wav->bit_depth == 8 || wav->bit_depth == 16 ||
-                    wav->bit_depth == 24 || wav->bit_depth == 32 ||
-                    wav->bit_depth == 48 || wav->bit_depth == 64);
-        }
-    }
-}
+// MARK: Decoding
 
 // See g711.c commonly available on the internet
 // http://web.mit.edu/audio/src/build/i386_linux2/sox-11gamma-cb/g711.c
@@ -575,6 +559,26 @@ static void decode_pcm_data(pcm_decoder *decoder) {
     }
 }
 
+// MARK: Container file formats (WAV, CAF)
+
+static bool valid_bit_depth(const ok_wav *wav, enum encoding encoding) {
+    if (encoding == ENCODING_ULAW || encoding == ENCODING_ALAW) {
+        return (wav->bit_depth == 8 && wav->is_float == false);
+    } else if (encoding == ENCODING_APPLE_IMA_ADPCM) {
+        return wav->is_float == false;
+    } else if (encoding == ENCODING_MS_IMA_ADPCM) {
+        return (wav->bit_depth == 4 && wav->is_float == false);
+    } else {
+        if (wav->is_float) {
+            return (wav->bit_depth == 32 || wav->bit_depth == 64);
+        } else {
+            return (wav->bit_depth == 8 || wav->bit_depth == 16 ||
+                    wav->bit_depth == 24 || wav->bit_depth == 32 ||
+                    wav->bit_depth == 48 || wav->bit_depth == 64);
+        }
+    }
+}
+
 static void decode_data(pcm_decoder *decoder, uint64_t data_length) {
     ok_wav *wav = decoder->wav;
     if (wav->sample_rate <= 0 || wav->num_channels <= 0) {
@@ -622,7 +626,7 @@ static void decode_data(pcm_decoder *decoder, uint64_t data_length) {
     }
 }
 
-static void decode_wav(pcm_decoder *decoder, bool is_little_endian) {
+static void decode_wav_file(pcm_decoder *decoder, bool is_little_endian) {
     ok_wav *wav = decoder->wav;
     wav->little_endian = is_little_endian;
 
@@ -726,7 +730,7 @@ static void decode_wav(pcm_decoder *decoder, bool is_little_endian) {
     }
 }
 
-static void decode_caf(pcm_decoder *decoder) {
+static void decode_caf_file(pcm_decoder *decoder) {
     ok_wav *wav = decoder->wav;
     uint8_t header[4];
     if (!ok_read(decoder, header, sizeof(header))) {
@@ -850,8 +854,8 @@ static void decode_caf(pcm_decoder *decoder) {
     }
 }
 
-static void decode_pcm(ok_wav *wav, void *input_data, ok_wav_input_func input_func,
-                       const bool convert_to_system_endian) {
+static void decode_file(ok_wav *wav, void *input_data, ok_wav_input_func input_func,
+                        bool convert_to_system_endian) {
     if (!wav) {
         return;
     }
@@ -870,11 +874,11 @@ static void decode_pcm(ok_wav *wav, void *input_data, ok_wav_input_func input_fu
     if (ok_read(decoder, header, sizeof(header))) {
         //printf("File '%.4s'\n", header);
         if (memcmp("RIFF", header, 4) == 0) {
-            decode_wav(decoder, true);
+            decode_wav_file(decoder, true);
         } else if (memcmp("RIFX", header, 4) == 0) {
-            decode_wav(decoder, false);
+            decode_wav_file(decoder, false);
         } else if (memcmp("caff", header, 4) == 0) {
-            decode_caf(decoder);
+            decode_caf_file(decoder);
         } else {
             ok_wav_error(wav, "Not a PCM WAV or CAF file.");
         }
