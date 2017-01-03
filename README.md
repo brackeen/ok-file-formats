@@ -4,7 +4,7 @@ C functions for reading a few different file formats. No external dependencies.
 
 * **PNG** - Reads any PNG file.
 * **JPG** - Reads most JPEG files. Baseline only, no progressive support.
-* **WAV** - Reads WAV or CAF files. PCM format only.
+* **WAV** - Reads WAV and CAF files.
 * **FNT** - Reads AngelCode BMFont files.
 * **CSV** - Reads Comma-Separated Values files.
 * **MO** - Reads gettext MO files.
@@ -61,8 +61,14 @@ int main() {
 * Tested with several JPEG files against IJG's jpeg-8d library.
 
 ### ok_wav
-* Reads WAV or CAF files.
-* PCM format only.
+* Reads both WAV and CAF files.
+* Supported encodings:
+  * PCM (including floating-point).
+  * u-law, a-law.
+  * CAF: Apple's IMA ADPCM.
+  * WAV: Microsoft's IMA ADPCM.
+  * WAV: Microsoft's ADPCM.
+* If the encoding of the file is u-law, a-law, or ADPCM, the data is converted to 16-bit signed integer PCM data.
 
 ### ok_fnt
 * Reads AngelCode BMFont files.

@@ -1,7 +1,7 @@
 /*
  ok-file-formats
  https://github.com/brackeen/ok-file-formats
- Copyright (c) 2014-2016 David Brackeen
+ Copyright (c) 2014-2017 David Brackeen
 
  This software is provided 'as-is', without any express or implied warranty.
  In no event will the authors be held liable for any damages arising from the
@@ -23,7 +23,14 @@
 
 /**
  * @file
- * Functions to read WAV and CAF files. PCM format only.
+ * Functions to read WAV and CAF files.
+ *
+ * Supported encodings:
+ *  * PCM (including floating-point).
+ *  * Both u-law and a-law.
+ *  * CAF: Apple's IMA ADPCM.
+ *  * WAV: Microsoft's IMA ADPCM.
+ *  * WAV: Microsoft's ADPCM.
  *
  * Example:
  *
@@ -90,14 +97,17 @@ typedef int (*ok_wav_input_func)(void *user_data, uint8_t *buffer, int count);
 
 /**
  * Reads a WAV (or CAF) audio file.
- * On success, #ok_wav.data has a length of `(num_channels * num_frames * (bit_depth/8))`.
+ * On success, ok_wav.data has a length of `(num_channels * num_frames * (bit_depth/8))`.
  *
  * On failure, #ok_wav.data is `NULL` and #ok_wav.error_message is set.
+ *
+ * If the encoding of the file is u-law, a-law, or ADPCM, the data is converted to 16-bit
+ * signed integer PCM data.
  *
  * @param user_data The parameter to be passed to the `input_func`.
  * @param input_func The input function to read a WAV file from.
  * @param convert_to_system_endian If true, the data is converted to the endianness of the system 
- * (required for OpenAL). Otherwise, the data is left as is.
+ * (required for playback on most systems). Otherwise, the data is left as is.
  * @return a new #ok_wav object. Never returns `NULL`. The object should be freed with
  * #ok_wav_free().
  */
