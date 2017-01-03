@@ -33,6 +33,7 @@ enum encoding {
     ENCODING_ALAW,
     ENCODING_APPLE_IMA_ADPCM,
     ENCODING_MS_IMA_ADPCM,
+    ENCODING_MS_ADPCM,
 };
 
 typedef struct {
@@ -248,33 +249,32 @@ static void decode_logarithmic_pcm_data(pcm_decoder *decoder, const int16_t tabl
 done:
     free(buffer);
 }
-
-static const int ima_index_table[16] = {
-    -1, -1, -1, -1, 2, 4, 6, 8,
-    -1, -1, -1, -1, 2, 4, 6, 8
-};
-
-static const uint16_t ima_step_table[89] = {
-    7, 8, 9, 10, 11, 12, 13, 14,
-    16, 17, 19, 21, 23, 25, 28, 31,
-    34, 37, 41, 45, 50, 55, 60, 66,
-    73, 80, 88, 97, 107, 118, 130, 143,
-    157, 173, 190, 209, 230, 253, 279, 307,
-    337, 371, 408, 449, 494, 544, 598, 658,
-    724, 796, 876, 963, 1060, 1166, 1282, 1411,
-    1552, 1707, 1878, 2066, 2272, 2499, 2749, 3024,
-    3327, 3660, 4026, 4428, 4871, 5358, 5894, 6484,
-    7132, 7845, 8630, 9493, 10442, 11487, 12635, 13899,
-    15289, 16818, 18500, 20350, 22385, 24623, 27086, 29794,
-    32767
-};
-
 struct ima_state {
     int32_t predictor;
     int8_t step_index;
 };
 
 static int16_t decode_ima_adpcm_nibble(struct ima_state *channel_state, uint8_t nibble) {
+    static const int ima_index_table[16] = {
+        -1, -1, -1, -1, 2, 4, 6, 8,
+        -1, -1, -1, -1, 2, 4, 6, 8
+    };
+
+    static const uint16_t ima_step_table[89] = {
+        7, 8, 9, 10, 11, 12, 13, 14,
+        16, 17, 19, 21, 23, 25, 28, 31,
+        34, 37, 41, 45, 50, 55, 60, 66,
+        73, 80, 88, 97, 107, 118, 130, 143,
+        157, 173, 190, 209, 230, 253, 279, 307,
+        337, 371, 408, 449, 494, 544, 598, 658,
+        724, 796, 876, 963, 1060, 1166, 1282, 1411,
+        1552, 1707, 1878, 2066, 2272, 2499, 2749, 3024,
+        3327, 3660, 4026, 4428, 4871, 5358, 5894, 6484,
+        7132, 7845, 8630, 9493, 10442, 11487, 12635, 13899,
+        15289, 16818, 18500, 20350, 22385, 24623, 27086, 29794,
+        32767
+    };
+
     if (channel_state->step_index < 0) {
         channel_state->step_index = 0;
     } else if (channel_state->step_index > 88) {
@@ -317,8 +317,9 @@ static void decode_apple_ima_adpcm_data(pcm_decoder *decoder) {
     const int num_channels = wav->num_channels;
 
     // Allocate buffers
-    uint64_t output_data_length = wav->num_frames * sizeof(int16_t) * wav->num_channels;
-    size_t platform_data_length = (size_t)output_data_length;
+    const uint64_t max_output_frames = (wav->num_frames + 1) & ~1;
+    const uint64_t output_data_length = max_output_frames * sizeof(int16_t) * num_channels;
+    const size_t platform_data_length = (size_t)output_data_length;
     channel_states = calloc(wav->num_channels, sizeof(struct ima_state));
     if (!channel_states) {
         ok_wav_error(wav, "Couldn't allocate channel_state buffer");
@@ -363,17 +364,13 @@ static void decode_apple_ima_adpcm_data(pcm_decoder *decoder) {
 
             uint8_t *input = packet;
             int16_t *channel_output = output + channel;
-            int16_t *channel_output_end = channel_output + num_channels * (frames - 1);
+            int16_t *channel_output_end = channel_output + num_channels * frames;
             while (channel_output < channel_output_end) {
                 *channel_output = decode_ima_adpcm_nibble(channel_state, (*input) & 0x0f);
                 channel_output += num_channels;
                 *channel_output = decode_ima_adpcm_nibble(channel_state, (*input) >> 4);
                 channel_output += num_channels;
                 input++;
-            }
-
-            if (frames & 1) {
-                *channel_output = decode_ima_adpcm_nibble(channel_state, (*input) & 0x0f);
             }
 
             packet += (decoder->frames_per_block + 1) / 2;
@@ -403,9 +400,8 @@ static void decode_ms_ima_adpcm_data(pcm_decoder *decoder) {
     const int num_channels = wav->num_channels;
 
     // Allocate buffers
-    // THe output_frames are a multiple of 8 because 8 frames are read at once.
-    const uint64_t output_frames = (wav->num_frames + 7) & ~7;
-    const uint64_t output_data_length = output_frames * sizeof(int16_t) * wav->num_channels;
+    const uint64_t max_output_frames = (wav->num_frames + 7) & ~7; // 8 frames are read at once.
+    const uint64_t output_data_length = max_output_frames * sizeof(int16_t) * num_channels;
     const size_t platform_data_length = (size_t)output_data_length;
     channel_states = calloc(wav->num_channels, sizeof(struct ima_state));
     if (!channel_states) {
@@ -473,6 +469,167 @@ static void decode_ms_ima_adpcm_data(pcm_decoder *decoder) {
     wav->little_endian = system_is_little_endian;
     wav->bit_depth = 16;
     
+done:
+    free(block);
+    free(channel_states);
+}
+
+struct ms_adpcm_state {
+    int32_t coeff1;
+    int32_t coeff2;
+    uint16_t delta;
+    int16_t sample1;
+    int16_t sample2;
+};
+
+static int16_t decode_ms_adpcm_nibble(struct ms_adpcm_state *channel_state, uint8_t nibble) {
+    static const uint16_t adaptation_table[16] = {
+        230, 230, 230, 230, 307, 409, 512, 614,
+        768, 614, 512, 409, 307, 230, 230, 230
+    };
+
+    if (channel_state->delta < 16) {
+        channel_state->delta = 16;
+    }
+
+    int8_t signed_nibble = (int8_t)nibble;
+    if (nibble & 8) {
+        signed_nibble |= 0xf0;
+    }
+
+    // According to https://wiki.multimedia.cx/?title=Microsoft_ADPCM this should be divided by 256,
+    // not shifted right by 8. Shifting a signed number by N can give different results than
+    // dividing by (2^N), but the right-shift matches what the SoX decoder is doing, and was (is?)
+    // a common optimization at the time the codec was written.
+    int32_t predictor = (channel_state->sample1 * channel_state->coeff1 +
+                         channel_state->sample2 * channel_state->coeff2) >> 8;
+    predictor += signed_nibble * channel_state->delta;
+    int16_t sample;
+    if (predictor > 32767) {
+        sample = 32767;
+    } else if (predictor < -32768) {
+        sample = -32768;
+    } else {
+        sample = (int16_t)predictor;
+    }
+
+    channel_state->sample2 = channel_state->sample1;
+    channel_state->sample1 = sample;
+    channel_state->delta = (adaptation_table[nibble] * channel_state->delta) >> 8;
+    return sample;
+}
+
+// See https://wiki.multimedia.cx/?title=Microsoft_ADPCM
+static void decode_ms_adpcm_data(pcm_decoder *decoder) {
+    static const int adaptation_coeff1[7] = {
+        256, 512, 0, 192, 240, 460, 392
+    };
+
+    static const int adaptation_coeff2[7] = {
+        0, -256, 0, 64, 0, -208, -232
+    };
+
+    ok_wav *wav = decoder->wav;
+    struct ms_adpcm_state *channel_states = NULL;
+    uint8_t *block = NULL;
+    const int num_channels = wav->num_channels;
+    const bool is_le = wav->little_endian;
+
+    // Allocate buffers
+    const uint64_t max_output_frames = (wav->num_frames + 1) & ~1;
+    const uint64_t output_data_length = max_output_frames * sizeof(int16_t) * num_channels;
+    const size_t platform_data_length = (size_t)output_data_length;
+    channel_states = calloc(wav->num_channels, sizeof(struct ms_adpcm_state));
+    if (!channel_states) {
+        ok_wav_error(wav, "Couldn't allocate channel_state buffer");
+        goto done;
+    }
+    block = malloc(decoder->block_size);
+    if (!block) {
+        ok_wav_error(wav, "Couldn't allocate block");
+        goto done;
+    }
+    if (platform_data_length > 0 && platform_data_length == output_data_length) {
+        wav->data = malloc(platform_data_length);
+    }
+    if (!wav->data) {
+        ok_wav_error(wav, "Couldn't allocate memory for audio");
+        goto done;
+    }
+
+    // Decode
+    uint64_t remaining_frames = wav->num_frames;
+    int16_t *output = wav->data;
+    while (remaining_frames > 0) {
+        const int block_frames = (int)min(remaining_frames, decoder->frames_per_block);
+        int frames = block_frames;
+        if (!ok_read(decoder, block, decoder->block_size)) {
+            goto done;
+        }
+
+        // Preamble (interleaved)
+        uint8_t *input = block;
+        for (int channel = 0; channel < num_channels; channel++) {
+            const uint8_t coeff_index = min(*input, 6);
+            channel_states[channel].coeff1 = adaptation_coeff1[coeff_index];
+            channel_states[channel].coeff2 = adaptation_coeff2[coeff_index];
+            input++;
+        }
+        for (int channel = 0; channel < num_channels; channel++) {
+            channel_states[channel].delta = (is_le ? readLE16(input) : readBE16(input));
+            input += 2;
+        }
+        for (int channel = 0; channel < num_channels; channel++) {
+            channel_states[channel].sample1 = (is_le ? readLE16(input) : readBE16(input));
+            input += 2;
+        }
+        for (int channel = 0; channel < num_channels; channel++) {
+            channel_states[channel].sample2 = (is_le ? readLE16(input) : readBE16(input));
+            input += 2;
+        }
+
+        // Initial output (sample2 first)
+        for (int channel = 0; channel < num_channels; channel++) {
+            *output++ = channel_states[channel].sample2;
+        }
+        for (int channel = 0; channel < num_channels; channel++) {
+            *output++ = channel_states[channel].sample1;
+        }
+        frames -= 2;
+
+        // Frames (interleaved)
+        int samples = frames * num_channels;
+        if (num_channels <= 2) {
+            struct ms_adpcm_state *channel_state1 = channel_states;
+            struct ms_adpcm_state *channel_state2 = channel_states + (num_channels - 1);
+            while (samples > 0) {
+                *output++ = decode_ms_adpcm_nibble(channel_state1, (*input) >> 4);
+                *output++ = decode_ms_adpcm_nibble(channel_state2, (*input) & 0x0f);
+                input++;
+                samples -= 2;
+            }
+        } else {
+            // FIXME: test
+            int channel = 0;
+            while (samples > 0) {
+                *output++ = decode_ms_adpcm_nibble(channel_states + channel, (*input) >> 4);
+                channel = (channel + 1) % num_channels;
+                *output++ = decode_ms_adpcm_nibble(channel_states + channel, (*input) & 0x0f);
+                channel = (channel + 1) % num_channels;
+                input++;
+                samples -= 2;
+            }
+        }
+
+        remaining_frames -= block_frames;
+    }
+
+    // Set endian
+    const int n = 1;
+    const bool system_is_little_endian = *(const char *)&n == 1;
+    wav->little_endian = system_is_little_endian;
+    wav->bit_depth = 16;
+
 done:
     free(block);
     free(channel_states);
@@ -566,7 +723,7 @@ static bool valid_bit_depth(const ok_wav *wav, enum encoding encoding) {
         return (wav->bit_depth == 8 && wav->is_float == false);
     } else if (encoding == ENCODING_APPLE_IMA_ADPCM) {
         return wav->is_float == false;
-    } else if (encoding == ENCODING_MS_IMA_ADPCM) {
+    } else if (encoding == ENCODING_MS_IMA_ADPCM || encoding == ENCODING_MS_ADPCM) {
         return (wav->bit_depth == 4 && wav->is_float == false);
     } else {
         if (wav->is_float) {
@@ -587,7 +744,8 @@ static void decode_data(pcm_decoder *decoder, uint64_t data_length) {
     }
 
     if (decoder->encoding == ENCODING_APPLE_IMA_ADPCM ||
-        decoder->encoding == ENCODING_MS_IMA_ADPCM) {
+        decoder->encoding == ENCODING_MS_IMA_ADPCM ||
+        decoder->encoding == ENCODING_MS_ADPCM) {
         const uint64_t blocks_needed = ((wav->num_frames + (decoder->frames_per_block - 1)) /
                                         decoder->frames_per_block);
         const uint64_t bytes_needed = blocks_needed * decoder->block_size;
@@ -623,6 +781,9 @@ static void decode_data(pcm_decoder *decoder, uint64_t data_length) {
         case ENCODING_MS_IMA_ADPCM:
             decode_ms_ima_adpcm_data(decoder);
             break;
+        case ENCODING_MS_ADPCM:
+            decode_ms_adpcm_data(decoder);
+            break;
     }
 }
 
@@ -652,11 +813,11 @@ static void decode_wav_file(pcm_decoder *decoder, bool is_little_endian) {
                                  readBE32(chunk_header + 4));
 
         if (memcmp("fmt ", chunk_header, 4) == 0) {
-            if (!(chunk_length >= 16 && chunk_length <= 40)) {
+            uint8_t chunk_data[50];
+            if (!(chunk_length >= 16 && chunk_length <= sizeof(chunk_data))) {
                 ok_wav_error(wav, "Invalid WAV file (not PCM)");
                 return;
             }
-            uint8_t chunk_data[40];
             if (!ok_read(decoder, chunk_data, chunk_length)) {
                 return;
             }
@@ -681,6 +842,8 @@ static void decode_wav_file(pcm_decoder *decoder, bool is_little_endian) {
 
             if (format == 1) {
                 decoder->encoding = ENCODING_PCM;
+            } else if (format == 2) {
+                decoder->encoding = ENCODING_MS_ADPCM;
             } else if (format == 3) {
                 decoder->encoding = ENCODING_PCM;
                 wav->is_float = true;
@@ -690,12 +853,14 @@ static void decode_wav_file(pcm_decoder *decoder, bool is_little_endian) {
                 decoder->encoding = ENCODING_ULAW;
             } else if (format == 0x11) {
                 decoder->encoding = ENCODING_MS_IMA_ADPCM;
-                if (chunk_length >= 20) {
-                    decoder->frames_per_block = (is_little_endian ? readLE16(chunk_data + 18) :
-                                                 readBE16(chunk_data + 18));
-                }
             } else {
                 decoder->encoding = ENCODING_UNKNOWN;
+            }
+
+            if (chunk_length >= 20 && (decoder->encoding == ENCODING_MS_ADPCM ||
+                                       decoder->encoding == ENCODING_MS_IMA_ADPCM)) {
+                decoder->frames_per_block = (is_little_endian ? readLE16(chunk_data + 18) :
+                                             readBE16(chunk_data + 18));
             }
 
             bool validFormat = (decoder->encoding != ENCODING_UNKNOWN &&
