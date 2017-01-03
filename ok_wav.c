@@ -400,7 +400,7 @@ static void decode_ms_ima_adpcm_data(pcm_decoder *decoder) {
     const int num_channels = wav->num_channels;
 
     // Allocate buffers
-    const uint64_t max_output_frames = (wav->num_frames + 7) & ~7; // 8 frames are read at once.
+    const uint64_t max_output_frames = wav->num_frames + 7; // 1 frame, then 8 frames at once
     const uint64_t output_data_length = max_output_frames * sizeof(int16_t) * num_channels;
     const size_t platform_data_length = (size_t)output_data_length;
     channel_states = calloc(wav->num_channels, sizeof(struct ima_state));
@@ -609,7 +609,6 @@ static void decode_ms_adpcm_data(pcm_decoder *decoder) {
                 samples -= 2;
             }
         } else {
-            // FIXME: test
             int channel = 0;
             while (samples > 0) {
                 *output++ = decode_ms_adpcm_nibble(channel_states + channel, (*input) >> 4);
