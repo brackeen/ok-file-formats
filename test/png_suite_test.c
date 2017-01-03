@@ -202,6 +202,7 @@ static bool test_image(const char *path_to_png_suite,
                        const bool info_only) {
     const bool flip_y = false;
     const bool print_image_on_error = false;
+    bool success = false;
 
     char *rgba_filename = get_full_path(path_to_rgba_files, name, "rgba");
     unsigned long rgba_data_length;
@@ -239,13 +240,13 @@ static bool test_image(const char *path_to_png_suite,
             png = ok_png_read(fp, file_input_func, color_format, flip_y);
         }
         fclose(fp);
+
+        success = compare(name, "png", png->data, png->width, png->height, png->error_message,
+                          rgba_data, rgba_data_length, info_only, 0, print_image_on_error);
     } else {
         printf("Warning: File not found: %s.png\n", name);
-        return true;
+        success = true;
     }
-
-    bool success = compare(name, "png", png->data, png->width, png->height, png->error_message,
-                           rgba_data, rgba_data_length, info_only, 0, print_image_on_error);
 
     free(rgba_data);
     free(rgba_filename);

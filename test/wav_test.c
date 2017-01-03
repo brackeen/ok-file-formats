@@ -79,6 +79,7 @@ static bool test_wav(const char *path, const char *container_type, const char *f
                 print_diff(raw_data, wav->data, length);
             }
         }
+        free(raw_data);
     }
 
     // Done

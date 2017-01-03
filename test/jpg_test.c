@@ -69,6 +69,7 @@ static bool test_image(const char *path_to_jpgs,
     char *rgba_filename = get_full_path(path_to_rgba_files, name, "rgba");
     unsigned long rgba_data_length;
     uint8_t *rgba_data = read_file(rgba_filename, &rgba_data_length);
+    bool success = false;
 
     // Load via ok_jpg
     ok_jpg *jpg = NULL;
@@ -81,13 +82,13 @@ static bool test_image(const char *path_to_jpgs,
             jpg = ok_jpg_read(fp, file_input_func, OK_JPG_COLOR_FORMAT_RGBA, flip_y);
         }
         fclose(fp);
+
+        success = compare(name, "jpg", jpg->data, jpg->width, jpg->height, jpg->error_message,
+                          rgba_data, rgba_data_length, info_only, 4, print_image_on_error);
     } else {
         printf("Warning: File not found: %s.jpg\n", name);
-        return true;
+        success = true;
     }
-
-    bool success = compare(name, "jpg", jpg->data, jpg->width, jpg->height, jpg->error_message,
-                           rgba_data, rgba_data_length, info_only, 4, print_image_on_error);
 
     free(rgba_data);
     free(rgba_filename);
