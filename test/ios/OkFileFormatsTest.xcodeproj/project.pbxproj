@@ -42,6 +42,10 @@
 		E33F9C9D1E18AB1700FAF73A /* sound-ima-adpcm-1ch.wav in Resources */ = {isa = PBXBuildFile; fileRef = E33F9C991E18AB1700FAF73A /* sound-ima-adpcm-1ch.wav */; };
 		E33F9C9E1E18AB1700FAF73A /* sound-ima-adpcm-2ch.raw in Resources */ = {isa = PBXBuildFile; fileRef = E33F9C9A1E18AB1700FAF73A /* sound-ima-adpcm-2ch.raw */; };
 		E33F9C9F1E18AB1700FAF73A /* sound-ima-adpcm-2ch.wav in Resources */ = {isa = PBXBuildFile; fileRef = E33F9C9B1E18AB1700FAF73A /* sound-ima-adpcm-2ch.wav */; };
+		E33F9CA41E19FFD300FAF73A /* sound-ms-adpcm-1ch.raw in Resources */ = {isa = PBXBuildFile; fileRef = E33F9CA01E19FFD300FAF73A /* sound-ms-adpcm-1ch.raw */; };
+		E33F9CA51E19FFD300FAF73A /* sound-ms-adpcm-1ch.wav in Resources */ = {isa = PBXBuildFile; fileRef = E33F9CA11E19FFD300FAF73A /* sound-ms-adpcm-1ch.wav */; };
+		E33F9CA61E19FFD300FAF73A /* sound-ms-adpcm-2ch.raw in Resources */ = {isa = PBXBuildFile; fileRef = E33F9CA21E19FFD300FAF73A /* sound-ms-adpcm-2ch.raw */; };
+		E33F9CA71E19FFD300FAF73A /* sound-ms-adpcm-2ch.wav in Resources */ = {isa = PBXBuildFile; fileRef = E33F9CA31E19FFD300FAF73A /* sound-ms-adpcm-2ch.wav */; };
 		E359EEE21E10BE8C0040AE53 /* wav_test.c in Sources */ = {isa = PBXBuildFile; fileRef = E359EEE01E10BE8C0040AE53 /* wav_test.c */; };
 		E35A634E1948F54900CEBD42 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = E35A634D1948F54900CEBD42 /* main.m */; };
 		E35A63511948F54900CEBD42 /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = E35A63501948F54900CEBD42 /* AppDelegate.m */; };
@@ -571,6 +575,10 @@
 		E33F9C991E18AB1700FAF73A /* sound-ima-adpcm-1ch.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "sound-ima-adpcm-1ch.wav"; sourceTree = "<group>"; };
 		E33F9C9A1E18AB1700FAF73A /* sound-ima-adpcm-2ch.raw */ = {isa = PBXFileReference; lastKnownFileType = file; path = "sound-ima-adpcm-2ch.raw"; sourceTree = "<group>"; };
 		E33F9C9B1E18AB1700FAF73A /* sound-ima-adpcm-2ch.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "sound-ima-adpcm-2ch.wav"; sourceTree = "<group>"; };
+		E33F9CA01E19FFD300FAF73A /* sound-ms-adpcm-1ch.raw */ = {isa = PBXFileReference; lastKnownFileType = file; path = "sound-ms-adpcm-1ch.raw"; sourceTree = "<group>"; };
+		E33F9CA11E19FFD300FAF73A /* sound-ms-adpcm-1ch.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "sound-ms-adpcm-1ch.wav"; sourceTree = "<group>"; };
+		E33F9CA21E19FFD300FAF73A /* sound-ms-adpcm-2ch.raw */ = {isa = PBXFileReference; lastKnownFileType = file; path = "sound-ms-adpcm-2ch.raw"; sourceTree = "<group>"; };
+		E33F9CA31E19FFD300FAF73A /* sound-ms-adpcm-2ch.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = "sound-ms-adpcm-2ch.wav"; sourceTree = "<group>"; };
 		E359EEE01E10BE8C0040AE53 /* wav_test.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = wav_test.c; sourceTree = "<group>"; };
 		E359EEE11E10BE8C0040AE53 /* wav_test.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = wav_test.h; sourceTree = "<group>"; };
 		E35A63481948F54900CEBD42 /* OkFileFormatsTest.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OkFileFormatsTest.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -1358,6 +1366,10 @@
 				E3CADF101E1564DF00D983E3 /* sound-LEI32-2ch.caf */,
 				E3CADF111E1564DF00D983E3 /* sound-LEI32-2ch.raw */,
 				E3CADF121E1564DF00D983E3 /* sound-LEI32-2ch.wav */,
+				E33F9CA01E19FFD300FAF73A /* sound-ms-adpcm-1ch.raw */,
+				E33F9CA11E19FFD300FAF73A /* sound-ms-adpcm-1ch.wav */,
+				E33F9CA21E19FFD300FAF73A /* sound-ms-adpcm-2ch.raw */,
+				E33F9CA31E19FFD300FAF73A /* sound-ms-adpcm-2ch.wav */,
 				E3CADF131E1564DF00D983E3 /* sound-UI8-1ch.raw */,
 				E3CADF141E1564DF00D983E3 /* sound-UI8-1ch.wav */,
 				E3CADF151E1564DF00D983E3 /* sound-UI8-2ch.raw */,
@@ -1809,6 +1821,7 @@
 				E35A665C1948F5D600CEBD42 /* basn4a16.png in Resources */,
 				E33C00D4195A11650003201B /* jpg-size-16x16.jpg in Resources */,
 				E3CADFCF1E1564DF00D983E3 /* s01i3p01.rgba in Resources */,
+				E33F9CA51E19FFD300FAF73A /* sound-ms-adpcm-1ch.wav in Resources */,
 				E3CAE0221E1564DF00D983E3 /* sound-LEF32-2ch.wav in Resources */,
 				E3CAE0261E1564DF00D983E3 /* sound-LEF64-2ch.caf in Resources */,
 				E35A66D51948F5D600CEBD42 /* tbgn2c16.png in Resources */,
@@ -1888,6 +1901,7 @@
 				E388A3631991AD1F003BC626 /* zh-Hans.mo in Resources */,
 				E35A66611948F5D600CEBD42 /* bgan6a08.png in Resources */,
 				E35A66551948F5D600CEBD42 /* basn2c08.png in Resources */,
+				E33F9CA41E19FFD300FAF73A /* sound-ms-adpcm-1ch.raw in Resources */,
 				E3CADFF51E1564DF00D983E3 /* sound-alaw-2ch.caf in Resources */,
 				E35A66AE1948F5D600CEBD42 /* s01i3p01.png in Resources */,
 				E35A66721948F5D600CEBD42 /* cs3n2c16.png in Resources */,
@@ -1908,6 +1922,7 @@
 				E3CADF5C1E1564DF00D983E3 /* basn3p08.rgba in Resources */,
 				E3CAE0061E1564DF00D983E3 /* sound-BEF64-2ch.wav in Resources */,
 				E35A66671948F5D600CEBD42 /* ccwn2c08.png in Resources */,
+				E33F9CA71E19FFD300FAF73A /* sound-ms-adpcm-2ch.wav in Resources */,
 				E33C00C9195A11650003201B /* zam.jpg in Resources */,
 				E3CADF941E1564DF00D983E3 /* g05n0g16.rgba in Resources */,
 				E3CADFD61E1564DF00D983E3 /* s04n3p01.rgba in Resources */,
@@ -2245,6 +2260,7 @@
 				E3CADFE21E1564DF00D983E3 /* s32n3p04.rgba in Resources */,
 				E3CAE0681E1564DF00D983E3 /* zam.rgba in Resources */,
 				E35A66491948F5D600CEBD42 /* basi3p02.png in Resources */,
+				E33F9CA61E19FFD300FAF73A /* sound-ms-adpcm-2ch.raw in Resources */,
 				E3CAE0111E1564DF00D983E3 /* sound-BEI24-2ch.raw in Resources */,
 				E35A66B71948F5D600CEBD42 /* s05n3p02.png in Resources */,
 				E33C00CD195A11650003201B /* LEVEL76.jpg in Resources */,

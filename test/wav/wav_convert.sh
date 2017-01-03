@@ -91,12 +91,17 @@ do
     sox $OUT/sound-BEF64-${channels}ch.wav --endian big $OUT/sound-BEF64-${channels}ch.raw
     
     # ADPCM files
-    # NOTE: The SoX decoder may add extra frames when converting from ima-adpcm to raw. Use `head` to truncate.
+    # NOTE: The SoX decoder may add extra frames when converting from adpcm to raw. Use `head` to truncate.
     # (The encoder appears to work correctly).
     sox $IN_WAV --encoding ima-adpcm --channels $channels $OUT/sound-ima-adpcm-${channels}ch.wav
     sox $OUT/sound-ima-adpcm-${channels}ch.wav --endian $system_endian --encoding signed-integer --bits 16 --channels $channels -t raw - \
         | head -c $(( ${IN_FRAMES[$channels - 1]} * $channels * 2)) \
         > $OUT/sound-ima-adpcm-${channels}ch.raw
+
+    sox $IN_WAV --encoding ms-adpcm --channels $channels $OUT/sound-ms-adpcm-${channels}ch.wav
+    sox $OUT/sound-ms-adpcm-${channels}ch.wav --endian $system_endian --encoding signed-integer --bits 16 --channels $channels -t raw - \
+        | head -c $(( ${IN_FRAMES[$channels - 1]} * $channels * 2)) \
+        > $OUT/sound-ms-adpcm-${channels}ch.raw
 done
 
 echo ${0##*/}: Done.

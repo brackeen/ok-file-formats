@@ -94,7 +94,7 @@ void wav_test(const char *path) {
         "BEI16", "BEI24", "BEI32", "BEF32", "BEF64",
         "LEI16", "LEI24", "LEI32", "LEF32", "LEF64" };
     const char *wav_data_formats[] = {
-        "UI8", "ulaw-wav", "alaw-wav", "ima-adpcm",
+        "UI8", "ulaw-wav", "alaw-wav", "ima-adpcm", "ms-adpcm",
         "BEI16", "BEI24", "BEI32", "BEF32", "BEF64",
         "LEI16", "LEI24", "LEI32", "LEF32", "LEF64" };
 
