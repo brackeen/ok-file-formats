@@ -1,15 +1,30 @@
-Tests if the output of ok_png decoder matches that of the libpng decoder.
+# ok-file-formats tests
 
-Uses the [PngSuite](http://www.schaik.com/pngsuite/pngsuite.html) images from Willem van Schaik.
+The `ok_png`, `ok_jpg`, and `ok_wav` decoders are tested against the output of other tools: [ImageMagick 7](https://www.imagemagick.org/) and [SoX 14](http://sox.sourceforge.net/). Additionally, on macOS, the pre-installed `afconvert` is used to test `CAF` decoding.
 
-Requires ImageMagick. On Mac OS X, if you have [Homebrew](http://brew.sh/) installed:
+On macOS, if you have [Homebrew](http://brew.sh/) installed:
 
-        brew install imagemagick
+    brew install imagemagick
+    brew install sox --with-libsndfile
 
-The Makefile uses ImageMagick (which uses libpng) to convert all the png images to raw RGBA data. The raw RGBA data is then used for comparison. 
+For PNG tests, the [PngSuite](http://www.schaik.com/pngsuite/pngsuite.html) images from Willem van Schaik are used.
 
-Note, during the conversion, the PNG gAMA chunk is ignored, because ok_png doesn't support the gAMA chunk. So, technically, the tests are a bit fudged.
+At the moment, some of the PNG tests are failing when tested against ImageMagick 7 (16-bit PNGs with transparency). These are false negatives - `ok_png` is correct, and either ImageMagick or an underlying library ImageMagick uses are incorrect.
 
-The iOS version exists to test Apple's proprietary PNG extensions. It must be run on an actual iOS device, and not the simulator. The Makefile must be run first, to generate the raw RGBA data for comparison.
+The JPEG results will vary based on what version of the IJG library ImageMagick uses. Best results are with the IJG jpeg-8d library.
 
-The Emscripten version exists as a sanity check.
+To test Apple's proprietary PNG extensions, the tests must run on an actual iOS device, and not the simulator.
+
+## Test on macOS and Linux
+
+    mkdir build
+    cd build
+    cmake .. && cmake --build . && ctest --verbose
+
+## Test on Windows using PowerShell
+
+    mkdir build
+    cd build
+    cmake ..
+    cmake --build .
+    ctest -C Debug --verbose
