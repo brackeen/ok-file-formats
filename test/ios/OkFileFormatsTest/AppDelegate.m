@@ -20,12 +20,14 @@
     [self.window makeKeyAndVisible];
     
     const char *path = [[NSBundle mainBundle].bundlePath UTF8String];
-    png_suite_test(path, path);
-    jpg_test(path, path);
-    csv_test(path);
-    gettext_test(path);
-    wav_test(path);
-    
+
+    bool verbose = false;
+    png_suite_test(path, path, verbose);
+    wav_test(path, verbose);
+    jpg_test(path, path, verbose);
+    csv_test(path, verbose);
+    gettext_test(path, verbose);
+
     return YES;
 }
 

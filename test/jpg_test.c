@@ -62,9 +62,8 @@ static const char *filenames[] = {
 static bool test_image(const char *path_to_jpgs,
                        const char *path_to_rgba_files,
                        const char *name,
-                       const bool info_only) {
+                       bool info_only, bool verbose) {
     const bool flip_y = false;
-    const bool print_image_on_error = false;
 
     char *rgba_filename = get_full_path(path_to_rgba_files, name, "rgba");
     unsigned long rgba_data_length;
@@ -84,7 +83,7 @@ static bool test_image(const char *path_to_jpgs,
         fclose(fp);
 
         success = compare(name, "jpg", jpg->data, jpg->width, jpg->height, jpg->error_message,
-                          rgba_data, rgba_data_length, info_only, 4, print_image_on_error);
+                          rgba_data, rgba_data_length, info_only, 4, verbose);
     } else {
         printf("Warning: File not found: %s.jpg\n", name);
         success = true;
@@ -98,18 +97,20 @@ static bool test_image(const char *path_to_jpgs,
     return success;
 }
 
-void jpg_test(const char *path_to_jpgs, const char *path_to_rgba_files) {
+int jpg_test(const char *path_to_jpgs, const char *path_to_rgba_files, bool verbose) {
     const int num_files = sizeof(filenames) / sizeof(filenames[0]);
-    printf("Testing %i files in path \"%s\".\n", num_files, path_to_jpgs);
+    if (verbose) {
+        printf("Testing %i files in path \"%s\".\n", num_files, path_to_jpgs);
+    }
 
     double startTime = clock() / (double)CLOCKS_PER_SEC;
     int num_failures = 0;
     for (int i = 0; i < num_files; i++) {
-        bool success = test_image(path_to_jpgs, path_to_rgba_files, filenames[i], true);
+        bool success = test_image(path_to_jpgs, path_to_rgba_files, filenames[i], true, verbose);
         if (!success) {
             num_failures++;
         } else {
-            success = test_image(path_to_jpgs, path_to_rgba_files, filenames[i], false);
+            success = test_image(path_to_jpgs, path_to_rgba_files, filenames[i], false, verbose);
             if (!success) {
                 num_failures++;
             }
@@ -118,5 +119,8 @@ void jpg_test(const char *path_to_jpgs, const char *path_to_rgba_files) {
     double endTime = clock() / (double)CLOCKS_PER_SEC;
     double elapsedTime = endTime - startTime;
     printf("Success: JPEG %i of %i\n", (num_files - num_failures), num_files);
-    printf("Duration: %f seconds\n", elapsedTime);
+    if (verbose) {
+        printf("Duration: %f seconds\n", elapsedTime);
+    }
+    return num_failures;
 }

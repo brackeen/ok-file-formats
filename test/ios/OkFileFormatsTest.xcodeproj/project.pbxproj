@@ -1417,7 +1417,8 @@
 				E3CADF3F1E1564DF00D983E3 /* z09n2c08.rgba */,
 				E3CADF401E1564DF00D983E3 /* zam.rgba */,
 			);
-			path = gen;
+			name = gen;
+			path = build/gen;
 			sourceTree = "<group>";
 		};
 		E35A633F1948F54900CEBD42 = {

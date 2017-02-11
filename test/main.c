@@ -15,10 +15,20 @@
 #  include <unistd.h>
 #endif
 
-int main() {
+int main(int argc, char *argv[]) {
+    bool verbose = false;
+    for (int i = 0; i < argc; i++) {
+        if (strcmp("--verbose", argv[i]) == 0) {
+            verbose = true;
+        }
+    }
+
+    int error_count = 0;
+
     char path[1024];
     if (getcwd(path, sizeof(path)) == NULL) {
         perror("getcwd() error");
+        error_count = 1;
     } else {
         char *path_png = append_path(path, "PngSuite");
         char *path_jpg = append_path(path, "jpg");
@@ -32,11 +42,11 @@ int main() {
         #endif
         char *path_gen = append_path(path, "gen");
 
-        png_suite_test(path_png, path_gen);
-        jpg_test(path_jpg, path_gen);
-        csv_test(path_csv);
-        gettext_test(path_gettext);
-        wav_test(path_gen);
+        error_count += png_suite_test(path_png, path_gen, verbose);
+        error_count += wav_test(path_gen, verbose);
+        error_count += jpg_test(path_jpg, path_gen, verbose);
+        error_count += csv_test(path_csv, verbose);
+        error_count += gettext_test(path_gettext, verbose);
 
         free(path_png);
         free(path_jpg);
@@ -44,5 +54,5 @@ int main() {
         free(path_csv);
         free(path_gettext);
     }
-    return 0;
+    return error_count;
 }

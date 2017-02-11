@@ -136,10 +136,10 @@ static bool fuzzy_memcmp(const uint8_t *data1, const uint8_t *data2, const size_
 }
 
 bool compare(const char *name, const char *ext,
-             const uint8_t *image_data, const uint32_t image_width, const uint32_t image_height,
+             const uint8_t *image_data, uint32_t image_width, uint32_t image_height,
              const char *image_error_message,
-             const uint8_t *rgba_data, const unsigned long rgba_data_length,
-             const bool info_only, const uint8_t fuzziness, const bool print_image_on_error) {
+             const uint8_t *rgba_data, unsigned long rgba_data_length,
+             bool info_only, uint8_t fuzziness, bool verbose) {
     double p_identical;
     int peak_diff;
     bool success = false;
@@ -150,12 +150,16 @@ bool compare(const char *name, const char *ext,
                    name, ext, image_width, image_height, rgba_data_length,
                    (image_width * image_height * 4));
         } else {
-            printf("File:    %16.16s.%s (Info only: %u x %u)\n", name, ext,
-                   image_width, image_height);
+            if (verbose) {
+                printf("File:    %16.16s.%s (Info only: %u x %u)\n", name, ext,
+                       image_width, image_height);
+            }
             success = true;
         }
     } else if (!image_data && (!rgba_data || rgba_data_length == 0)) {
-        printf("File:    %16.16s.%s (invalid file correctly detected).\n", name, ext);
+        if (verbose) {
+            printf("File:    %16.16s.%s (invalid file correctly detected).\n", name, ext);
+        }
         success = true;
     } else if (!image_data) {
         printf("Failure: Couldn't load %s.%s. %s\n", name, ext, image_error_message);
@@ -174,7 +178,7 @@ bool compare(const char *name, const char *ext,
         } else {
             printf("Failure: Data is different for image %s.%s\n", name, ext);
         }
-        if (print_image_on_error) {
+        if (verbose) {
             printf("raw:\n");
             print_image(rgba_data, image_width, image_height);
             printf("as decoded:\n");
@@ -188,11 +192,15 @@ bool compare(const char *name, const char *ext,
             free(diff_data);
         }
     } else if (fuzziness > 0) {
-        printf("File:    %16.16s.%s (%9.5f%% diff<=1, peak diff=%i)\n", name, ext,
-               (p_identical * 100.0), peak_diff);
+        if (verbose) {
+            printf("File:    %16.16s.%s (%9.5f%% diff<=1, peak diff=%i)\n", name, ext,
+                   (p_identical * 100.0), peak_diff);
+        }
         success = true;
     } else {
-        printf("File:    %16.16s.%s\n", name, ext);
+        if (verbose) {
+            printf("File:    %16.16s.%s\n", name, ext);
+        }
         success = true;
     }
     return success;

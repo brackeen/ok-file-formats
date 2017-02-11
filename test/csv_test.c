@@ -7,7 +7,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-void csv_test(const char *path) {
+int csv_test(const char *path, bool verbose) {
+    (void)verbose;
+
     char *test1_file = get_full_path(path, "test1", "csv");
 
     FILE *fp = fopen(test1_file, "rb");
@@ -17,15 +19,15 @@ void csv_test(const char *path) {
 
     if (!csv) {
         printf("Failure: ok_csv is NULL\n");
-        return;
+        return 1;
     }
     if (csv->num_records == 0) {
         printf("Failure: Couldn't load CSV: %s\n", csv->error_message);
-        return;
+        return 1;
     }
     if (csv->num_records != 10) {
         printf("Failure: Didn't find 10 records\n");
-        return;
+        return 1;
     }
 
     char hello_utf8[] = {0xe4, 0xbd, 0xa0, 0xe5, 0xa5, 0xbd, 0};
@@ -34,46 +36,47 @@ void csv_test(const char *path) {
     ok_utf8_to_unicode(hello_utf8, hello, hello_len);
     if (!hello || hello[0] != 0x4f60 || hello[1] != 0x597d || hello[2] != 0) {
         printf("Failure: Couldn't convert UTF-8 to unicode\n");
-        return;
+        return 1;
     }
     free(hello);
 
     if (memcmp(hello_utf8, csv->fields[2][2], 7)) {
         printf("Failure: Couldn't read UTF-8 field\n");
-        return;
+        return 1;
     }
     if (memcmp("Smith, Fred", csv->fields[3][2], 12)) {
         printf("Failure: Couldn't read field with comma\n");
-        return;
+        return 1;
     }
     if (memcmp("\"The Prof\"", csv->fields[4][2], 11)) {
         printf("Failure: Couldn't read field with quotes\n");
-        return;
+        return 1;
     }
 
     if (csv->num_fields[5] != 3 || csv->fields[5][0][0] != 0 ||
         csv->fields[5][1][0] != 0 || csv->fields[5][1][0] != 0) {
         printf("Failure: Couldn't read three blank fields\n");
-        return;
+        return 1;
     }
     if (csv->num_fields[6] != 1 || csv->fields[6][0][0] != 0) {
         printf("Failure: Couldn't read one blank line\n");
-        return;
+        return 1;
     }
     if (memcmp("This is\ntwo lines", csv->fields[7][2], 18)) {
         printf("Failure: Couldn't read multiline\n");
-        return;
+        return 1;
     }
     if (memcmp("\nThis is also two lines", csv->fields[8][2], 24)) {
         printf("Failure: Couldn't read multiline2\n");
-        return;
+        return 1;
     }
     if (strlen(csv->fields[9][2]) != 4105) {
         printf("Failure: Couldn't read long line\n");
-        return;
+        return 1;
     }
 
     ok_csv_free(csv);
 
     printf("Success: CSV\n");
+    return 0;
 }

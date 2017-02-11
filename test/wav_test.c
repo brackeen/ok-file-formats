@@ -41,7 +41,8 @@ static void print_diff(const uint8_t *data1, const uint8_t *data2, const unsigne
     }
 }
 
-static bool test_wav(const char *path, const char *container_type, const char *format, int channels) {
+static bool test_wav(const char *path, const char *container_type, const char *format,
+                     int channels, bool verbose) {
     char src_filename[256];
     bool success = false;
 
@@ -58,7 +59,8 @@ static bool test_wav(const char *path, const char *container_type, const char *f
     free(src_path);
 
     if (!wav->data) {
-        printf("File:    %24.24s.%s (Couldn't load data. %s).\n", src_filename, container_type, wav->error_message);
+        printf("File:    %24.24s.%s (Couldn't load data. %s).\n", src_filename, container_type,
+               wav->error_message);
     } else {
         // Load raw
         char *raw_path = get_full_path(path, src_filename, "raw");
@@ -76,7 +78,9 @@ static bool test_wav(const char *path, const char *container_type, const char *f
             success = memcmp(wav->data, raw_data, length) == 0;
             if (!success) {
                 printf("File:    %24.24s.%s (Data mismatch).\n", src_filename, container_type);
-                print_diff(raw_data, wav->data, length);
+                if (verbose) {
+                    print_diff(raw_data, wav->data, length);
+                }
             }
         }
         free(raw_data);
@@ -88,7 +92,7 @@ static bool test_wav(const char *path, const char *container_type, const char *f
     return success;
 }
 
-void wav_test(const char *path) {
+int wav_test(const char *path, bool verbose) {
     const int channels[] = { 1, 2 };
     const char *caf_data_formats[] = {
         "I8", "ulaw", "alaw", "ima4",
@@ -104,20 +108,22 @@ void wav_test(const char *path) {
     const int num_wav_types = sizeof(wav_data_formats) / sizeof(wav_data_formats[0]);
 
     const int num_files = (num_caf_types + num_wav_types) * num_channels;
-    printf("Testing %i files in path \"%s\".\n", num_files, path);
+    if (verbose) {
+        printf("Testing %i files in path \"%s\".\n", num_files, path);
+    }
 
     double startTime = clock() / (double)CLOCKS_PER_SEC;
     int num_failures = 0;
     for (int i = 0; i < num_channels; i++) {
         for (int j = 0; j < num_caf_types; j++) {
-            bool success = test_wav(path, "caf", caf_data_formats[j], channels[i]);
+            bool success = test_wav(path, "caf", caf_data_formats[j], channels[i], verbose);
             if (!success) {
                 num_failures++;
             }
         }
 
         for (int j = 0; j < num_wav_types; j++) {
-            bool success = test_wav(path, "wav", wav_data_formats[j], channels[i]);
+            bool success = test_wav(path, "wav", wav_data_formats[j], channels[i], verbose);
             if (!success) {
                 num_failures++;
             }
@@ -127,5 +133,8 @@ void wav_test(const char *path) {
     double endTime = clock() / (double)CLOCKS_PER_SEC;
     double elapsedTime = endTime - startTime;
     printf("Success: WAV %i of %i\n", (num_files - num_failures), num_files);
-    printf("Duration: %f seconds\n", elapsedTime);
+    if (verbose) {
+        printf("Duration: %f seconds\n", elapsedTime);
+    }
+    return num_failures;
 }

@@ -199,9 +199,8 @@ static const char *filenames[] = {
 static bool test_image(const char *path_to_png_suite,
                        const char *path_to_rgba_files,
                        const char *name,
-                       const bool info_only) {
+                       bool info_only, bool verbose) {
     const bool flip_y = false;
-    const bool print_image_on_error = false;
     bool success = false;
 
     char *rgba_filename = get_full_path(path_to_rgba_files, name, "rgba");
@@ -242,7 +241,7 @@ static bool test_image(const char *path_to_png_suite,
         fclose(fp);
 
         success = compare(name, "png", png->data, png->width, png->height, png->error_message,
-                          rgba_data, rgba_data_length, info_only, 0, print_image_on_error);
+                          rgba_data, rgba_data_length, info_only, 0, verbose);
     } else {
         printf("Warning: File not found: %s.png\n", name);
         success = true;
@@ -256,18 +255,22 @@ static bool test_image(const char *path_to_png_suite,
     return success;
 }
 
-void png_suite_test(const char *path_to_png_suite, const char *path_to_rgba_files) {
+int png_suite_test(const char *path_to_png_suite, const char *path_to_rgba_files, bool verbose) {
     const int num_files = sizeof(filenames) / sizeof(filenames[0]);
-    printf("Testing %i files in path \"%s\".\n", num_files, path_to_png_suite);
+    if (verbose) {
+        printf("Testing %i files in path \"%s\".\n", num_files, path_to_png_suite);
+    }
 
     double startTime = clock() / (double)CLOCKS_PER_SEC;
     int num_failures = 0;
     for (int i = 0; i < num_files; i++) {
-        bool success = test_image(path_to_png_suite, path_to_rgba_files, filenames[i], true);
+        bool success = test_image(path_to_png_suite, path_to_rgba_files, filenames[i], true,
+                                  verbose);
         if (!success) {
             num_failures++;
         } else {
-            success = test_image(path_to_png_suite, path_to_rgba_files, filenames[i], false);
+            success = test_image(path_to_png_suite, path_to_rgba_files, filenames[i], false,
+                                 verbose);
             if (!success) {
                 num_failures++;
             }
@@ -276,5 +279,8 @@ void png_suite_test(const char *path_to_png_suite, const char *path_to_rgba_file
     double endTime = clock() / (double)CLOCKS_PER_SEC;
     double elapsedTime = endTime - startTime;
     printf("Success: PNG %i of %i\n", (num_files - num_failures), num_files);
-    printf("Duration: %f seconds\n", elapsedTime);
+    if (verbose) {
+        printf("Duration: %f seconds\n", elapsedTime);
+    }
+    return num_failures;
 }
