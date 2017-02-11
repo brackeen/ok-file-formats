@@ -20,14 +20,17 @@ int main() {
     if (getcwd(path, sizeof(path)) == NULL) {
         perror("getcwd() error");
     } else {
-#ifdef _WIN32
-        strcat(path, "\\test");
-#endif
         char *path_png = append_path(path, "PngSuite");
         char *path_jpg = append_path(path, "jpg");
-        char *path_gen = append_path(path, "gen");
         char *path_csv = append_path(path, "csv");
         char *path_gettext = append_path(path, "gettext");
+
+        #ifdef _WIN32
+            strcat(path, "\\build");
+        #else
+            strcat(path, "/build");
+        #endif
+        char *path_gen = append_path(path, "gen");
 
         png_suite_test(path_png, path_gen);
         jpg_test(path_jpg, path_gen);
@@ -41,9 +44,5 @@ int main() {
         free(path_csv);
         free(path_gettext);
     }
-#ifdef _WIN32
-    printf("Press any key to continue...");
-    getchar();
-#endif
     return 0;
 }

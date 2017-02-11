@@ -1,4 +1,1 @@
-/bin
-/gen
-/Makefile.local
-/emsdk_set_env.sh
+build
