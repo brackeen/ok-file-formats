@@ -117,11 +117,11 @@ static const char *filenames[] = {
     "pp0n2c16",
     "pp0n6a08",
 // Xcode's pngcrush croaks on these two files. Ignore.
-#if !defined(TARGET_OS_IPHONE)
+#if !defined(TARGET_OS_IPHONE) || TARGET_OS_IPHONE == 0
     "ps1n0g08",
 #endif
     "ps1n2c16",
-#if !defined(TARGET_OS_IPHONE)
+#if !defined(TARGET_OS_IPHONE) || TARGET_OS_IPHONE == 0
     "ps2n0g08",
 #endif
     "ps2n2c16",
