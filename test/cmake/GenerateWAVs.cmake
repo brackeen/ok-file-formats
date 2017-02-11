@@ -1,4 +1,5 @@
 set(WAV_IN_FILES "${CMAKE_CURRENT_SOURCE_DIR}/wav/sound.wav" "${CMAKE_CURRENT_SOURCE_DIR}/wav/sound2.wav")
+set(WAV_IN_FRAMES "44086" "44085")
 set(WAV_OUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/gen")
 
 set(WAV_SYSTEM_ENDIAN "little")
@@ -52,6 +53,8 @@ find_program(SOX_COMMAND sox)
 set(WAV_CHANNELS 1)
 
 foreach(WAV_IN_FILE ${WAV_IN_FILES})
+    list(FIND WAV_IN_FILES ${WAV_IN_FILE} WAV_IN_FILE_INDEX)
+
     if (AFCONVERT_COMMAND AND SOX_COMMAND)
         foreach(FORMAT ${WAV_CAF_FORMATS})
             # CAF
@@ -118,13 +121,19 @@ foreach(WAV_IN_FILE ${WAV_IN_FILES})
             list(APPEND GEN_FILES ${WAV_OUT_DIR}/${WAV_FILE_NAME})
 
             # RAW
+            set(TRIM_PARAM)
+            if (${FORMAT} MATCHES "adpcm")
+                # SoX is decoding adpcm files with extra samples at the end; force a trim
+                list(GET WAV_IN_FRAMES ${WAV_IN_FILE_INDEX} FRAME_COUNT)
+                set(TRIM_PARAM "trim" "0s" "${FRAME_COUNT}s")
+            endif()
             list(GET WAV_SOX_WAV_DECODE_PARAMS ${FORMAT_INDEX} DECODE_PARAMS)
             string(REPLACE " " ";" DECODE_PARAMS ${DECODE_PARAMS})
             set(RAW_FILE_NAME "sound-${FORMAT}-${WAV_CHANNELS}ch.raw")
             add_custom_command(
                 OUTPUT ${WAV_OUT_DIR}/${RAW_FILE_NAME}
                 DEPENDS ${WAV_OUT_DIR}/${WAV_FILE_NAME}
-                COMMAND sox ${WAV_OUT_DIR}/${WAV_FILE_NAME} ${DECODE_PARAMS} --channels ${WAV_CHANNELS} ${WAV_OUT_DIR}/${RAW_FILE_NAME}
+                COMMAND sox ${WAV_OUT_DIR}/${WAV_FILE_NAME} ${DECODE_PARAMS} --channels ${WAV_CHANNELS} ${WAV_OUT_DIR}/${RAW_FILE_NAME} ${TRIM_PARAM}
                 COMMENT "Creating ${RAW_FILE_NAME}"
                 VERBATIM
             )
