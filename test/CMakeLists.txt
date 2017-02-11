@@ -27,9 +27,9 @@ file(GLOB test_jpg_files "jpg/*.jpg")
 add_custom_target(create_gen_directory ALL COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/gen)
 set(GEN_FILES create_gen_directory)
 
-find_program(IMAGEMAGICK_COMMAND convert)
+find_program(IMAGEMAGICK_COMMAND magick)
 if (NOT IMAGEMAGICK_COMMAND)
-    message("Warning: ImageMagick not found")
+    message("Warning: ImageMagick 7 not found")
 else()
     # Convert png files to raw RGBA8888 format.
     # Requires ImageMagick.
@@ -54,7 +54,7 @@ else()
         add_custom_command(
             OUTPUT ${gen_file}
             DEPENDS ${jpg_file}
-            COMMAND convert -auto-orient ${jpg_file} ${gen_file}
+            COMMAND magick ${jpg_file} -auto-orient ${gen_file}
             COMMENT "Converting ${file_name}.jpg"
             VERBATIM
         )
