@@ -29,38 +29,38 @@ set(GEN_FILES create_gen_directory)
 
 find_program(IMAGEMAGICK_COMMAND magick)
 if (NOT IMAGEMAGICK_COMMAND)
-    message("Warning: ImageMagick 7 not found")
-else()
-    # Convert png files to raw RGBA8888 format.
-    # Requires ImageMagick.
-    foreach(png_file ${test_png_files})
-        get_filename_component(file_name ${png_file} NAME_WE)
-        set(gen_file "${CMAKE_CURRENT_BINARY_DIR}/gen/${file_name}.rgba")
-        add_custom_command(
-            OUTPUT ${gen_file}
-            DEPENDS ${png_file}
-            COMMAND ${CMAKE_COMMAND} -DIN_FILE=${png_file} -DOUT_FILE=${gen_file} -P ${CMAKE_CURRENT_LIST_DIR}/cmake/ConvertPNG.cmake
-            COMMENT "Converting ${file_name}.png"
-            VERBATIM
-        )
-        list(APPEND GEN_FILES ${gen_file})
-    endforeach()
-
-    # Convert jpg files to raw RGBA8888 format, applying exif orientation tags if found.
-    # Tested against jpeg 8d via ImageMagick.
-    foreach(jpg_file ${test_jpg_files})
-        get_filename_component(file_name ${jpg_file} NAME_WE)
-        set(gen_file "${CMAKE_CURRENT_BINARY_DIR}/gen/${file_name}.rgba")
-        add_custom_command(
-            OUTPUT ${gen_file}
-            DEPENDS ${jpg_file}
-            COMMAND magick ${jpg_file} -auto-orient ${gen_file}
-            COMMENT "Converting ${file_name}.jpg"
-            VERBATIM
-        )
-        list(APPEND GEN_FILES ${gen_file})
-    endforeach()
+    message(FATAL_ERROR "ImageMagick 7 not found")
 endif()
+
+# Convert png files to raw RGBA8888 format.
+# Requires ImageMagick.
+foreach(png_file ${test_png_files})
+    get_filename_component(file_name ${png_file} NAME_WE)
+    set(gen_file "${CMAKE_CURRENT_BINARY_DIR}/gen/${file_name}.rgba")
+    add_custom_command(
+        OUTPUT ${gen_file}
+        DEPENDS ${png_file}
+        COMMAND ${CMAKE_COMMAND} -DIN_FILE=${png_file} -DOUT_FILE=${gen_file} -P ${CMAKE_CURRENT_LIST_DIR}/cmake/ConvertPNG.cmake
+        COMMENT "Converting ${file_name}.png"
+        VERBATIM
+    )
+    list(APPEND GEN_FILES ${gen_file})
+endforeach()
+
+# Convert jpg files to raw RGBA8888 format, applying exif orientation tags if found.
+# Tested against jpeg 8d via ImageMagick.
+foreach(jpg_file ${test_jpg_files})
+    get_filename_component(file_name ${jpg_file} NAME_WE)
+    set(gen_file "${CMAKE_CURRENT_BINARY_DIR}/gen/${file_name}.rgba")
+    add_custom_command(
+        OUTPUT ${gen_file}
+        DEPENDS ${jpg_file}
+        COMMAND magick ${jpg_file} -auto-orient ${gen_file}
+        COMMENT "Converting ${file_name}.jpg"
+        VERBATIM
+    )
+    list(APPEND GEN_FILES ${gen_file})
+endforeach()
 
 # Generate WAV files
 include(GenerateWAVs)

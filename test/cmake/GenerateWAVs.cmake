@@ -49,9 +49,11 @@ set(WAV_SOX_COMMON_DECODE_PARAMS
 
 find_program(AFCONVERT_COMMAND afconvert)
 find_program(SOX_COMMAND sox)
+if (NOT SOX_COMMAND)
+    message(FATAL_ERROR "SoX required. See http://sox.sourceforge.net/")
+endif()
 
 set(WAV_CHANNELS 1)
-
 foreach(WAV_IN_FILE ${WAV_IN_FILES})
     list(FIND WAV_IN_FILES ${WAV_IN_FILE} WAV_IN_FILE_INDEX)
 
