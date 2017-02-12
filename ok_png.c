@@ -1,7 +1,7 @@
 /*
  ok-file-formats
  https://github.com/brackeen/ok-file-formats
- Copyright (c) 2014-2016 David Brackeen
+ Copyright (c) 2014-2017 David Brackeen
 
  This software is provided 'as-is', without any express or implied warranty.
  In no event will the authors be held liable for any damages arising from the
@@ -21,13 +21,6 @@
 #include "ok_png.h"
 #include <stdlib.h>
 #include <string.h>
-
-// Set this to use the regular zlib library instead of the internal inflater
-//#define USE_ZLIB
-
-#ifdef USE_ZLIB
-#include "zlib.h"
-#endif
 
 #if __STDC_VERSION__ >= 199901L
 #define RESTRICT restrict
@@ -77,14 +70,9 @@ typedef struct {
     bool flip_y;
     bool info_only;
 
-// Decoding
-#ifdef USE_ZLIB
-    z_stream zlib_stream;
-    bool zlib_initialized;
-#else
+    // Decoding
     struct ok_inflater *inflater;
     uint32_t inflater_bytes_read;
-#endif
     uint8_t *inflate_buffer;
     uint8_t *curr_scanline;
     uint8_t *prev_scanline;
@@ -748,16 +736,7 @@ static bool read_data(png_decoder *decoder, uint32_t bytes_remaining) {
         return false;
     }
 
-// Setup inflater
-#ifdef USE_ZLIB
-    if (!decoder->zlib_initialized) {
-        if (inflateInit2(&decoder->zlib_stream, decoder->is_ios_format ? -15 : 15) != Z_OK) {
-            ok_png_error(png, "Couldn't init zlib");
-            return false;
-        }
-        decoder->zlib_initialized = true;
-    }
-#else
+    // Setup inflater
     if (!decoder->inflater) {
         decoder->inflater = ok_inflater_init(decoder->is_ios_format);
         if (!decoder->inflater) {
@@ -765,7 +744,6 @@ static bool read_data(png_decoder *decoder, uint32_t bytes_remaining) {
             return false;
         }
     }
-#endif
 
     // Sanity check - this happened with one file in the PNG suite
     if (decoder->decoding_completed) {
@@ -804,22 +782,12 @@ static bool read_data(png_decoder *decoder, uint32_t bytes_remaining) {
             } else {
                 memset(decoder->curr_scanline, 0, curr_bytes_per_scanline);
                 memset(decoder->prev_scanline, 0, curr_bytes_per_scanline);
-#ifdef USE_ZLIB
-                decoder->zlib_stream.next_out = decoder->curr_scanline;
-                decoder->zlib_stream.avail_out = curr_bytes_per_scanline;
-#else
                 decoder->inflater_bytes_read = 0;
-#endif
             }
         }
 
-// Read compressed data
-#ifdef USE_ZLIB
-        if (decoder->zlib_stream.avail_in == 0)
-#else
-        if (ok_inflater_needs_input(decoder->inflater))
-#endif
-        {
+        // Read compressed data
+        if (ok_inflater_needs_input(decoder->inflater)) {
             if (bytes_remaining == 0) {
                 // Need more data, but there is no remaining data in this chunk.
                 // There may be another IDAT chunk.
@@ -830,25 +798,10 @@ static bool read_data(png_decoder *decoder, uint32_t bytes_remaining) {
                 return false;
             }
             bytes_remaining -= len;
-#ifdef USE_ZLIB
-            decoder->zlib_stream.next_in = decoder->inflate_buffer;
-            decoder->zlib_stream.avail_in = len;
-#else
             ok_inflater_set_input(decoder->inflater, decoder->inflate_buffer, len);
-#endif
         }
 
-// Decompress data
-#ifdef USE_ZLIB
-        int status = inflate(&decoder->zlib_stream, Z_NO_FLUSH);
-        if (status != Z_OK && status != Z_STREAM_END) {
-            ok_png_error(png, "Error inflating data");
-            return false;
-        }
-
-        // Get one scanline
-        if (decoder->zlib_stream.avail_out == 0)
-#else
+        // Decompress data
         intptr_t len = ok_inflater_inflate(decoder->inflater,
                                            decoder->curr_scanline + decoder->inflater_bytes_read,
                                            curr_bytes_per_scanline - decoder->inflater_bytes_read);
@@ -857,9 +810,7 @@ static bool read_data(png_decoder *decoder, uint32_t bytes_remaining) {
             return false;
         }
         decoder->inflater_bytes_read += len;
-        if (decoder->inflater_bytes_read == curr_bytes_per_scanline)
-#endif
-        {
+        if (decoder->inflater_bytes_read == curr_bytes_per_scanline) {
             // Apply filter
             const int filter = decoder->curr_scanline[0];
             if (filter > 0 && filter < NUM_FILTERS) {
@@ -883,12 +834,7 @@ static bool read_data(png_decoder *decoder, uint32_t bytes_remaining) {
                 uint8_t *temp = decoder->curr_scanline;
                 decoder->curr_scanline = decoder->prev_scanline;
                 decoder->prev_scanline = temp;
-#ifdef USE_ZLIB
-                decoder->zlib_stream.next_out = decoder->curr_scanline;
-                decoder->zlib_stream.avail_out = curr_bytes_per_scanline;
-#else
                 decoder->inflater_bytes_read = 0;
-#endif
             }
         }
     }
@@ -998,14 +944,8 @@ static ok_png *decode_png(void *user_data, ok_png_input_func input_func,
 
     decode_png2(decoder);
 
-// Cleanup decoder
-#ifdef USE_ZLIB
-    if (decoder->zlib_initialized) {
-        inflateEnd(&decoder->zlib_stream);
-    }
-#else
+    // Cleanup decoder
     ok_inflater_free(decoder->inflater);
-#endif
     free(decoder->curr_scanline);
     free(decoder->prev_scanline);
     free(decoder->inflate_buffer);
