@@ -18,21 +18,10 @@ grab `ok_png.h` and `ok_png.c` and you're good to go.
 #include <stdio.h>
 #include "ok_png.h"
 
-static int file_input_func(void *user_data, uint8_t *buffer, const int count) {
-    FILE *fp = (FILE *)user_data;
-    if (buffer && count > 0) {
-        return (int)fread(buffer, 1, (size_t)count, fp);
-    } else if (fseek(fp, count, SEEK_CUR) == 0) {
-        return count;
-    } else {
-        return 0;
-    }
-}
-
 int main() {
-    FILE *fp = fopen("my_image.png", "rb");
-    ok_png *image = ok_png_read(fp, file_input_func, OK_PNG_COLOR_FORMAT_RGBA, false);
-    fclose(fp);
+    FILE *file = fopen("my_image.png", "rb");
+    ok_png *image = ok_png_read(file, OK_PNG_COLOR_FORMAT_RGBA, false);
+    fclose(file);
     if (image->data) {
         printf("Got image! Size: %li x %li\n", (long)image->width, (long)image->height);
     }
