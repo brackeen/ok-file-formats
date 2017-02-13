@@ -37,21 +37,10 @@
  *     #include <stdio.h>
  *     #include "ok_wav.h"
  *
- *     static int file_input_func(void *user_data, uint8_t *buffer, const int count) {
- *         FILE *fp = (FILE *)user_data;
- *         if (buffer && count > 0) {
- *             return (int)fread(buffer, 1, (size_t)count, fp);
- *         } else if (fseek(fp, count, SEEK_CUR) == 0) {
- *             return count;
- *         } else {
- *             return 0;
- *         }
- *     }
- *
  *     int main() {
- *         FILE *fp = fopen("my_audio.caf", "rb");
- *         ok_wav *audio = ok_wav_read(fp, file_input_func, true);
- *         fclose(fp);
+ *         FILE *file = fopen("my_audio.wav", "rb");
+ *         ok_wav *audio = ok_wav_read(file, true);
+ *         fclose(file);
  *         if (audio->data) {
  *             printf("Got audio! Length: %f seconds\n", (audio->num_frames / audio->sample_rate));
  *         }
@@ -62,6 +51,9 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#ifndef OK_NO_STDIO
+#include <stdio.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -81,19 +73,7 @@ typedef struct {
     char error_message[80];
 } ok_wav;
 
-/**
- * Input function provided to the #ok_wav_read() function.
- * This function must read bytes from its source (typically `user_data`) and copy the data to
- * `buffer`.
- *
- * @param user_data The parameter that was passed to the #ok_wav_read() function.
- * @param buffer The data buffer to copy bytes to. If `NULL`, this function should perform a
- * relative seek.
- * @param count The number of bytes to read. If negative, this function should perform a
- * relative seek.
- * @return The number of bytes read or skipped. Should return 0 on error.
- */
-typedef int (*ok_wav_input_func)(void *user_data, uint8_t *buffer, int count);
+#ifndef OK_NO_STDIO
 
 /**
  * Reads a WAV (or CAF) audio file.
@@ -104,20 +84,65 @@ typedef int (*ok_wav_input_func)(void *user_data, uint8_t *buffer, int count);
  * If the encoding of the file is u-law, a-law, or ADPCM, the data is converted to 16-bit
  * signed integer PCM data.
  *
- * @param user_data The parameter to be passed to the `input_func`.
- * @param input_func The input function to read a WAV file from.
- * @param convert_to_system_endian If true, the data is converted to the endianness of the system 
+ * @param file The file to read.
+ * @param convert_to_system_endian If true, the data is converted to the endianness of the system
  * (required for playback on most systems). Otherwise, the data is left as is.
  * @return a new #ok_wav object. Never returns `NULL`. The object should be freed with
  * #ok_wav_free().
  */
-ok_wav *ok_wav_read(void *user_data, ok_wav_input_func input_func, bool convert_to_system_endian);
+ok_wav *ok_wav_read(FILE *file, bool convert_to_system_endian);
+
+#endif
 
 /**
- * Frees the audio. This function should always be called when done with the audio, even if reading 
+ * Frees the audio. This function should always be called when done with the audio, even if reading
  * failed.
  */
 void ok_wav_free(ok_wav *wav);
+
+// MARK: Read from callbacks
+
+/**
+ * Read function provided to the #ok_wav_read_from_callbacks() function.
+ * This function must read bytes from its source (typically `user_data`) and copy the data to
+ * `buffer`.
+ *
+ * @param user_data The parameter that was passed to the #ok_wav_read_from_callbacks() function.
+ * @param buffer The data buffer to copy bytes to.
+ * @param count The number of bytes to read.
+ * @return The number of bytes read.
+ */
+typedef size_t (*ok_wav_read_func)(void *user_data, uint8_t *buffer, size_t count);
+
+/**
+ * Seek function provided to the #ok_wav_read_from_callbacks() function.
+ * This function must skip bytes from its source (typically `user_data`).
+ *
+ * @param user_data The parameter that was passed to the #ok_wav_read_from_callbacks() function.
+ * @param count The number of bytes to skip.
+ * @return `true` if success.
+ */
+typedef bool (*ok_wav_seek_func)(void *user_data, long count);
+
+/**
+ * Reads a WAV (or CAF) audio file from the provided callback functions.
+ * On success, ok_wav.data has a length of `(num_channels * num_frames * (bit_depth/8))`.
+ *
+ * On failure, #ok_wav.data is `NULL` and #ok_wav.error_message is set.
+ *
+ * If the encoding of the file is u-law, a-law, or ADPCM, the data is converted to 16-bit
+ * signed integer PCM data.
+ *
+ * @param user_data The parameter to be passed to `read_func` and `seek_func`.
+ * @param read_func The read function.
+ * @param seek_func The seek function.
+ * @param convert_to_system_endian If true, the data is converted to the endianness of the system
+ * (required for playback on most systems). Otherwise, the data is left as is.
+ * @return a new #ok_wav object. Never returns `NULL`. The object should be freed with
+ * #ok_wav_free().
+ */
+ok_wav *ok_wav_read_from_callbacks(void *user_data, ok_wav_read_func read_func,
+                                   ok_wav_seek_func seek_func, bool convert_to_system_endian);
 
 #ifdef __cplusplus
 }

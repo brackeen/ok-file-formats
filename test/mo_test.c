@@ -6,9 +6,9 @@
 #include <string.h>
 
 static ok_mo *mo_read(const char *filename) {
-    FILE *fp = fopen(filename, "rb");
-    ok_mo *mo = ok_mo_read(fp, file_input_func);
-    fclose(fp);
+    FILE *file = fopen(filename, "rb");
+    ok_mo *mo = ok_mo_read(file);
+    fclose(file);
     return mo;
 }
 

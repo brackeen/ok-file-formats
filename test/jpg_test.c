@@ -73,14 +73,14 @@ static bool test_image(const char *path_to_jpgs,
     // Load via ok_jpg
     ok_jpg *jpg = NULL;
     char *in_filename = get_full_path(path_to_jpgs, name, "jpg");
-    FILE *fp = fopen(in_filename, "rb");
-    if (fp) {
+    FILE *file = fopen(in_filename, "rb");
+    if (file) {
         if (info_only) {
-            jpg = ok_jpg_read_info(fp, file_input_func);
+            jpg = ok_jpg_read_info(file);
         } else {
-            jpg = ok_jpg_read(fp, file_input_func, OK_JPG_COLOR_FORMAT_RGBA, flip_y);
+            jpg = ok_jpg_read(file, OK_JPG_COLOR_FORMAT_RGBA, flip_y);
         }
-        fclose(fp);
+        fclose(file);
 
         success = compare(name, "jpg", jpg->data, jpg->width, jpg->height, jpg->error_message,
                           rgba_data, rgba_data_length, info_only, 4, verbose);

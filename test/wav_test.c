@@ -49,13 +49,13 @@ static bool test_wav(const char *path, const char *container_type, const char *f
     // Load ok_wav
     sprintf(src_filename, "sound-%s-%dch", format, channels);
     char *src_path = get_full_path(path, src_filename, container_type);
-    FILE *fp = fopen(src_path, "rb");
-    if (!fp) {
+    FILE *file = fopen(src_path, "rb");
+    if (!file) {
         printf("Warning: %24.24s.%s not found.\n", src_filename, container_type);
         return true;
     }
-    ok_wav *wav = ok_wav_read(fp, file_input_func, false);
-    fclose(fp);
+    ok_wav *wav = ok_wav_read(file, false);
+    fclose(file);
     free(src_path);
 
     if (!wav->data) {

@@ -50,8 +50,8 @@ typedef struct {
 
     // Input
     void *input_data;
-    ok_wav_input_func input_func;
-
+    ok_wav_read_func input_read_func;
+    ok_wav_seek_func input_seek_func;
 } pcm_decoder;
 
 static void ok_wav_error(ok_wav *wav, const char *message) {
@@ -65,8 +65,8 @@ static void ok_wav_error(ok_wav *wav, const char *message) {
     }
 }
 
-static bool ok_read(pcm_decoder *decoder, uint8_t *data, const int length) {
-    if (decoder->input_func(decoder->input_data, data, length) == length) {
+static bool ok_read(pcm_decoder *decoder, uint8_t *buffer, size_t length) {
+    if (decoder->input_read_func(decoder->input_data, buffer, length) == length) {
         return true;
     } else {
         ok_wav_error(decoder->wav, "Read error: error calling input function.");
@@ -74,21 +74,53 @@ static bool ok_read(pcm_decoder *decoder, uint8_t *data, const int length) {
     }
 }
 
-static bool ok_seek(pcm_decoder *decoder, const int length) {
-    return ok_read(decoder, NULL, length);
+static bool ok_seek(pcm_decoder *decoder, long length) {
+    if (decoder->input_seek_func(decoder->input_data, length)) {
+        return true;
+    } else {
+        ok_wav_error(decoder->wav, "Seek error: error calling input function.");
+        return false;
+    }
 }
 
-static void decode_file(ok_wav *wav, void *input_data, ok_wav_input_func input_func,
-                        bool convert_to_system_endian);
+#ifndef OK_NO_STDIO
+
+static size_t ok_file_read_func(void *user_data, uint8_t *buffer, size_t length) {
+    return fread(buffer, 1, length, (FILE *)user_data);
+}
+
+static bool ok_file_seek_func(void *user_data, long count) {
+    return fseek((FILE *)user_data, count, SEEK_CUR) == 0;
+}
+
+#endif
+
+static void decode_file(ok_wav *wav, void *input_data, ok_wav_read_func read_func,
+                        ok_wav_seek_func seek_func, bool convert_to_system_endian);
 
 // MARK: Public API
 
-ok_wav *ok_wav_read(void *user_data, ok_wav_input_func input_func, bool convert_to_system_endian) {
+#ifndef OK_NO_STDIO
+
+ok_wav *ok_wav_read(FILE *file, bool convert_to_system_endian) {
     ok_wav *wav = calloc(1, sizeof(ok_wav));
-    if (input_func) {
-        decode_file(wav, user_data, input_func, convert_to_system_endian);
+    if (file) {
+        decode_file(wav, file, ok_file_read_func, ok_file_seek_func, convert_to_system_endian);
     } else {
-        ok_wav_error(wav, "Invalid argument: input_func is NULL");
+        ok_wav_error(wav, "File not found");
+    }
+    return wav;
+}
+
+#endif
+
+ok_wav *ok_wav_read_from_callbacks(void *user_data, ok_wav_read_func read_func,
+                                   ok_wav_seek_func seek_func, bool convert_to_system_endian) {
+    ok_wav *wav = calloc(1, sizeof(ok_wav));
+    if (read_func && seek_func) {
+        decode_file(wav, user_data, read_func, seek_func, convert_to_system_endian);
+    } else {
+        ok_wav_error(wav, "Invalid argument: read_func and seek_func must not be NULL");
     }
     return wav;
 }
@@ -1018,8 +1050,8 @@ static void decode_caf_file(pcm_decoder *decoder) {
     }
 }
 
-static void decode_file(ok_wav *wav, void *input_data, ok_wav_input_func input_func,
-                        bool convert_to_system_endian) {
+static void decode_file(ok_wav *wav, void *input_data, ok_wav_read_func read_func,
+                        ok_wav_seek_func seek_func, bool convert_to_system_endian) {
     if (!wav) {
         return;
     }
@@ -1031,7 +1063,8 @@ static void decode_file(ok_wav *wav, void *input_data, ok_wav_input_func input_f
 
     decoder->wav = wav;
     decoder->input_data = input_data;
-    decoder->input_func = input_func;
+    decoder->input_read_func = read_func;
+    decoder->input_seek_func = seek_func;
     decoder->convert_to_system_endian = convert_to_system_endian;
 
     uint8_t header[4];

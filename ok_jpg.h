@@ -1,7 +1,7 @@
 /*
  ok-file-formats
  https://github.com/brackeen/ok-file-formats
- Copyright (c) 2014-2016 David Brackeen
+ Copyright (c) 2014-2017 David Brackeen
 
  This software is provided 'as-is', without any express or implied warranty.
  In no event will the authors be held liable for any damages arising from the
@@ -41,21 +41,10 @@
  *     #include <stdio.h>
  *     #include "ok_jpg.h"
  *
- *     static int file_input_func(void *user_data, uint8_t *buffer, const int count) {
- *         FILE *fp = (FILE *)user_data;
- *         if (buffer && count > 0) {
- *             return (int)fread(buffer, 1, (size_t)count, fp);
- *         } else if (fseek(fp, count, SEEK_CUR) == 0) {
- *             return count;
- *         } else {
- *             return 0;
- *         }
- *     }
- *
  *     int main() {
- *         FILE *fp = fopen("my_image.jpg", "rb");
- *         ok_jpg *image = ok_jpg_read(fp, file_input_func, OK_JPG_COLOR_FORMAT_RGBA, false);
- *         fclose(fp);
+ *         FILE *file = fopen("my_image.jpg", "rb");
+ *         ok_jpg *image = ok_jpg_read(file, OK_JPG_COLOR_FORMAT_RGBA, false);
+ *         fclose(file);
  *         if (image->data) {
  *             printf("Got image! Size: %li x %li\n", (long)image->width, (long)image->height);
  *         }
@@ -66,6 +55,9 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#ifndef OK_NO_STDIO
+#include <stdio.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -91,53 +83,100 @@ typedef enum {
     OK_JPG_COLOR_FORMAT_BGRA,
 } ok_jpg_color_format;
 
-/**
- * Input function provided to the #ok_jpg_read() or #ok_jpg_read_info() functions.
- * This function must read bytes from its source (typically `user_data`) and copy the data to
- * `buffer`.
- *
- * @param user_data The parameter that was passed to the #ok_jpg_read() or #ok_jpg_read_info()
- * functions.
- * @param buffer The data buffer to copy bytes to. If `NULL`, this function should perform a
- * relative seek.
- * @param count The number of bytes to read. If negative, this function should perform a
- * relative seek.
- * @return The number of bytes read or skipped. Should return 0 on error.
- */
-typedef int (*ok_jpg_input_func)(void *user_data, uint8_t *buffer, int count);
+#ifndef OK_NO_STDIO
 
 /**
  * Gets a JPEG image's dimensions without reading the image data. Its EXIF orientation is taken into
  * consideration.
  * On failure, #ok_jpg.width and #ok_jpg.height are both zero and #ok_jpg.error_message is set.
  *
- * @param user_data The parameter to be passed to the `input_func`.
- * @param input_func The input function to read a JPEG file from.
+ * @param file The file to read.
  * @return a new #ok_jpg object. Never returns `NULL`. The object should be freed with
  * #ok_jpg_free().
  */
-ok_jpg *ok_jpg_read_info(void *user_data, ok_jpg_input_func input_func);
+ok_jpg *ok_jpg_read_info(FILE *file);
 
 /**
  * Reads a JPEG image. On success, #ok_jpg.data contains the packed image data, with a size of
  * (`width * height * 4`). On failure, #ok_jpg.data is `NULL` and #ok_jpg.error_message is set.
  *
- * @param user_data The parameter to be passed to the `input_func`.
- * @param input_func The input function to read a JPEG file from.
+ * @param file The file to read.
  * @param color_format The format to return the pixel data.
  * @param flip_y If `true`, the returned image data is flipped along the vertical axis, so that the
  * first row of data is the last row in the image.
  * @return a new #ok_jpg object. Never returns `NULL`. The object should be freed with
  * #ok_jpg_free().
  */
-ok_jpg *ok_jpg_read(void *user_data, ok_jpg_input_func input_func, ok_jpg_color_format color_format,
-                    bool flip_y);
+ok_jpg *ok_jpg_read(FILE *file, ok_jpg_color_format color_format, bool flip_y);
+
+#endif
 
 /**
  * Frees the image. This function should always be called when done with the image, even if reading
  * failed.
  */
 void ok_jpg_free(ok_jpg *jpg);
+
+// MARK: Read from callbacks
+
+/**
+ * Read function provided to the #ok_jpg_read_from_callbacks() or #ok_jpg_read_info_from_callbacks()
+ * functions.
+ *
+ * This function must read bytes from its source (typically `user_data`) and copy the data to
+ * `buffer`.
+ *
+ * @param user_data The parameter that was passed to the #ok_jpg_read_from_callbacks() or
+ * ok_png_read_info_from_callbacks() function.
+ * @param buffer The data buffer to copy bytes to.
+ * @param count The number of bytes to read.
+ * @return The number of bytes read.
+ */
+typedef size_t (*ok_jpg_read_func)(void *user_data, uint8_t *buffer, size_t count);
+
+/**
+ * Seek function provided to the #ok_jpg_read_from_callbacks() or #ok_jpg_read_info_from_callbacks()
+ * functions.
+ *
+ * This function must skip bytes from its source (typically `user_data`).
+ *
+ * @param user_data The parameter that was passed to the #ok_jpg_read_from_callbacks() or
+ * ok_png_read_info_from_callbacks() function.
+ * @param count The number of bytes to skip.
+ * @return `true` if success.
+ */
+typedef bool (*ok_jpg_seek_func)(void *user_data, long count);
+
+/**
+ * Gets a JPEG image's dimensions without reading the image data. Its EXIF orientation is taken into
+ * consideration.
+ * On failure, #ok_jpg.width and #ok_jpg.height are both zero and #ok_jpg.error_message is set.
+ *
+ * @param user_data The parameter to be passed to `read_func` and `seek_func`.
+ * @param read_func The read function.
+ * @param seek_func The seek function.
+ * @return a new #ok_jpg object. Never returns `NULL`. The object should be freed with
+ * #ok_jpg_free().
+ */
+ok_jpg *ok_jpg_read_info_from_callbacks(void *user_data, ok_jpg_read_func read_func,
+                                        ok_jpg_seek_func seek_func);
+
+/**
+ * Reads a JPEG image. On success, #ok_jpg.data contains the packed image data, with a size of
+ * (`width * height * 4`). On failure, #ok_jpg.data is `NULL` and #ok_jpg.error_message is set.
+ *
+ * @param user_data The parameter to be passed to `read_func` and `seek_func`.
+ * @param read_func The read function.
+ * @param seek_func The seek function.
+ * @param color_format The format to return the pixel data.
+ * @param flip_y If `true`, the returned image data is flipped along the vertical axis, so that the
+ * first row of data is the last row in the image.
+ * @return a new #ok_jpg object. Never returns `NULL`. The object should be freed with
+ * #ok_jpg_free().
+ */
+ok_jpg *ok_jpg_read_from_callbacks(void *user_data, ok_jpg_read_func read_func,
+                                   ok_jpg_seek_func seek_func, ok_jpg_color_format color_format,
+                                   bool flip_y);
 
 #ifdef __cplusplus
 }

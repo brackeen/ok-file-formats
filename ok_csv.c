@@ -1,7 +1,7 @@
 /*
  ok-file-formats
  https://github.com/brackeen/ok-file-formats
- Copyright (c) 2014-2016 David Brackeen
+ Copyright (c) 2014-2017 David Brackeen
 
  This software is provided 'as-is', without any express or implied warranty.
  In no event will the authors be held liable for any damages arising from the
@@ -36,7 +36,7 @@ typedef struct {
     int length;
 } circular_buffer;
 
-static bool circular_buffer_init(circular_buffer *buffer, const int capacity) {
+static bool circular_buffer_init(circular_buffer *buffer, int capacity) {
     buffer->start = 0;
     buffer->length = 0;
     buffer->data = malloc(capacity);
@@ -80,7 +80,7 @@ static bool circular_buffer_expand(circular_buffer *buffer) {
     }
 }
 
-static bool circular_buffer_read(circular_buffer *buffer, uint8_t *dst, const int length) {
+static bool circular_buffer_read(circular_buffer *buffer, uint8_t *dst, int length) {
     if (length > buffer->length) {
         return false;
     } else {
@@ -98,7 +98,7 @@ static bool circular_buffer_read(circular_buffer *buffer, uint8_t *dst, const in
     }
 }
 
-static bool circular_buffer_skip(circular_buffer *buffer, const int length) {
+static bool circular_buffer_skip(circular_buffer *buffer, int length) {
     if (length > buffer->length) {
         return false;
     } else {
@@ -118,11 +118,11 @@ typedef struct {
 
     // Input
     void *input_data;
-    ok_csv_input_func input_func;
+    ok_csv_read_func input_read_func;
 
 } csv_decoder;
 
-static void decode_csv(ok_csv *csv, void *input_data, ok_csv_input_func input_func);
+static void decode_csv(ok_csv *csv, void *input_data, ok_csv_read_func input_read_func);
 static void decode_csv2(csv_decoder *decoder);
 
 static void ok_csv_cleanup(ok_csv *csv) {
@@ -152,12 +152,35 @@ static void ok_csv_error(ok_csv *csv, const char *message) {
     }
 }
 
+
+#ifndef OK_NO_STDIO
+
+static size_t ok_file_read_func(void *user_data, uint8_t *buffer, size_t length) {
+    return fread(buffer, 1, length, (FILE *)user_data);
+}
+
+#endif
+
 // MARK: Public API
 
-ok_csv *ok_csv_read(void *user_data, ok_csv_input_func input_func) {
+#ifndef OK_NO_STDIO
+
+ok_csv *ok_csv_read(FILE *file) {
     ok_csv *csv = calloc(1, sizeof(ok_csv));
-    if (input_func) {
-        decode_csv(csv, user_data, input_func);
+    if (file) {
+        decode_csv(csv, file, ok_file_read_func);
+    } else {
+        ok_csv_error(csv, "File not found");
+    }
+    return csv;
+}
+
+#endif
+
+ok_csv *ok_csv_read_from_callbacks(void *user_data, ok_csv_read_func input_read_func) {
+    ok_csv *csv = calloc(1, sizeof(ok_csv));
+    if (input_read_func) {
+        decode_csv(csv, user_data, input_read_func);
     } else {
         ok_csv_error(csv, "Invalid argument: input_func is NULL");
     }
@@ -191,7 +214,7 @@ typedef enum {
     NONESCAPED_FIELD,
 } csv_decoder_state;
 
-static void decode_csv(ok_csv *csv, void *input_data, ok_csv_input_func input_func) {
+static void decode_csv(ok_csv *csv, void *input_data, ok_csv_read_func input_read_func) {
     if (!csv) {
         return;
     }
@@ -207,7 +230,7 @@ static void decode_csv(ok_csv *csv, void *input_data, ok_csv_input_func input_fu
     }
     decoder->csv = csv;
     decoder->input_data = input_data;
-    decoder->input_func = input_func;
+    decoder->input_read_func = input_read_func;
 
     decode_csv2(decoder);
 
@@ -241,7 +264,7 @@ static bool csv_ensure_record_capcity(ok_csv *csv) {
 }
 
 // Ensure capacity for at least (csv->num_fields[record] + 1) fields
-static bool csv_ensure_field_capcity(ok_csv *csv, const int record) {
+static bool csv_ensure_field_capcity(ok_csv *csv, int record) {
     // curr_capacity is >= csv->num_fields[record]
     int curr_capacity = min_field_capacity;
     while (curr_capacity < csv->num_fields[record]) {
@@ -282,7 +305,7 @@ static void decode_csv2(csv_decoder *decoder) {
             uint8_t *end = decoder->input_buffer.data +
                 ((decoder->input_buffer.start + decoder->input_buffer.length) %
                  decoder->input_buffer.capacity);
-            int bytesRead = decoder->input_func(decoder->input_data, end, writeable);
+            int bytesRead = (int)decoder->input_read_func(decoder->input_data, end, writeable);
             decoder->input_buffer.length += bytesRead;
         }
 

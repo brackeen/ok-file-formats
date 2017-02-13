@@ -12,9 +12,9 @@ int csv_test(const char *path, bool verbose) {
 
     char *test1_file = get_full_path(path, "test1", "csv");
 
-    FILE *fp = fopen(test1_file, "rb");
-    ok_csv *csv = ok_csv_read(fp, file_input_func);
-    fclose(fp);
+    FILE *file = fopen(test1_file, "rb");
+    ok_csv *csv = ok_csv_read(file);
+    fclose(file);
     free(test1_file);
 
     if (!csv) {

@@ -1,7 +1,7 @@
 /*
  ok-file-formats
  https://github.com/brackeen/ok-file-formats
- Copyright (c) 2014-2016 David Brackeen
+ Copyright (c) 2014-2017 David Brackeen
 
  This software is provided 'as-is', without any express or implied warranty.
  In no event will the authors be held liable for any damages arising from the
@@ -27,7 +27,7 @@ typedef struct {
 
     // Input
     void *input_data;
-    ok_fnt_input_func input_func;
+    ok_fnt_read_func input_read_func;
 
 } fnt_decoder;
 
@@ -40,8 +40,8 @@ static void ok_fnt_error(ok_fnt *fnt, const char *message) {
     }
 }
 
-static bool ok_read(fnt_decoder *decoder, uint8_t *data, const int length) {
-    if (decoder->input_func(decoder->input_data, data, length) == length) {
+static bool ok_read(fnt_decoder *decoder, uint8_t *data, size_t length) {
+    if (decoder->input_read_func(decoder->input_data, data, length) == length) {
         return true;
     } else {
         ok_fnt_error(decoder->fnt, "Read error: error calling input function.");
@@ -49,16 +49,38 @@ static bool ok_read(fnt_decoder *decoder, uint8_t *data, const int length) {
     }
 }
 
-static void decode_fnt(ok_fnt *fnt, void *input_data, ok_fnt_input_func input_func);
+static void decode_fnt(ok_fnt *fnt, void *input_data, ok_fnt_read_func input_read_func);
 
-// Public API
+#ifndef OK_NO_STDIO
 
-ok_fnt *ok_fnt_read(void *user_data, ok_fnt_input_func input_func) {
+static size_t ok_file_read_func(void *user_data, uint8_t *buffer, size_t length) {
+    return fread(buffer, 1, length, (FILE *)user_data);
+}
+
+#endif
+
+// MARK: Public API
+
+#ifndef OK_NO_STDIO
+
+ok_fnt *ok_fnt_read(FILE *file) {
     ok_fnt *fnt = calloc(1, sizeof(ok_fnt));
-    if (input_func) {
-        decode_fnt(fnt, user_data, input_func);
+    if (file) {
+        decode_fnt(fnt, file, ok_file_read_func);
     } else {
-        ok_fnt_error(fnt, "Invalid argument: input_func is NULL");
+        ok_fnt_error(fnt, "File not found");
+    }
+    return fnt;
+}
+
+#endif
+
+ok_fnt *ok_fnt_read_from_callbacks(void *user_data, ok_fnt_read_func input_read_func) {
+    ok_fnt *fnt = calloc(1, sizeof(ok_fnt));
+    if (input_read_func) {
+        decode_fnt(fnt, user_data, input_read_func);
+    } else {
+        ok_fnt_error(fnt, "Invalid argument: read_func is NULL");
     }
     return fnt;
 }
@@ -116,7 +138,7 @@ static void decode_fnt2(fnt_decoder *decoder) {
     uint32_t block_types_found = 0;
     while (true) {
         uint8_t block_header[5];
-        if (decoder->input_func(decoder->input_data, block_header,
+        if (decoder->input_read_func(decoder->input_data, block_header,
             sizeof(block_header)) != sizeof(block_header)) {
             // Don't give an error if all required blocks have been found.
             const bool all_required_blocks_found = (block_types_found & 0x1E) == 0x1E;
@@ -277,7 +299,7 @@ static void decode_fnt2(fnt_decoder *decoder) {
     }
 }
 
-static void decode_fnt(ok_fnt *fnt, void *input_data, ok_fnt_input_func input_func) {
+static void decode_fnt(ok_fnt *fnt, void *input_data, ok_fnt_read_func input_read_func) {
     if (fnt) {
         fnt_decoder *decoder = calloc(1, sizeof(fnt_decoder));
         if (!decoder) {
@@ -286,7 +308,7 @@ static void decode_fnt(ok_fnt *fnt, void *input_data, ok_fnt_input_func input_fu
         }
         decoder->fnt = fnt;
         decoder->input_data = input_data;
-        decoder->input_func = input_func;
+        decoder->input_read_func = input_read_func;
 
         decode_fnt2(decoder);
 

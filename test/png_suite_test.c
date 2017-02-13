@@ -231,14 +231,14 @@ static bool test_image(const char *path_to_png_suite,
     // Load via ok_png
     ok_png *png = NULL;
     char *in_filename = get_full_path(path_to_png_suite, name, "png");
-    FILE *fp = fopen(in_filename, "rb");
-    if (fp) {
+    FILE *file = fopen(in_filename, "rb");
+    if (file) {
         if (info_only) {
-            png = ok_png_read_info(fp, file_input_func);
+            png = ok_png_read_info(file);
         } else {
-            png = ok_png_read(fp, file_input_func, color_format, flip_y);
+            png = ok_png_read(file, color_format, flip_y);
         }
-        fclose(fp);
+        fclose(file);
 
         success = compare(name, "png", png->data, png->width, png->height, png->error_message,
                           rgba_data, rgba_data_length, info_only, 0, verbose);

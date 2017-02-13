@@ -63,7 +63,8 @@ typedef struct {
 
     // Input
     void *input_data;
-    ok_png_input_func input_func;
+    ok_png_read_func input_read_func;
+    ok_png_seek_func input_seek_func;
 
     // Decode options
     ok_png_color_format color_format;
@@ -107,8 +108,8 @@ static void ok_png_error(ok_png *png, const char *message) {
     }
 }
 
-static bool ok_read(png_decoder *decoder, uint8_t *data, const int length) {
-    if (decoder->input_func(decoder->input_data, data, length) == length) {
+static bool ok_read(png_decoder *decoder, uint8_t *buffer, size_t length) {
+    if (decoder->input_read_func(decoder->input_data, buffer, length) == length) {
         return true;
     } else {
         ok_png_error(decoder->png, "Read error: error calling input function.");
@@ -116,23 +117,57 @@ static bool ok_read(png_decoder *decoder, uint8_t *data, const int length) {
     }
 }
 
-static bool ok_seek(png_decoder *decoder, const int length) {
-    return ok_read(decoder, NULL, length);
+static bool ok_seek(png_decoder *decoder, long length) {
+    if (decoder->input_seek_func(decoder->input_data, length)) {
+        return true;
+    } else {
+        ok_png_error(decoder->png, "Seek error: error calling input function.");
+        return false;
+    }
 }
 
-static ok_png *decode_png(void *user_data, ok_png_input_func input_func,
-                          const ok_png_color_format color_format,
-                          const bool flip_y, const bool info_only);
+#ifndef OK_NO_STDIO
+
+static size_t ok_file_read_func(void *user_data, uint8_t *buffer, size_t length) {
+    return fread(buffer, 1, length, (FILE *)user_data);
+}
+
+static bool ok_file_seek_func(void *user_data, long count) {
+    return fseek((FILE *)user_data, count, SEEK_CUR) == 0;
+}
+
+#endif
+
+static ok_png *decode_png(void *user_data, ok_png_read_func input_read_func,
+                          ok_png_seek_func input_seek_func, ok_png_color_format color_format,
+                          bool flip_y, bool info_only, bool check_user_data);
 
 // Public API
 
-ok_png *ok_png_read_info(void *user_data, ok_png_input_func input_func) {
-    return decode_png(user_data, input_func, OK_PNG_COLOR_FORMAT_RGBA, false, true);
+#ifndef OK_NO_STDIO
+
+ok_png *ok_png_read_info(FILE *file) {
+    return decode_png(file, ok_file_read_func, ok_file_seek_func, OK_PNG_COLOR_FORMAT_RGBA, false,
+                      true, true);
 }
 
-ok_png *ok_png_read(void *user_data, ok_png_input_func input_func,
-                    ok_png_color_format color_format, bool flip_y) {
-    return decode_png(user_data, input_func, color_format, flip_y, false);
+ok_png *ok_png_read(FILE *file, ok_png_color_format color_format, bool flip_y) {
+    return decode_png(file, ok_file_read_func, ok_file_seek_func, color_format, flip_y, false,
+                      true);
+}
+
+#endif
+
+ok_png *ok_png_read_info_from_callbacks(void *user_data, ok_png_read_func read_func,
+                                        ok_png_seek_func seek_func) {
+    return decode_png(user_data, read_func, seek_func, OK_PNG_COLOR_FORMAT_RGBA, false, true,
+                      false);
+}
+
+ok_png *ok_png_read_from_callbacks(void *user_data, ok_png_read_func read_func,
+                                   ok_png_seek_func seek_func, ok_png_color_format color_format,
+                                   bool flip_y) {
+    return decode_png(user_data, read_func, seek_func, color_format, flip_y, false, false);
 }
 
 void ok_png_free(ok_png *png) {
@@ -917,15 +952,19 @@ static void decode_png2(png_decoder *decoder) {
     }
 }
 
-static ok_png *decode_png(void *user_data, ok_png_input_func input_func,
-                          const ok_png_color_format color_format,
-                          const bool flip_y, const bool info_only) {
+static ok_png *decode_png(void *user_data, ok_png_read_func input_read_func,
+                          ok_png_seek_func input_seek_func, ok_png_color_format color_format,
+                          bool flip_y, bool info_only, bool check_user_data) {
     ok_png *png = calloc(1, sizeof(ok_png));
     if (!png) {
         return NULL;
     }
-    if (!input_func) {
-        ok_png_error(png, "Invalid argument: input_func is NULL");
+    if (check_user_data && !user_data) {
+        ok_png_error(png, "File not found");
+        return png;
+    }
+    if (!input_read_func || !input_seek_func) {
+        ok_png_error(png, "Invalid argument: read_func and seek_func must not be NULL");
         return png;
     }
 
@@ -937,7 +976,8 @@ static ok_png *decode_png(void *user_data, ok_png_input_func input_func,
 
     decoder->png = png;
     decoder->input_data = user_data;
-    decoder->input_func = input_func;
+    decoder->input_read_func = input_read_func;
+    decoder->input_seek_func = input_seek_func;
     decoder->color_format = color_format;
     decoder->flip_y = flip_y;
     decoder->info_only = info_only;

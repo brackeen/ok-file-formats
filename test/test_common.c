@@ -96,17 +96,6 @@ uint8_t *read_file(const char *filename, unsigned long *length) {
     return buffer;
 }
 
-int file_input_func(void *user_data, uint8_t *buffer, int count) {
-    FILE *fp = (FILE *)user_data;
-    if (buffer && count > 0) {
-        return (int)fread(buffer, 1, (size_t)count, fp);
-    } else if (fseek(fp, count, SEEK_CUR) == 0) {
-        return count;
-    } else {
-        return 0;
-    }
-}
-
 static bool fuzzy_memcmp(const uint8_t *data1, const uint8_t *data2, const size_t length,
                          const uint8_t fuzziness, double *p_identical, int *peak_diff) {
     if (fuzziness == 0) {

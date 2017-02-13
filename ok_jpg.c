@@ -1,7 +1,7 @@
 /*
  ok-file-formats
  https://github.com/brackeen/ok-file-formats
- Copyright (c) 2014-2016 David Brackeen
+ Copyright (c) 2014-2017 David Brackeen
 
  This software is provided 'as-is', without any express or implied warranty.
  In no event will the authors be held liable for any damages arising from the
@@ -83,7 +83,8 @@ typedef struct {
 
     // Input
     void *input_data;
-    ok_jpg_input_func input_func;
+    ok_jpg_read_func input_read_func;
+    ok_jpg_seek_func input_seek_func;
 
     // State
     bool eoi_found;
@@ -120,8 +121,8 @@ static void ok_jpg_error(ok_jpg *jpg, const char *message) {
     }
 }
 
-static bool ok_read(jpg_decoder *decoder, uint8_t *data, const int length) {
-    if (decoder->input_func(decoder->input_data, data, length) == length) {
+static bool ok_read(jpg_decoder *decoder, uint8_t *buffer, size_t length) {
+    if (decoder->input_read_func(decoder->input_data, buffer, length) == length) {
         return true;
     } else {
         ok_jpg_error(decoder->jpg, "Read error: error calling input function.");
@@ -129,23 +130,58 @@ static bool ok_read(jpg_decoder *decoder, uint8_t *data, const int length) {
     }
 }
 
-static bool ok_seek(jpg_decoder *decoder, const int length) {
-    return ok_read(decoder, NULL, length);
+static bool ok_seek(jpg_decoder *decoder, long length) {
+    if (decoder->input_seek_func(decoder->input_data, length)) {
+        return true;
+    } else {
+        ok_jpg_error(decoder->jpg, "Seek error: error calling input function.");
+        return false;
+    }
 }
 
-static ok_jpg *decode_jpg(void *user_data, ok_jpg_input_func input_func,
-                          const ok_jpg_color_format color_format, const bool flip_y,
-                          const bool info_only);
+#ifndef OK_NO_STDIO
+
+static size_t ok_file_read_func(void *user_data, uint8_t *buffer, size_t length) {
+    return fread(buffer, 1, length, (FILE *)user_data);
+}
+
+static bool ok_file_seek_func(void *user_data, long count) {
+    return fseek((FILE *)user_data, count, SEEK_CUR) == 0;
+}
+
+#endif
+
+static ok_jpg *decode_jpg(void *user_data, ok_jpg_read_func input_read_func,
+                          ok_jpg_seek_func input_seek_func, ok_jpg_color_format color_format,
+                          bool flip_y, bool info_only, bool check_user_data);
 
 // MARK: Public API
 
-ok_jpg *ok_jpg_read_info(void *user_data, ok_jpg_input_func input_func) {
-    return decode_jpg(user_data, input_func, OK_JPG_COLOR_FORMAT_RGBA, false, true);
+#ifndef OK_NO_STDIO
+
+ok_jpg *ok_jpg_read_info(FILE *file) {
+    return decode_jpg(file, ok_file_read_func, ok_file_seek_func, OK_JPG_COLOR_FORMAT_RGBA, false,
+                      true, true);
 }
 
-ok_jpg *ok_jpg_read(void *user_data, ok_jpg_input_func input_func,
-                    ok_jpg_color_format color_format, bool flip_y) {
-    return decode_jpg(user_data, input_func, color_format, flip_y, false);
+ok_jpg *ok_jpg_read(FILE *file, ok_jpg_color_format color_format, bool flip_y) {
+    return decode_jpg(file, ok_file_read_func, ok_file_seek_func, color_format, flip_y, false,
+                      true);
+}
+
+#endif
+
+ok_jpg *ok_jpg_read_info_from_callbacks(void *user_data, ok_jpg_read_func input_read_func,
+                                        ok_jpg_seek_func input_seek_func) {
+    return decode_jpg(user_data, input_read_func, input_seek_func, OK_JPG_COLOR_FORMAT_RGBA, false,
+                      true, false);
+}
+
+ok_jpg *ok_jpg_read_from_callbacks(void *user_data, ok_jpg_read_func input_read_func,
+                                   ok_jpg_seek_func input_seek_func,
+                                   ok_jpg_color_format color_format, bool flip_y) {
+    return decode_jpg(user_data, input_read_func, input_seek_func, color_format, flip_y, false,
+                      false);
 }
 
 void ok_jpg_free(ok_jpg *jpg) {
@@ -1354,15 +1390,19 @@ static void decode_jpg2(jpg_decoder *decoder) {
     }
 }
 
-static ok_jpg *decode_jpg(void *user_data, ok_jpg_input_func input_func,
-                          const ok_jpg_color_format color_format, const bool flip_y,
-                          const bool info_only) {
+static ok_jpg *decode_jpg(void *user_data, ok_jpg_read_func input_read_func,
+                          ok_jpg_seek_func input_seek_func, ok_jpg_color_format color_format,
+                          bool flip_y, bool info_only, bool check_user_data) {
     ok_jpg *jpg = calloc(1, sizeof(ok_jpg));
     if (!jpg) {
         return NULL;
     }
-    if (!input_func) {
-        ok_jpg_error(jpg, "Invalid argument: input_func is NULL");
+    if (check_user_data && !user_data) {
+        ok_jpg_error(jpg, "File not found");
+        return jpg;
+    }
+    if (!input_read_func || !input_seek_func) {
+        ok_jpg_error(jpg, "Invalid argument: read_func and seek_func must not be NULL");
         return jpg;
     }
 
@@ -1374,7 +1414,8 @@ static ok_jpg *decode_jpg(void *user_data, ok_jpg_input_func input_func,
 
     decoder->jpg = jpg;
     decoder->input_data = user_data;
-    decoder->input_func = input_func;
+    decoder->input_read_func = input_read_func;
+    decoder->input_seek_func = input_seek_func;
     decoder->color_format = color_format;
     decoder->flip_y = flip_y;
     decoder->info_only = info_only;
