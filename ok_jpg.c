@@ -75,7 +75,7 @@ typedef struct {
     ok_jpg *jpg;
 
     // Decode options
-    ok_jpg_color_format color_format;
+    bool color_rgba;
     bool flip_x;
     bool flip_y;
     bool rotate;
@@ -152,36 +152,34 @@ static bool ok_file_seek_func(void *user_data, long count) {
 #endif
 
 static ok_jpg *decode_jpg(void *user_data, ok_jpg_read_func input_read_func,
-                          ok_jpg_seek_func input_seek_func, ok_jpg_color_format color_format,
-                          bool flip_y, bool info_only, bool check_user_data);
+                          ok_jpg_seek_func input_seek_func, ok_jpg_decode_flags decode_flags,
+                          bool info_only, bool check_user_data);
 
 // MARK: Public API
 
 #ifndef OK_NO_STDIO
 
 ok_jpg *ok_jpg_read_info(FILE *file) {
-    return decode_jpg(file, ok_file_read_func, ok_file_seek_func, OK_JPG_COLOR_FORMAT_RGBA, false,
+    return decode_jpg(file, ok_file_read_func, ok_file_seek_func, OK_JPG_COLOR_FORMAT_RGBA,
                       true, true);
 }
 
-ok_jpg *ok_jpg_read(FILE *file, ok_jpg_color_format color_format, bool flip_y) {
-    return decode_jpg(file, ok_file_read_func, ok_file_seek_func, color_format, flip_y, false,
-                      true);
+ok_jpg *ok_jpg_read(FILE *file, ok_jpg_decode_flags decode_flags) {
+    return decode_jpg(file, ok_file_read_func, ok_file_seek_func, decode_flags, false, true);
 }
 
 #endif
 
 ok_jpg *ok_jpg_read_info_from_callbacks(void *user_data, ok_jpg_read_func input_read_func,
                                         ok_jpg_seek_func input_seek_func) {
-    return decode_jpg(user_data, input_read_func, input_seek_func, OK_JPG_COLOR_FORMAT_RGBA, false,
+    return decode_jpg(user_data, input_read_func, input_seek_func, OK_JPG_COLOR_FORMAT_RGBA,
                       true, false);
 }
 
 ok_jpg *ok_jpg_read_from_callbacks(void *user_data, ok_jpg_read_func input_read_func,
                                    ok_jpg_seek_func input_seek_func,
-                                   ok_jpg_color_format color_format, bool flip_y) {
-    return decode_jpg(user_data, input_read_func, input_seek_func, color_format, flip_y, false,
-                      false);
+                                   ok_jpg_decode_flags decode_flags) {
+    return decode_jpg(user_data, input_read_func, input_seek_func, decode_flags, false, false);
 }
 
 void ok_jpg_free(ok_jpg *jpg) {
@@ -485,7 +483,7 @@ static void convert_data_unit(jpg_decoder *decoder, const int data_unit_x, const
     if (decoder->num_components == 1) {
         convert_data_unit_grayscale(c->output, data, data + 1, data + 2, data + 3,
                                     x_inc, y_inc, width, height);
-    } else if (decoder->color_format == OK_JPG_COLOR_FORMAT_RGBA) {
+    } else if (decoder->color_rgba) {
         convert_data_unit_color(c->output, (c + 1)->output, (c + 2)->output,
                                 data, data + 1, data + 2, data + 3,
                                 x_inc, y_inc, width, height);
@@ -1391,8 +1389,8 @@ static void decode_jpg2(jpg_decoder *decoder) {
 }
 
 static ok_jpg *decode_jpg(void *user_data, ok_jpg_read_func input_read_func,
-                          ok_jpg_seek_func input_seek_func, ok_jpg_color_format color_format,
-                          bool flip_y, bool info_only, bool check_user_data) {
+                          ok_jpg_seek_func input_seek_func, ok_jpg_decode_flags decode_flags,
+                          bool info_only, bool check_user_data) {
     ok_jpg *jpg = calloc(1, sizeof(ok_jpg));
     if (!jpg) {
         return NULL;
@@ -1416,8 +1414,8 @@ static ok_jpg *decode_jpg(void *user_data, ok_jpg_read_func input_read_func,
     decoder->input_data = user_data;
     decoder->input_read_func = input_read_func;
     decoder->input_seek_func = input_seek_func;
-    decoder->color_format = color_format;
-    decoder->flip_y = flip_y;
+    decoder->color_rgba = (decode_flags & OK_JPG_COLOR_FORMAT_BGRA) == 0;
+    decoder->flip_y = (decode_flags & OK_JPG_FLIP_Y) != 0;
     decoder->info_only = info_only;
 
     decode_jpg2(decoder);

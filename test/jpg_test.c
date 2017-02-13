@@ -63,8 +63,6 @@ static bool test_image(const char *path_to_jpgs,
                        const char *path_to_rgba_files,
                        const char *name,
                        bool info_only, bool verbose) {
-    const bool flip_y = false;
-
     char *rgba_filename = get_full_path(path_to_rgba_files, name, "rgba");
     unsigned long rgba_data_length;
     uint8_t *rgba_data = read_file(rgba_filename, &rgba_data_length);
@@ -78,7 +76,7 @@ static bool test_image(const char *path_to_jpgs,
         if (info_only) {
             jpg = ok_jpg_read_info(file);
         } else {
-            jpg = ok_jpg_read(file, OK_JPG_COLOR_FORMAT_RGBA, flip_y);
+            jpg = ok_jpg_read(file, OK_JPG_COLOR_FORMAT_RGBA);
         }
         fclose(file);
 

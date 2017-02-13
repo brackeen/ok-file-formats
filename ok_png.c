@@ -67,8 +67,7 @@ typedef struct {
     ok_png_seek_func input_seek_func;
 
     // Decode options
-    ok_png_color_format color_format;
-    bool flip_y;
+    ok_png_decode_flags decode_flags;
     bool info_only;
 
     // Decoding
@@ -139,35 +138,32 @@ static bool ok_file_seek_func(void *user_data, long count) {
 #endif
 
 static ok_png *decode_png(void *user_data, ok_png_read_func input_read_func,
-                          ok_png_seek_func input_seek_func, ok_png_color_format color_format,
-                          bool flip_y, bool info_only, bool check_user_data);
+                          ok_png_seek_func input_seek_func, ok_png_decode_flags decode_flags,
+                          bool info_only, bool check_user_data);
 
 // Public API
 
 #ifndef OK_NO_STDIO
 
 ok_png *ok_png_read_info(FILE *file) {
-    return decode_png(file, ok_file_read_func, ok_file_seek_func, OK_PNG_COLOR_FORMAT_RGBA, false,
+    return decode_png(file, ok_file_read_func, ok_file_seek_func, OK_PNG_COLOR_FORMAT_RGBA,
                       true, true);
 }
 
-ok_png *ok_png_read(FILE *file, ok_png_color_format color_format, bool flip_y) {
-    return decode_png(file, ok_file_read_func, ok_file_seek_func, color_format, flip_y, false,
-                      true);
+ok_png *ok_png_read(FILE *file, ok_png_decode_flags decode_flags) {
+    return decode_png(file, ok_file_read_func, ok_file_seek_func, decode_flags, false, true);
 }
 
 #endif
 
 ok_png *ok_png_read_info_from_callbacks(void *user_data, ok_png_read_func read_func,
                                         ok_png_seek_func seek_func) {
-    return decode_png(user_data, read_func, seek_func, OK_PNG_COLOR_FORMAT_RGBA, false, true,
-                      false);
+    return decode_png(user_data, read_func, seek_func, OK_PNG_COLOR_FORMAT_RGBA, true, false);
 }
 
 ok_png *ok_png_read_from_callbacks(void *user_data, ok_png_read_func read_func,
-                                   ok_png_seek_func seek_func, ok_png_color_format color_format,
-                                   bool flip_y) {
-    return decode_png(user_data, read_func, seek_func, color_format, flip_y, false, false);
+                                   ok_png_seek_func seek_func, ok_png_decode_flags decode_flags) {
+    return decode_png(user_data, read_func, seek_func, decode_flags, false, false);
 }
 
 void ok_png_free(ok_png *png) {
@@ -267,8 +263,7 @@ static bool read_palette(png_decoder *decoder, const uint32_t chunk_length) {
         return false;
     }
     const bool src_is_bgr = decoder->is_ios_format;
-    const bool dst_is_bgr = (decoder->color_format == OK_PNG_COLOR_FORMAT_BGRA ||
-                             decoder->color_format == OK_PNG_COLOR_FORMAT_BGRA_PRE);
+    const bool dst_is_bgr = (decoder->decode_flags & OK_PNG_COLOR_FORMAT_BGRA) != 0;
     const bool should_byteswap = src_is_bgr != dst_is_bgr;
     uint8_t *dst = decoder->palette;
     uint8_t buffer[3];
@@ -300,8 +295,7 @@ static bool read_transparency(png_decoder *decoder, const uint32_t chunk_length)
             return false;
         }
 
-        const bool should_premultiply = (decoder->color_format == OK_PNG_COLOR_FORMAT_BGRA_PRE ||
-                                         decoder->color_format == OK_PNG_COLOR_FORMAT_RGBA_PRE);
+        const bool should_premultiply = (decoder->decode_flags & OK_PNG_PREMULTIPLIED_ALPHA) != 0;
         uint8_t *dst = decoder->palette;
         for (uint32_t i = 0; i < chunk_length; i++) {
             if (!ok_read(decoder, (dst + 3), 1)) {
@@ -414,16 +408,17 @@ static void decode_filter(uint8_t *RESTRICT curr, const uint8_t *RESTRICT prev,
 
 static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const uint32_t width) {
     ok_png *png = decoder->png;
+    const bool dst_flip_y = (decoder->decode_flags & OK_PNG_FLIP_Y) != 0;
     const uint32_t dst_stride = png->width * 4;
     uint8_t *dst_start;
     uint8_t *dst_end;
     if (decoder->interlace_method == 0) {
         const uint32_t dst_y =
-            (decoder->flip_y ? (png->height - decoder->scanline - 1) : decoder->scanline);
+            (dst_flip_y ? (png->height - decoder->scanline - 1) : decoder->scanline);
         dst_start = png->data + (dst_y * dst_stride);
     } else if (decoder->interlace_pass == 7) {
         const uint32_t t_scanline = decoder->scanline * 2 + 1;
-        const uint32_t dst_y = decoder->flip_y ? (png->height - t_scanline - 1) : t_scanline;
+        const uint32_t dst_y = dst_flip_y ? (png->height - t_scanline - 1) : t_scanline;
         dst_start = png->data + (dst_y * dst_stride);
     } else {
         dst_start = decoder->temp_data_row;
@@ -436,11 +431,9 @@ static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const u
     const bool has_full_alpha = (c == COLOR_TYPE_GRAYSCALE_WITH_ALPHA ||
                                  c == COLOR_TYPE_RGB_WITH_ALPHA);
     const bool src_is_premultiplied = decoder->is_ios_format;
-    const bool dst_is_premultiplied = (decoder->color_format == OK_PNG_COLOR_FORMAT_RGBA_PRE ||
-                                       decoder->color_format == OK_PNG_COLOR_FORMAT_BGRA_PRE);
+    const bool dst_is_premultiplied = (decoder->decode_flags & OK_PNG_PREMULTIPLIED_ALPHA) != 0;
     const bool src_is_bgr = decoder->is_ios_format;
-    const bool dst_is_bgr = (decoder->color_format == OK_PNG_COLOR_FORMAT_BGRA ||
-                             decoder->color_format == OK_PNG_COLOR_FORMAT_BGRA_PRE);
+    const bool dst_is_bgr = (decoder->decode_flags & OK_PNG_COLOR_FORMAT_BGRA) != 0;
     bool should_byteswap = ((c == COLOR_TYPE_RGB || c == COLOR_TYPE_RGB_WITH_ALPHA) &&
                             src_is_bgr != dst_is_bgr);
 
@@ -662,7 +655,7 @@ static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const u
         uint32_t x = dst_x[i];
         uint32_t y = dst_y[i];
         uint32_t dx = 4 * (dst_dx[i] - 1);
-        if (decoder->flip_y) {
+        if (dst_flip_y) {
             y = (png->height - y - 1);
         }
 
@@ -953,8 +946,8 @@ static void decode_png2(png_decoder *decoder) {
 }
 
 static ok_png *decode_png(void *user_data, ok_png_read_func input_read_func,
-                          ok_png_seek_func input_seek_func, ok_png_color_format color_format,
-                          bool flip_y, bool info_only, bool check_user_data) {
+                          ok_png_seek_func input_seek_func, ok_png_decode_flags decode_flags,
+                          bool info_only, bool check_user_data) {
     ok_png *png = calloc(1, sizeof(ok_png));
     if (!png) {
         return NULL;
@@ -978,8 +971,7 @@ static ok_png *decode_png(void *user_data, ok_png_read_func input_read_func,
     decoder->input_data = user_data;
     decoder->input_read_func = input_read_func;
     decoder->input_seek_func = input_seek_func;
-    decoder->color_format = color_format;
-    decoder->flip_y = flip_y;
+    decoder->decode_flags = decode_flags;
     decoder->info_only = info_only;
 
     decode_png2(decoder);

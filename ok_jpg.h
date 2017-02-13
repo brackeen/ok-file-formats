@@ -43,7 +43,7 @@
  *
  *     int main() {
  *         FILE *file = fopen("my_image.jpg", "rb");
- *         ok_jpg *image = ok_jpg_read(file, OK_JPG_COLOR_FORMAT_RGBA, false);
+ *         ok_jpg *image = ok_jpg_read(file, OK_JPG_COLOR_FORMAT_RGBA);
  *         fclose(file);
  *         if (image->data) {
  *             printf("Got image! Size: %li x %li\n", (long)image->width, (long)image->height);
@@ -74,14 +74,17 @@ typedef struct {
 } ok_jpg;
 
 /**
- * The color format that should be returned when decoding the JPEG data.
+ * JPG decode flags. Use `OK_JPG_COLOR_FORMAT_RGBA` for the most cases.
  */
 typedef enum {
-    /// Specifies that data should be returned in RGBA format. The alpha is always 255.
-    OK_JPG_COLOR_FORMAT_RGBA = 0,
-    /// Specifies that data should be returned in BGRA format. The alpha is always 255.
-    OK_JPG_COLOR_FORMAT_BGRA,
-} ok_jpg_color_format;
+    /// Set for RGBA color format. The alpha is always 255.
+    OK_JPG_COLOR_FORMAT_RGBA = (0 << 0),
+    /// Set for BGRA color format. The alpha is always 255.
+    OK_JPG_COLOR_FORMAT_BGRA = (1 << 0),
+    /// Set to flip the image data along the horizontal axis, so that the first row of data is
+    /// the last row in the image.
+    OK_JPG_FLIP_Y = (1 << 2)
+} ok_jpg_decode_flags;
 
 #ifndef OK_NO_STDIO
 
@@ -101,13 +104,11 @@ ok_jpg *ok_jpg_read_info(FILE *file);
  * (`width * height * 4`). On failure, #ok_jpg.data is `NULL` and #ok_jpg.error_message is set.
  *
  * @param file The file to read.
- * @param color_format The format to return the pixel data.
- * @param flip_y If `true`, the returned image data is flipped along the vertical axis, so that the
- * first row of data is the last row in the image.
+ * @param decode_flags The JPG decode flags. Use `OK_JPG_COLOR_FORMAT_RGBA` for the most cases.
  * @return a new #ok_jpg object. Never returns `NULL`. The object should be freed with
  * #ok_jpg_free().
  */
-ok_jpg *ok_jpg_read(FILE *file, ok_jpg_color_format color_format, bool flip_y);
+ok_jpg *ok_jpg_read(FILE *file, ok_jpg_decode_flags decode_flags);
 
 #endif
 
@@ -168,15 +169,12 @@ ok_jpg *ok_jpg_read_info_from_callbacks(void *user_data, ok_jpg_read_func read_f
  * @param user_data The parameter to be passed to `read_func` and `seek_func`.
  * @param read_func The read function.
  * @param seek_func The seek function.
- * @param color_format The format to return the pixel data.
- * @param flip_y If `true`, the returned image data is flipped along the vertical axis, so that the
- * first row of data is the last row in the image.
+ * @param decode_flags The JPG decode flags. Use `OK_JPG_COLOR_FORMAT_RGBA` for the most cases.
  * @return a new #ok_jpg object. Never returns `NULL`. The object should be freed with
  * #ok_jpg_free().
  */
 ok_jpg *ok_jpg_read_from_callbacks(void *user_data, ok_jpg_read_func read_func,
-                                   ok_jpg_seek_func seek_func, ok_jpg_color_format color_format,
-                                   bool flip_y);
+                                   ok_jpg_seek_func seek_func, ok_jpg_decode_flags decode_flags);
 
 #ifdef __cplusplus
 }

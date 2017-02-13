@@ -44,7 +44,7 @@
  *
  *     int main() {
  *         FILE *file = fopen("my_image.png", "rb");
- *         ok_png *image = ok_png_read(file, OK_PNG_COLOR_FORMAT_RGBA, false);
+ *         ok_png *image = ok_png_read(file, OK_PNG_COLOR_FORMAT_RGBA);
  *         fclose(file);
  *         if (image->data) {
  *             printf("Got image! Size: %li x %li\n", (long)image->width, (long)image->height);
@@ -76,22 +76,20 @@ typedef struct {
 } ok_png;
 
 /**
- * The color format that should be returned when decoding the PNG data.
+ * PNG decode flags. Use `OK_PNG_COLOR_FORMAT_RGBA` for the most cases.
  */
 typedef enum {
-    /// Specifies that data should be returned in RGBA format.
-    /// This is the default format for standard PNG files.
-    OK_PNG_COLOR_FORMAT_RGBA = 0,
-    /// Specifies that data should be returned in RGBA format, with premultiplied alpha.
-    /// The color components are multiplied by the alpha component.
-    OK_PNG_COLOR_FORMAT_RGBA_PRE,
-    /// Specifies that data should be returned in BGRA format.
-    OK_PNG_COLOR_FORMAT_BGRA,
-    /// Specifies that data should be returned in BGRA format, with premultiplied alpha.
-    /// The color components are multiplied by the alpha component.
-    /// This is the default format on iOS devices.
-    OK_PNG_COLOR_FORMAT_BGRA_PRE,
-} ok_png_color_format;
+    /// Set for RGBA color format. This is the default format for standard PNG files.
+    OK_PNG_COLOR_FORMAT_RGBA = (0 << 0),
+    /// Set for BGRA color format.
+    OK_PNG_COLOR_FORMAT_BGRA = (1 << 0),
+    /// Set for premultiplied alpha. The default format on iOS devices is
+    /// `(OK_PNG_COLOR_FORMAT_RGBA | OK_PNG_PREMULTIPLIED_ALPHA)`
+    OK_PNG_PREMULTIPLIED_ALPHA = (1 << 1),
+    /// Set to flip the image data along the horizontal axis, so that the first row of data is
+    /// the last row in the image.
+    OK_PNG_FLIP_Y = (1 << 2)
+} ok_png_decode_flags;
 
 #ifndef OK_NO_STDIO
 
@@ -111,13 +109,12 @@ ok_png *ok_png_read_info(FILE *file);
  *
  * @param file The file to read.
 
- * @param color_format The format to return the pixel data.
- * @param flip_y If `true`, the returned image data is flipped along the vertical axis, so that the
+ * @param decode_flags The PNG decode flags. Use `OK_PNG_COLOR_FORMAT_RGBA` for the most cases.
  * first row of data is the last row in the image.
  * @return a new #ok_png object. Never returns `NULL`. The object should be freed with
  * #ok_png_free().
  */
-ok_png *ok_png_read(FILE *file, ok_png_color_format color_format, bool flip_y);
+ok_png *ok_png_read(FILE *file, ok_png_decode_flags decode_flags);
 
 #endif
 
@@ -177,15 +174,12 @@ ok_png *ok_png_read_info_from_callbacks(void *user_data, ok_png_read_func read_f
  * @param user_data The parameter to be passed to `read_func` and `seek_func`.
  * @param read_func The read function.
  * @param seek_func The seek function.
- * @param color_format The format to return the pixel data.
- * @param flip_y If `true`, the returned image data is flipped along the vertical axis, so that the
- * first row of data is the last row in the image.
- * @return a new #ok_png object. Never returns `NULL`. The object should be freed with 
+ * @param decode_flags The PNG decode flags. Use `OK_PNG_COLOR_FORMAT_RGBA` for the most cases.
+ * @return a new #ok_png object. Never returns `NULL`. The object should be freed with
  * #ok_png_free().
  */
 ok_png *ok_png_read_from_callbacks(void *user_data, ok_png_read_func read_func,
-                                   ok_png_seek_func seek_func, ok_png_color_format color_format,
-                                   bool flip_y);
+                                   ok_png_seek_func seek_func, ok_png_decode_flags decode_flags);
 
 // MARK: Inflater
 

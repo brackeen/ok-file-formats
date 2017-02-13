@@ -200,7 +200,6 @@ static bool test_image(const char *path_to_png_suite,
                        const char *path_to_rgba_files,
                        const char *name,
                        bool info_only, bool verbose) {
-    const bool flip_y = false;
     bool success = false;
 
     char *rgba_filename = get_full_path(path_to_rgba_files, name, "rgba");
@@ -211,7 +210,7 @@ static bool test_image(const char *path_to_png_suite,
     // On iOS, Apple stores PNG data with premultiplied alpha.
     // Unpremultiplying would lose precision, so instead, premultiply the raw RGBA data
     // for comparison purposes.
-    ok_png_color_format color_format = OK_PNG_COLOR_FORMAT_RGBA_PRE;
+    ok_png_decode_flags decode_flags = OK_PNG_COLOR_FORMAT_RGBA | OK_PNG_PREMULTIPLIED_ALPHA;
     for (uint8_t *src = rgba_data; src < rgba_data + rgba_data_length; src += 4) {
         const uint8_t a = src[3];
         if (a == 0) {
@@ -225,7 +224,7 @@ static bool test_image(const char *path_to_png_suite,
         }
     }
 #else
-    ok_png_color_format color_format = OK_PNG_COLOR_FORMAT_RGBA;
+    ok_png_decode_flags decode_flags = OK_PNG_COLOR_FORMAT_RGBA;
 #endif
 
     // Load via ok_png
@@ -236,7 +235,7 @@ static bool test_image(const char *path_to_png_suite,
         if (info_only) {
             png = ok_png_read_info(file);
         } else {
-            png = ok_png_read(file, color_format, flip_y);
+            png = ok_png_read(file, decode_flags);
         }
         fclose(file);
 
