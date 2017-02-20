@@ -781,9 +781,12 @@ static void decode_data(pcm_decoder *decoder, uint64_t data_length) {
                                         decoder->frames_per_block);
         const uint64_t bytes_needed = blocks_needed * decoder->block_size;
         if (data_length < bytes_needed) {
-
             ok_wav_error(wav, "Not enough bytes for requested number of frames");
             return;
+        }
+        if (data_length == bytes_needed * 2) {
+            // Audacity export bug? This shouldn't happen.
+            wav->num_frames *= 2;
         }
     } else if (wav->num_frames == 0) {
         if (wav->bit_depth >= 8) {
