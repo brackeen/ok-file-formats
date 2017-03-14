@@ -61,9 +61,9 @@ extern "C" {
  */
 typedef struct {
     /// Number of records (rows)
-    int num_records;
+    size_t num_records;
     /// Number of fields (columns) for each record.
-    int *num_fields;
+    size_t *num_fields;
     /// Fields. The value fields[record][field] is a NULL-terminated string.
     char ***fields;
     /// Error message (if num_records is 0)

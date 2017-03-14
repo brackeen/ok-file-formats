@@ -30,7 +30,7 @@ int csv_test(const char *path, bool verbose) {
         return 1;
     }
 
-    char hello_utf8[] = {0xe4, 0xbd, 0xa0, 0xe5, 0xa5, 0xbd, 0};
+    char hello_utf8[] = {(char)0xe4, (char)0xbd, (char)0xa0, (char)0xe5, (char)0xa5, (char)0xbd, 0};
     unsigned int hello_len = ok_utf8_strlen(hello_utf8);
     uint32_t *hello = malloc(sizeof(uint32_t) * (hello_len + 1));
     ok_utf8_to_unicode(hello_utf8, hello, hello_len);
