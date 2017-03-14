@@ -31,12 +31,12 @@
 
 typedef struct {
     uint8_t *data;
-    int capacity;
-    int start;
-    int length;
+    size_t capacity;
+    size_t start;
+    size_t length;
 } circular_buffer;
 
-static bool circular_buffer_init(circular_buffer *buffer, int capacity) {
+static bool circular_buffer_init(circular_buffer *buffer, size_t capacity) {
     buffer->start = 0;
     buffer->length = 0;
     buffer->data = malloc(capacity);
@@ -50,26 +50,26 @@ static bool circular_buffer_init(circular_buffer *buffer, int capacity) {
 }
 
 // Number of writable elements until edge of buffer
-static int circular_buffer_writable(circular_buffer *buffer) {
-    int total_writable = buffer->capacity - buffer->length;
+static size_t circular_buffer_writable(circular_buffer *buffer) {
+    size_t total_writable = buffer->capacity - buffer->length;
     return min(total_writable,
                buffer->capacity - ((buffer->start + buffer->length) % buffer->capacity));
 }
 
 // Number of readable elements until edge of buffer
-static int circular_buffer_readable(circular_buffer *buffer) {
+static size_t circular_buffer_readable(circular_buffer *buffer) {
     return min(buffer->length, buffer->capacity - buffer->start);
 }
 
 // Doubles the size of the buffer
 static bool circular_buffer_expand(circular_buffer *buffer) {
-    int new_capacity = buffer->capacity * 2;
+    size_t new_capacity = buffer->capacity * 2;
     uint8_t *new_data = malloc(new_capacity);
     if (!new_data) {
         return false;
     } else {
-        const int readable1 = circular_buffer_readable(buffer);
-        const int readable2 = buffer->length - readable1;
+        const size_t readable1 = circular_buffer_readable(buffer);
+        const size_t readable2 = buffer->length - readable1;
         memcpy(new_data, buffer->data + buffer->start, readable1);
         memcpy(new_data + readable1, buffer->data, readable2);
         free(buffer->data);
@@ -80,15 +80,15 @@ static bool circular_buffer_expand(circular_buffer *buffer) {
     }
 }
 
-static bool circular_buffer_read(circular_buffer *buffer, uint8_t *dst, int length) {
+static bool circular_buffer_read(circular_buffer *buffer, uint8_t *dst, size_t length) {
     if (length > buffer->length) {
         return false;
     } else {
-        const int readable1 = circular_buffer_readable(buffer);
+        const size_t readable1 = circular_buffer_readable(buffer);
         if (length <= readable1) {
             memcpy(dst, buffer->data + buffer->start, length);
         } else {
-            const int readable2 = buffer->length - readable1;
+            const size_t readable2 = buffer->length - readable1;
             memcpy(dst, buffer->data + buffer->start, readable1);
             memcpy(dst + readable1, buffer->data, readable2);
         }
@@ -98,7 +98,7 @@ static bool circular_buffer_read(circular_buffer *buffer, uint8_t *dst, int leng
     }
 }
 
-static bool circular_buffer_skip(circular_buffer *buffer, int length) {
+static bool circular_buffer_skip(circular_buffer *buffer, size_t length) {
     if (length > buffer->length) {
         return false;
     } else {
@@ -128,8 +128,8 @@ static void decode_csv2(csv_decoder *decoder);
 static void ok_csv_cleanup(ok_csv *csv) {
     if (csv) {
         if (csv->fields && csv->num_fields) {
-            for (int i = 0; i < csv->num_records; i++) {
-                for (int j = 0; j < csv->num_fields[i]; j++) {
+            for (size_t i = 0; i < csv->num_records; i++) {
+                for (size_t j = 0; j < csv->num_fields[i]; j++) {
                     free(csv->fields[i][j]);
                 }
                 free(csv->fields[i]);
@@ -196,9 +196,9 @@ void ok_csv_free(ok_csv *csv) {
 
 // MARK: Decoding
 
-static const int min_record_capacity = 16;
-static const int min_field_capacity = 16;
-static const int default_input_buffer_capacity = 4096;
+static const size_t min_record_capacity = 16;
+static const size_t min_field_capacity = 16;
+static const size_t default_input_buffer_capacity = 4096;
 
 typedef enum {
     // About to add a new record. Ignore if next char is cr, lf, or eof
@@ -241,13 +241,13 @@ static void decode_csv(ok_csv *csv, void *input_data, ok_csv_read_func input_rea
 // Ensure capacity for at least (csv->num_records + 1) records
 static bool csv_ensure_record_capcity(ok_csv *csv) {
     // curr_capacity is >= csv->num_records
-    int curr_capacity = min_record_capacity;
+    size_t curr_capacity = min_record_capacity;
     while (curr_capacity < csv->num_records) {
         curr_capacity <<= 1;
     }
 
     // new_capacity is >= (csv->num_records + 1)
-    int new_capacity = curr_capacity;
+    size_t new_capacity = curr_capacity;
     if (new_capacity < csv->num_records + 1) {
         new_capacity <<= 1;
     }
@@ -264,15 +264,15 @@ static bool csv_ensure_record_capcity(ok_csv *csv) {
 }
 
 // Ensure capacity for at least (csv->num_fields[record] + 1) fields
-static bool csv_ensure_field_capcity(ok_csv *csv, int record) {
+static bool csv_ensure_field_capcity(ok_csv *csv, size_t record) {
     // curr_capacity is >= csv->num_fields[record]
-    int curr_capacity = min_field_capacity;
+    size_t curr_capacity = min_field_capacity;
     while (curr_capacity < csv->num_fields[record]) {
         curr_capacity <<= 1;
     }
 
     // new_capacity is >= (csv->num_fields[record] + 1)
-    int new_capacity = curr_capacity;
+    size_t new_capacity = curr_capacity;
     if (new_capacity < csv->num_fields[record] + 1) {
         new_capacity <<= 1;
     }
@@ -289,7 +289,7 @@ static bool csv_ensure_field_capcity(ok_csv *csv, int record) {
 
 static void decode_csv2(csv_decoder *decoder) {
     ok_csv *csv = decoder->csv;
-    int peek = 0;
+    size_t peek = 0;
     uint8_t prev_char = 0;
     csv_decoder_state state = RECORD_START;
     bool is_eof = false;
@@ -297,7 +297,7 @@ static void decode_csv2(csv_decoder *decoder) {
     while (true) {
         // Read data if needed
         if (decoder->input_buffer.length - peek == 0) {
-            int writeable = circular_buffer_writable(&decoder->input_buffer);
+            size_t writeable = circular_buffer_writable(&decoder->input_buffer);
             if (writeable == 0) {
                 circular_buffer_expand(&decoder->input_buffer);
                 writeable = circular_buffer_writable(&decoder->input_buffer);
@@ -305,14 +305,14 @@ static void decode_csv2(csv_decoder *decoder) {
             uint8_t *end = decoder->input_buffer.data +
                 ((decoder->input_buffer.start + decoder->input_buffer.length) %
                  decoder->input_buffer.capacity);
-            int bytesRead = (int)decoder->input_read_func(decoder->input_data, end, writeable);
+            size_t bytesRead = decoder->input_read_func(decoder->input_data, end, writeable);
             decoder->input_buffer.length += bytesRead;
         }
 
         // Peek current char (0 if EOF)
         uint8_t curr_char = 0;
         if (decoder->input_buffer.length - peek > 0) {
-            int offset = (decoder->input_buffer.start + peek) % decoder->input_buffer.capacity;
+            size_t offset = (decoder->input_buffer.start + peek) % decoder->input_buffer.capacity;
             curr_char = decoder->input_buffer.data[offset];
             peek++;
         } else {
@@ -342,7 +342,7 @@ static void decode_csv2(csv_decoder *decoder) {
                     peek = 0;
                 } else if (curr_char == ',' || curr_char == '\r' || curr_char == '\n') {
                     // Add new record
-                    int curr_record = csv->num_records;
+                    size_t curr_record = csv->num_records;
                     csv_ensure_record_capcity(csv);
                     csv->num_fields[csv->num_records] = 0;
                     csv->fields[csv->num_records] = NULL;
@@ -387,7 +387,7 @@ static void decode_csv2(csv_decoder *decoder) {
                         return;
                     }
                     blank_field[0] = 0;
-                    int curr_record = csv->num_records - 1;
+                    size_t curr_record = csv->num_records - 1;
                     csv_ensure_field_capcity(csv, curr_record);
                     csv->fields[curr_record][csv->num_fields[curr_record]] = blank_field;
                     csv->num_fields[curr_record]++;
@@ -422,7 +422,7 @@ static void decode_csv2(csv_decoder *decoder) {
 
                     bool dquote_escape = false;
                     while (peek > 0) {
-                        char ch = decoder->input_buffer.data[decoder->input_buffer.start];
+                        char ch = (char)decoder->input_buffer.data[decoder->input_buffer.start];
                         if (ch == '\"') {
                             if (dquote_escape) {
                                 *field_ptr++ = '\"';
@@ -451,7 +451,7 @@ static void decode_csv2(csv_decoder *decoder) {
                         circular_buffer_skip(&decoder->input_buffer, 1);
                     }
 
-                    int curr_record = csv->num_records - 1;
+                    size_t curr_record = csv->num_records - 1;
                     csv_ensure_field_capcity(csv, curr_record);
                     csv->fields[curr_record][csv->num_fields[curr_record]] = field;
                     csv->num_fields[curr_record]++;
@@ -476,7 +476,7 @@ static void decode_csv2(csv_decoder *decoder) {
                     field[peek - 1] = 0;
                     peek = 0;
 
-                    int curr_record = csv->num_records - 1;
+                    size_t curr_record = csv->num_records - 1;
                     csv_ensure_field_capcity(csv, curr_record);
                     csv->fields[curr_record][csv->num_fields[curr_record]] = field;
                     csv->num_fields[curr_record]++;
