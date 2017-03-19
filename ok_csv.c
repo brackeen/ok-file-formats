@@ -253,7 +253,7 @@ static bool csv_ensure_record_capcity(ok_csv *csv) {
     }
 
     if (!csv->num_fields || curr_capacity < new_capacity) {
-        csv->num_fields = realloc(csv->num_fields, sizeof(int) * new_capacity);
+        csv->num_fields = realloc(csv->num_fields, sizeof(*csv->num_fields) * new_capacity);
         csv->fields = realloc(csv->fields, sizeof(char **) * new_capacity);
         if (!csv->num_fields || !csv->fields) {
             ok_csv_error(csv, "Couldn't allocate fields array");
