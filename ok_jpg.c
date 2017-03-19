@@ -940,7 +940,7 @@ static bool read_sof(jpg_decoder *decoder) {
         ok_jpg_error(jpg, "SOF segment too short");
         return false;
     }
-    if (!ok_read(decoder, buffer, 3 * decoder->num_components)) {
+    if (!ok_read(decoder, buffer, 3 * (size_t)decoder->num_components)) {
         return false;
     }
 
@@ -1218,7 +1218,7 @@ static bool read_dht(jpg_decoder *decoder) {
                 ok_jpg_error(jpg, "Invalid DHT segment length");
                 return false;
             }
-            if (!ok_read(decoder, table->val, table->count)) {
+            if (!ok_read(decoder, table->val, (size_t)table->count)) {
                 return false;
             }
             length -= table->count;
@@ -1235,7 +1235,7 @@ static bool read_dht(jpg_decoder *decoder) {
 
 static bool read_sos(jpg_decoder *decoder) {
     ok_jpg *jpg = decoder->jpg;
-    const int expected_size = 6 + decoder->num_components * 2;
+    const size_t expected_size = 6 + (size_t)decoder->num_components * 2;
     uint8_t buffer[16];
     if ((int)sizeof(buffer) < expected_size) {
         ok_jpg_error(jpg, "Too many components for buffer");
@@ -1244,7 +1244,7 @@ static bool read_sos(jpg_decoder *decoder) {
     if (!ok_read(decoder, buffer, expected_size)) {
         return false;
     }
-    int length = readBE16(buffer);
+    uint16_t length = readBE16(buffer);
     if (length != expected_size) {
         ok_jpg_error(jpg, "Invalid SOS segment (L)");
         return false;
