@@ -107,7 +107,10 @@ static inline uint16_t readLE16(const uint8_t *data) {
 }
 
 static inline uint32_t readLE32(const uint8_t *data) {
-    return (data[3] << 24) | (data[2] << 16) | (data[1] << 8) | data[0];
+    return (((uint32_t)data[3] << 24) |
+            ((uint32_t)data[2] << 16) |
+            ((uint32_t)data[1] << 8) |
+            (uint32_t)data[0]);
 }
 
 typedef enum {
@@ -155,8 +158,7 @@ static void decode_fnt2(fnt_decoder *decoder) {
         switch (block_type) {
             case BLOCK_TYPE_INFO: {
                 uint8_t info_header[14];
-                const int name_buffer_length = block_length - sizeof(info_header);
-                if (name_buffer_length <= 0) {
+                if (block_length <= sizeof(info_header)) {
                     ok_fnt_error(fnt, "Invalid info block");
                     return;
                 }
@@ -167,6 +169,7 @@ static void decode_fnt2(fnt_decoder *decoder) {
                 fnt->size = readLE16(info_header);
 
                 // Get the fnt name
+                const size_t name_buffer_length = block_length - sizeof(info_header);
                 fnt->name = malloc(name_buffer_length);
                 if (!fnt->name) {
                     ok_fnt_error(fnt, "Couldn't allocate font name");
@@ -223,7 +226,7 @@ static void decode_fnt2(fnt_decoder *decoder) {
                     *(end_pos - 1) = 0;
 
                     // Set up pointers for each page name
-                    int next_index = 1;
+                    size_t next_index = 1;
                     while (pos + 1 < end_pos && next_index < fnt->num_pages) {
                         if (*pos == 0) {
                             fnt->page_names[next_index] = pos + 1;
@@ -232,7 +235,7 @@ static void decode_fnt2(fnt_decoder *decoder) {
                         pos++;
                     }
                     // Sanity check - make sure the remaining page names, if any, point somewhere
-                    for (int i = next_index; i < fnt->num_pages; i++) {
+                    for (size_t i = next_index; i < fnt->num_pages; i++) {
                         fnt->page_names[i] = end_pos - 1;
                     }
                 }
@@ -250,7 +253,7 @@ static void decode_fnt2(fnt_decoder *decoder) {
                 }
                 // On little-endian systems we could just load the entire block into memory, but
                 // we'll assume the byte order is unknown here.
-                for (int i = 0; i < fnt->num_glyphs; i++) {
+                for (size_t i = 0; i < fnt->num_glyphs; i++) {
                     if (!ok_read(decoder, data, sizeof(data))) {
                         return;
                     }
@@ -260,9 +263,9 @@ static void decode_fnt2(fnt_decoder *decoder) {
                     glyph->y = readLE16(data + 6);
                     glyph->width = readLE16(data + 8);
                     glyph->height = readLE16(data + 10);
-                    glyph->offset_x = readLE16(data + 12);
-                    glyph->offset_y = readLE16(data + 14);
-                    glyph->advance_x = readLE16(data + 16);
+                    glyph->offset_x = (int16_t)readLE16(data + 12);
+                    glyph->offset_y = (int16_t)readLE16(data + 14);
+                    glyph->advance_x = (int16_t)readLE16(data + 16);
                     glyph->page = data[18];
                     glyph->channel = data[19];
                 }
@@ -280,14 +283,14 @@ static void decode_fnt2(fnt_decoder *decoder) {
                 }
                 // On little-endian systems we could just load the entire block into memory, but
                 // we'll assume the byte order is unknown here.
-                for (int i = 0; i < fnt->num_kerning_pairs; i++) {
+                for (size_t i = 0; i < fnt->num_kerning_pairs; i++) {
                     if (!ok_read(decoder, data, sizeof(data))) {
                         return;
                     }
                     ok_fnt_kerning *kerning = &fnt->kerning_pairs[i];
                     kerning->first_char = readLE32(data);
                     kerning->second_char = readLE32(data + 4);
-                    kerning->amount = readLE16(data + 8);
+                    kerning->amount = (int16_t)readLE16(data + 8);
                 }
                 break;
             }

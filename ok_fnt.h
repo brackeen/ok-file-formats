@@ -83,11 +83,11 @@ typedef struct {
     int size;
     int line_height;
     int base;
-    int num_pages;
+    size_t num_pages;
     char **page_names;
-    int num_glyphs;
+    size_t num_glyphs;
     ok_fnt_glyph *glyphs;
-    int num_kerning_pairs;
+    size_t num_kerning_pairs;
     ok_fnt_kerning *kerning_pairs;
     char error_message[80];
 } ok_fnt;
