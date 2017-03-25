@@ -575,20 +575,20 @@ static inline void idct_1d_16(int *out, const int out_shift,
                               const int v0, const int v1, const int v2, const int v3,
                               const int v4, const int v5, const int v6, const int v7) {
     // Constants scaled by (1 << 12).
-    static const int c1 = 5765; // cos( 1*pi/32) * sqrt(2)
-    static const int c2 = 5681; // cos( 2*pi/32) * sqrt(2)
-    static const int c3 = 5543; // cos( 3*pi/32) * sqrt(2)
-    static const int c4 = 5352; // cos( 4*pi/32) * sqrt(2)
-    static const int c5 = 5109; // cos( 5*pi/32) * sqrt(2)
-    static const int c6 = 4816; // cos( 6*pi/32) * sqrt(2)
-    static const int c7 = 4478; // cos( 7*pi/32) * sqrt(2)
-    static const int c9 = 3675; // cos( 9*pi/32) * sqrt(2)
+    static const int c1 = 5765;  // cos( 1*pi/32) * sqrt(2)
+    static const int c2 = 5681;  // cos( 2*pi/32) * sqrt(2)
+    static const int c3 = 5543;  // cos( 3*pi/32) * sqrt(2)
+    static const int c4 = 5352;  // cos( 4*pi/32) * sqrt(2)
+    static const int c5 = 5109;  // cos( 5*pi/32) * sqrt(2)
+    static const int c6 = 4816;  // cos( 6*pi/32) * sqrt(2)
+    static const int c7 = 4478;  // cos( 7*pi/32) * sqrt(2)
+    static const int c9 = 3675;  // cos( 9*pi/32) * sqrt(2)
     static const int c10 = 3218; // cos(10*pi/32) * sqrt(2)
     static const int c11 = 2731; // cos(11*pi/32) * sqrt(2)
     static const int c12 = 2217; // cos(12*pi/32) * sqrt(2)
     static const int c13 = 1682; // cos(13*pi/32) * sqrt(2)
     static const int c14 = 1130; // cos(14*pi/32) * sqrt(2)
-    static const int c15 = 568; // cos(15*pi/32) * sqrt(2)
+    static const int c15 = 568;  // cos(15*pi/32) * sqrt(2)
 
     int t0, t1, t2;
     int p0, p1, p2, p3, p4, p5, p6, p7;
@@ -652,16 +652,16 @@ static inline void idct_1d_16(int *out, const int out_shift,
         const int q6 = t0 + t2 + v1 * (c13 - c7) + v5 * (c1 - c5);
 
         // Output
-        out[0] = (p0 + q0) >> out_shift;
-        out[1] = (p1 + q1) >> out_shift;
-        out[2] = (p2 + q2) >> out_shift;
-        out[3] = (p3 + q3) >> out_shift;
-        out[4] = (p4 + q4) >> out_shift;
-        out[5] = (p5 + q5) >> out_shift;
-        out[6] = (p6 + q6) >> out_shift;
-        out[7] = (p7 + q7) >> out_shift;
-        out[8] = (p7 - q7) >> out_shift;
-        out[9] = (p6 - q6) >> out_shift;
+        out[0]  = (p0 + q0) >> out_shift;
+        out[1]  = (p1 + q1) >> out_shift;
+        out[2]  = (p2 + q2) >> out_shift;
+        out[3]  = (p3 + q3) >> out_shift;
+        out[4]  = (p4 + q4) >> out_shift;
+        out[5]  = (p5 + q5) >> out_shift;
+        out[6]  = (p6 + q6) >> out_shift;
+        out[7]  = (p7 + q7) >> out_shift;
+        out[8]  = (p7 - q7) >> out_shift;
+        out[9]  = (p6 - q6) >> out_shift;
         out[10] = (p5 - q5) >> out_shift;
         out[11] = (p4 - q4) >> out_shift;
         out[12] = (p3 - q3) >> out_shift;
@@ -759,7 +759,6 @@ static void idct_16x16(const int *const input, uint8_t *output) {
 
 // MARK: Entropy decoding
 
-// clang-format off
 static const uint8_t zig_zag[] = {
      0,  1,  8, 16,  9,  2,  3, 10,
     17, 24, 32, 25, 18, 11,  4,  5,
@@ -770,7 +769,6 @@ static const uint8_t zig_zag[] = {
     58, 59, 52, 45, 38, 31, 39, 46,
     53, 60, 61, 54, 47, 55, 62, 63,
 };
-// clang-format on
 
 static inline int extend(const int v, const int t) {
     // Figure F.12

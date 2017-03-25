@@ -645,12 +645,10 @@ static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const u
     if (decoder->interlace_method == 1 && decoder->interlace_pass < 7) {
         const int i = decoder->interlace_pass;
         const uint32_t s = decoder->scanline;
-        // clang-format off
         //                                       1      2      3      4      5      6      7
         static const uint32_t dst_x[]  = {0,     0,     4,     0,     2,     0,     1,     0 };
         static const uint32_t dst_dx[] = {0,     8,     8,     4,     4,     2,     2,     1 };
                const uint32_t dst_y[]  = {0,   s*8,   s*8, 4+s*8,   s*4, 2+s*4,   s*2, 1+s*2 };
-        // clang-format on
 
         uint32_t x = dst_x[i];
         uint32_t y = dst_y[i];
@@ -681,22 +679,14 @@ static uint32_t get_width_for_pass(const png_decoder *decoder) {
     }
 
     switch (decoder->interlace_pass) {
-        case 1:
-            return (w + 7) / 8;
-        case 2:
-            return (w + 3) / 8;
-        case 3:
-            return (w + 3) / 4;
-        case 4:
-            return (w + 1) / 4;
-        case 5:
-            return (w + 1) / 2;
-        case 6:
-            return w / 2;
-        case 7:
-            return w;
-        default:
-            return 0;
+        case 1: return (w + 7) / 8;
+        case 2: return (w + 3) / 8;
+        case 3: return (w + 3) / 4;
+        case 4: return (w + 1) / 4;
+        case 5: return (w + 1) / 2;
+        case 6: return w / 2;
+        case 7: return w;
+        default: return 0;
     }
 }
 
@@ -707,22 +697,14 @@ static uint32_t get_height_for_pass(const png_decoder *decoder) {
     }
 
     switch (decoder->interlace_pass) {
-        case 1:
-            return (h + 7) / 8;
-        case 2:
-            return (h + 7) / 8;
-        case 3:
-            return (h + 3) / 8;
-        case 4:
-            return (h + 3) / 4;
-        case 5:
-            return (h + 1) / 4;
-        case 6:
-            return (h + 1) / 2;
-        case 7:
-            return h / 2;
-        default:
-            return 0;
+        case 1: return (h + 7) / 8;
+        case 2: return (h + 7) / 8;
+        case 3: return (h + 3) / 8;
+        case 4: return (h + 3) / 4;
+        case 5: return (h + 1) / 4;
+        case 6: return (h + 1) / 2;
+        case 7: return h / 2;
+        default: return 0;
     }
 }
 
@@ -1030,8 +1012,6 @@ typedef enum {
 #define MAX_NUM_CODES 289
 #define MAX_CODE_LENGTH 16
 
-// clang-format off
-
 static const int DISTANCE_TABLE[] = {
     1,    2,    3,    4,    5,    7,    9,    13,    17,    25,
     33,   49,   65,   97,   129,  193,  257,  385,   513,   769,
@@ -1049,8 +1029,6 @@ static const int BIT_LENGTH_TABLE[] = {
     16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15
 };
 static const int BIT_LENGTH_TABLE_LENGTH = 19;
-
-// clang-format on
 
 typedef struct {
     uint16_t lookup_table[1 << (MAX_CODE_LENGTH - 1)];
