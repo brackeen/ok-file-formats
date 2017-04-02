@@ -48,7 +48,7 @@ int gettext_test(const char *path, bool verbose) {
     ok_mo_free(mo_es);
 
     ok_mo *mo_zh = mo_read(zh_file);
-    char hello_utf8[] = {0xe4, 0xbd, 0xa0, 0xe5, 0xa5, 0xbd, 0};
+    char hello_utf8[] = {(char)0xe4, (char)0xbd, (char)0xa0, (char)0xe5, (char)0xa5, (char)0xbd, 0};
     if (strcmp(hello_utf8, ok_mo_value(mo_zh, "Hello")) != 0) {
         printf("Failure: utf8\n");
         return 1;

@@ -228,8 +228,8 @@ static void decode_mo2(mo_decoder *decoder) {
 
     // Read offsets and lengths
     // Using "tell" because the seek functions only support relative seeking.
-    int tell = sizeof(header);
-    if (!ok_seek(decoder, key_offset - tell)) {
+    size_t tell = sizeof(header);
+    if (!ok_seek(decoder, (long)(key_offset - tell))) {
         return;
     }
     if (!ok_read(decoder, decoder->key_offset_buffer, 8 * mo->num_strings)) {
@@ -237,7 +237,7 @@ static void decode_mo2(mo_decoder *decoder) {
         return;
     }
     tell = key_offset + 8 * mo->num_strings;
-    if (!ok_seek(decoder, value_offset - tell)) {
+    if (!ok_seek(decoder, (long)(value_offset - tell))) {
         return;
     }
     if (!ok_read(decoder, decoder->value_offset_buffer, 8 * mo->num_strings)) {
@@ -257,7 +257,7 @@ static void decode_mo2(mo_decoder *decoder) {
             ok_mo_error(mo, "Couldn't allocate strings");
             return;
         }
-        if (!ok_seek(decoder, offset - tell)) {
+        if (!ok_seek(decoder, (long)(offset - tell))) {
             return;
         }
         if (!ok_read(decoder, (uint8_t *)mo->strings[i].key, length + 1)) {
@@ -276,7 +276,7 @@ static void decode_mo2(mo_decoder *decoder) {
             ok_mo_error(mo, "Couldn't allocate strings");
             return;
         }
-        if (!ok_seek(decoder, offset - tell)) {
+        if (!ok_seek(decoder, (long)(offset - tell))) {
             return;
         }
         if (!ok_read(decoder, (uint8_t *)mo->strings[i].value, length + 1)) {
@@ -412,13 +412,13 @@ unsigned int ok_utf8_to_unicode(const char *utf8, uint32_t *dest, unsigned int n
             dest[len] = in[0];
             in++;
         } else if (*in < 0xe0) {
-            dest[len] = ((in[0] & 0x1f) << 6) | (in[1] & 0x3f);
+            dest[len] = ((in[0] & 0x1fu) << 6) | (in[1] & 0x3fu);
             in += 2;
         } else if (*in < 0xf0) {
-            dest[len] = ((in[0] & 0x0f) << 12) | ((in[1] & 0x3f) << 6) | (in[2] & 0x3f);
+            dest[len] = ((in[0] & 0x0fu) << 12) | ((in[1] & 0x3fu) << 6) | (in[2] & 0x3fu);
             in += 3;
         } else {
-            dest[len] = ((in[0] & 0x07) << 18) | ((in[1] & 0x3f) << 6) | ((in[2] & 0x3f) << 6) |
+            dest[len] = ((in[0] & 0x07u) << 18) | ((in[1] & 0x3fu) << 6) | ((in[2] & 0x3fu) << 6) |
                 (in[3] & 0x3f);
             in += 4;
         }
