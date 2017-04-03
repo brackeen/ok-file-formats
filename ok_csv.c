@@ -34,9 +34,9 @@ typedef struct {
     size_t capacity;
     size_t start;
     size_t length;
-} circular_buffer;
+} ok_csv_circular_buffer;
 
-static bool circular_buffer_init(circular_buffer *buffer, size_t capacity) {
+static bool ok_csv_circular_buffer_init(ok_csv_circular_buffer *buffer, size_t capacity) {
     buffer->start = 0;
     buffer->length = 0;
     buffer->data = malloc(capacity);
@@ -50,25 +50,25 @@ static bool circular_buffer_init(circular_buffer *buffer, size_t capacity) {
 }
 
 // Number of writable elements until edge of buffer
-static size_t circular_buffer_writable(circular_buffer *buffer) {
+static size_t ok_csv_circular_buffer_writable(ok_csv_circular_buffer *buffer) {
     size_t total_writable = buffer->capacity - buffer->length;
     return min(total_writable,
                buffer->capacity - ((buffer->start + buffer->length) % buffer->capacity));
 }
 
 // Number of readable elements until edge of buffer
-static size_t circular_buffer_readable(circular_buffer *buffer) {
+static size_t ok_csv_circular_buffer_readable(ok_csv_circular_buffer *buffer) {
     return min(buffer->length, buffer->capacity - buffer->start);
 }
 
 // Doubles the size of the buffer
-static bool circular_buffer_expand(circular_buffer *buffer) {
+static bool ok_csv_circular_buffer_expand(ok_csv_circular_buffer *buffer) {
     size_t new_capacity = buffer->capacity * 2;
     uint8_t *new_data = malloc(new_capacity);
     if (!new_data) {
         return false;
     } else {
-        const size_t readable1 = circular_buffer_readable(buffer);
+        const size_t readable1 = ok_csv_circular_buffer_readable(buffer);
         const size_t readable2 = buffer->length - readable1;
         memcpy(new_data, buffer->data + buffer->start, readable1);
         memcpy(new_data + readable1, buffer->data, readable2);
@@ -80,11 +80,12 @@ static bool circular_buffer_expand(circular_buffer *buffer) {
     }
 }
 
-static bool circular_buffer_read(circular_buffer *buffer, uint8_t *dst, size_t length) {
+static bool ok_csv_circular_buffer_read(ok_csv_circular_buffer *buffer, uint8_t *dst,
+                                        size_t length) {
     if (length > buffer->length) {
         return false;
     } else {
-        const size_t readable1 = circular_buffer_readable(buffer);
+        const size_t readable1 = ok_csv_circular_buffer_readable(buffer);
         if (length <= readable1) {
             memcpy(dst, buffer->data + buffer->start, length);
         } else {
@@ -98,7 +99,7 @@ static bool circular_buffer_read(circular_buffer *buffer, uint8_t *dst, size_t l
     }
 }
 
-static bool circular_buffer_skip(circular_buffer *buffer, size_t length) {
+static bool ok_csv_circular_buffer_skip(ok_csv_circular_buffer *buffer, size_t length) {
     if (length > buffer->length) {
         return false;
     } else {
@@ -114,16 +115,16 @@ typedef struct {
     ok_csv *csv;
 
     // The circular buffer is expanded if needed (for example, a field is larger than 4K)
-    circular_buffer input_buffer;
+    ok_csv_circular_buffer input_buffer;
 
     // Input
     void *input_data;
     ok_csv_read_func input_read_func;
 
-} csv_decoder;
+} ok_csv_decoder;
 
-static void decode_csv(ok_csv *csv, void *input_data, ok_csv_read_func input_read_func);
-static void decode_csv2(csv_decoder *decoder);
+static void ok_csv_decode(ok_csv *csv, void *input_data, ok_csv_read_func input_read_func);
+static void ok_csv_decode2(ok_csv_decoder *decoder);
 
 static void ok_csv_cleanup(ok_csv *csv) {
     if (csv) {
@@ -168,7 +169,7 @@ static size_t ok_file_read_func(void *user_data, uint8_t *buffer, size_t length)
 ok_csv *ok_csv_read(FILE *file) {
     ok_csv *csv = calloc(1, sizeof(ok_csv));
     if (file) {
-        decode_csv(csv, file, ok_file_read_func);
+        ok_csv_decode(csv, file, ok_file_read_func);
     } else {
         ok_csv_error(csv, "File not found");
     }
@@ -180,7 +181,7 @@ ok_csv *ok_csv_read(FILE *file) {
 ok_csv *ok_csv_read_from_callbacks(void *user_data, ok_csv_read_func input_read_func) {
     ok_csv *csv = calloc(1, sizeof(ok_csv));
     if (input_read_func) {
-        decode_csv(csv, user_data, input_read_func);
+        ok_csv_decode(csv, user_data, input_read_func);
     } else {
         ok_csv_error(csv, "Invalid argument: input_func is NULL");
     }
@@ -196,34 +197,34 @@ void ok_csv_free(ok_csv *csv) {
 
 // MARK: Decoding
 
-static const size_t min_record_capacity = 16;
-static const size_t min_field_capacity = 16;
-static const size_t default_input_buffer_capacity = 4096;
+static const size_t OK_CSV_MIN_RECORD_CAPACITY = 16;
+static const size_t OK_CSV_MIN_FIELD_CAPACITY = 16;
+static const size_t OK_CSV_INPUT_BUFFER_CAPACITY = 4096;
 
 typedef enum {
     // About to add a new record. Ignore if next char is cr, lf, or eof
-    RECORD_START = 0,
+    OK_CSV_RECORD_START = 0,
 
     // About to add a new field (could be a blank field if next char is a comma, cr, or lf)
-    FIELD_START,
+    OK_CSV_FIELD_START,
 
     // Parsing an escaped field (stop when a lone double quote is found)
-    ESCAPED_FIELD,
+    OK_CSV_ESCAPED_FIELD,
 
     // Parsing a non-escaped field (stop when a comma, cr, lf, or eof is found)
-    NONESCAPED_FIELD,
-} csv_decoder_state;
+    OK_CSV_NONESCAPED_FIELD,
+} ok_csv_decoder_state;
 
-static void decode_csv(ok_csv *csv, void *input_data, ok_csv_read_func input_read_func) {
+static void ok_csv_decode(ok_csv *csv, void *input_data, ok_csv_read_func input_read_func) {
     if (!csv) {
         return;
     }
-    csv_decoder *decoder = calloc(1, sizeof(csv_decoder));
+    ok_csv_decoder *decoder = calloc(1, sizeof(ok_csv_decoder));
     if (!decoder) {
         ok_csv_error(csv, "Couldn't allocate decoder.");
         return;
     }
-    if (!circular_buffer_init(&decoder->input_buffer, default_input_buffer_capacity)) {
+    if (!ok_csv_circular_buffer_init(&decoder->input_buffer, OK_CSV_INPUT_BUFFER_CAPACITY)) {
         free(decoder);
         ok_csv_error(csv, "Couldn't allocate input buffer.");
         return;
@@ -232,16 +233,16 @@ static void decode_csv(ok_csv *csv, void *input_data, ok_csv_read_func input_rea
     decoder->input_data = input_data;
     decoder->input_read_func = input_read_func;
 
-    decode_csv2(decoder);
+    ok_csv_decode2(decoder);
 
     free(decoder->input_buffer.data);
     free(decoder);
 }
 
 // Ensure capacity for at least (csv->num_records + 1) records
-static bool csv_ensure_record_capcity(ok_csv *csv) {
+static bool ok_csv_ensure_record_capcity(ok_csv *csv) {
     // curr_capacity is >= csv->num_records
-    size_t curr_capacity = min_record_capacity;
+    size_t curr_capacity = OK_CSV_MIN_RECORD_CAPACITY;
     while (curr_capacity < csv->num_records) {
         curr_capacity <<= 1;
     }
@@ -264,9 +265,9 @@ static bool csv_ensure_record_capcity(ok_csv *csv) {
 }
 
 // Ensure capacity for at least (csv->num_fields[record] + 1) fields
-static bool csv_ensure_field_capcity(ok_csv *csv, size_t record) {
+static bool ok_csv_ensure_field_capcity(ok_csv *csv, size_t record) {
     // curr_capacity is >= csv->num_fields[record]
-    size_t curr_capacity = min_field_capacity;
+    size_t curr_capacity = OK_CSV_MIN_FIELD_CAPACITY;
     while (curr_capacity < csv->num_fields[record]) {
         curr_capacity <<= 1;
     }
@@ -287,20 +288,20 @@ static bool csv_ensure_field_capcity(ok_csv *csv, size_t record) {
     return true;
 }
 
-static void decode_csv2(csv_decoder *decoder) {
+static void ok_csv_decode2(ok_csv_decoder *decoder) {
     ok_csv *csv = decoder->csv;
     size_t peek = 0;
     uint8_t prev_char = 0;
-    csv_decoder_state state = RECORD_START;
+    ok_csv_decoder_state state = OK_CSV_RECORD_START;
     bool is_eof = false;
 
     while (true) {
         // Read data if needed
         if (decoder->input_buffer.length - peek == 0) {
-            size_t writeable = circular_buffer_writable(&decoder->input_buffer);
+            size_t writeable = ok_csv_circular_buffer_writable(&decoder->input_buffer);
             if (writeable == 0) {
-                circular_buffer_expand(&decoder->input_buffer);
-                writeable = circular_buffer_writable(&decoder->input_buffer);
+                ok_csv_circular_buffer_expand(&decoder->input_buffer);
+                writeable = ok_csv_circular_buffer_writable(&decoder->input_buffer);
             }
             uint8_t *end = decoder->input_buffer.data +
                 ((decoder->input_buffer.start + decoder->input_buffer.length) %
@@ -320,30 +321,30 @@ static void decode_csv2(csv_decoder *decoder) {
         }
 
         switch (state) {
-            case RECORD_START:
+            case OK_CSV_RECORD_START:
             default: {
                 if (is_eof) {
                     // Do nothing
                     return;
                 } else if (curr_char == '\n' && prev_char == '\r') {
                     // Second char in CRLF sequence, ignore
-                    circular_buffer_skip(&decoder->input_buffer, peek);
+                    ok_csv_circular_buffer_skip(&decoder->input_buffer, peek);
                     peek = 0;
                 } else if (curr_char == '\"') {
                     // Add new record
-                    csv_ensure_record_capcity(csv);
+                    ok_csv_ensure_record_capcity(csv);
                     csv->num_fields[csv->num_records] = 0;
                     csv->fields[csv->num_records] = NULL;
                     csv->num_records++;
 
                     // Prep for escaped field
-                    state = ESCAPED_FIELD;
-                    circular_buffer_skip(&decoder->input_buffer, peek);
+                    state = OK_CSV_ESCAPED_FIELD;
+                    ok_csv_circular_buffer_skip(&decoder->input_buffer, peek);
                     peek = 0;
                 } else if (curr_char == ',' || curr_char == '\r' || curr_char == '\n') {
                     // Add new record
                     size_t curr_record = csv->num_records;
-                    csv_ensure_record_capcity(csv);
+                    ok_csv_ensure_record_capcity(csv);
                     csv->num_fields[csv->num_records] = 0;
                     csv->fields[csv->num_records] = NULL;
                     csv->num_records++;
@@ -355,30 +356,30 @@ static void decode_csv2(csv_decoder *decoder) {
                         return;
                     }
                     blank_field[0] = 0;
-                    csv_ensure_field_capcity(csv, curr_record);
+                    ok_csv_ensure_field_capcity(csv, curr_record);
                     csv->fields[curr_record][0] = blank_field;
                     csv->num_fields[curr_record] = 1;
 
                     if (curr_char == ',') {
-                        state = FIELD_START;
+                        state = OK_CSV_FIELD_START;
                     } else {
-                        state = RECORD_START;
+                        state = OK_CSV_RECORD_START;
                     }
-                    circular_buffer_skip(&decoder->input_buffer, peek);
+                    ok_csv_circular_buffer_skip(&decoder->input_buffer, peek);
                     peek = 0;
                 } else {
                     // Add new record
-                    csv_ensure_record_capcity(csv);
+                    ok_csv_ensure_record_capcity(csv);
                     csv->num_fields[csv->num_records] = 0;
                     csv->fields[csv->num_records] = NULL;
                     csv->num_records++;
 
                     // Prep for nonescaped field
-                    state = NONESCAPED_FIELD;
+                    state = OK_CSV_NONESCAPED_FIELD;
                 }
                 break;
             }
-            case FIELD_START: {
+            case OK_CSV_FIELD_START: {
                 if (curr_char == ',' || curr_char == '\r' || curr_char == '\n' || is_eof) {
                     // Add blank field
                     char *blank_field = malloc(1);
@@ -388,26 +389,26 @@ static void decode_csv2(csv_decoder *decoder) {
                     }
                     blank_field[0] = 0;
                     size_t curr_record = csv->num_records - 1;
-                    csv_ensure_field_capcity(csv, curr_record);
+                    ok_csv_ensure_field_capcity(csv, curr_record);
                     csv->fields[curr_record][csv->num_fields[curr_record]] = blank_field;
                     csv->num_fields[curr_record]++;
-                    circular_buffer_skip(&decoder->input_buffer, peek);
+                    ok_csv_circular_buffer_skip(&decoder->input_buffer, peek);
                     peek = 0;
                     if (curr_char == ',') {
-                        state = FIELD_START;
+                        state = OK_CSV_FIELD_START;
                     } else {
-                        state = RECORD_START;
+                        state = OK_CSV_RECORD_START;
                     }
                 } else if (curr_char == '\"') {
-                    state = ESCAPED_FIELD;
-                    circular_buffer_skip(&decoder->input_buffer, peek);
+                    state = OK_CSV_ESCAPED_FIELD;
+                    ok_csv_circular_buffer_skip(&decoder->input_buffer, peek);
                     peek = 0;
                 } else {
-                    state = NONESCAPED_FIELD;
+                    state = OK_CSV_NONESCAPED_FIELD;
                 }
                 break;
             }
-            case ESCAPED_FIELD: {
+            case OK_CSV_ESCAPED_FIELD: {
                 if (is_eof || (prev_char == '\"' && peek > 1 &&
                                (curr_char == ',' || curr_char == '\r' || curr_char == '\n'))) {
                     if (prev_char == '\"') {
@@ -442,49 +443,50 @@ static void decode_csv2(csv_decoder *decoder) {
                             *field_ptr++ = ch;
                         }
                         peek--;
-                        circular_buffer_skip(&decoder->input_buffer, 1);
+                        ok_csv_circular_buffer_skip(&decoder->input_buffer, 1);
                     }
                     *field_ptr++ = 0;
 
                     if (prev_char == '\"') {
                         // Skip closing dquote
-                        circular_buffer_skip(&decoder->input_buffer, 1);
+                        ok_csv_circular_buffer_skip(&decoder->input_buffer, 1);
                     }
 
                     size_t curr_record = csv->num_records - 1;
-                    csv_ensure_field_capcity(csv, curr_record);
+                    ok_csv_ensure_field_capcity(csv, curr_record);
                     csv->fields[curr_record][csv->num_fields[curr_record]] = field;
                     csv->num_fields[curr_record]++;
 
                     if (curr_char == ',') {
-                        state = FIELD_START;
+                        state = OK_CSV_FIELD_START;
                     } else if (curr_char == '\r' || curr_char == '\n') {
-                        state = RECORD_START;
+                        state = OK_CSV_RECORD_START;
                     }
                 }
                 break;
             }
-            case NONESCAPED_FIELD: {
+            case OK_CSV_NONESCAPED_FIELD: {
                 if (curr_char == ',' || curr_char == '\r' || curr_char == '\n' || is_eof) {
                     char *field = malloc(peek);
                     if (!field) {
                         ok_csv_error(csv, "Couldn't allocate field");
                         return;
                     }
-                    circular_buffer_read(&decoder->input_buffer, (unsigned char *)field, peek - 1);
-                    circular_buffer_skip(&decoder->input_buffer, 1);
+                    ok_csv_circular_buffer_read(&decoder->input_buffer, (unsigned char *)field,
+                                                peek - 1);
+                    ok_csv_circular_buffer_skip(&decoder->input_buffer, 1);
                     field[peek - 1] = 0;
                     peek = 0;
 
                     size_t curr_record = csv->num_records - 1;
-                    csv_ensure_field_capcity(csv, curr_record);
+                    ok_csv_ensure_field_capcity(csv, curr_record);
                     csv->fields[curr_record][csv->num_fields[curr_record]] = field;
                     csv->num_fields[curr_record]++;
 
                     if (curr_char == ',') {
-                        state = FIELD_START;
+                        state = OK_CSV_FIELD_START;
                     } else if (curr_char == '\r' || curr_char == '\n') {
-                        state = RECORD_START;
+                        state = OK_CSV_RECORD_START;
                     }
                 }
                 break;
