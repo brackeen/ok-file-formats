@@ -990,51 +990,51 @@ only work with 16-bit buffers.
 #define BLOCK_TYPE_DYNAMIC_HUFFMAN 2
 
 typedef enum {
-    STATE_READY_FOR_HEAD = 0,
-    STATE_READY_FOR_NEXT_BLOCK,
-    STATE_READING_STORED_BLOCK_HEADER,
-    STATE_READING_STORED_BLOCK,
-    STATE_READING_DYNAMIC_BLOCK_HEADER,
-    STATE_READING_DYNAMIC_CODE_LENGTHS,
-    STATE_READING_DYNAMIC_LITERAL_TREE,
-    STATE_READING_DYNAMIC_DISTANCE_TREE,
-    STATE_READING_DYNAMIC_COMPRESSED_BLOCK,
-    STATE_READING_FIXED_COMPRESSED_BLOCK,
-    STATE_READING_DYNAMIC_DISTANCE,
-    STATE_READING_FIXED_DISTANCE,
-    STATE_DONE,
-    STATE_ERROR,
-    NUM_STATES,
-} inflater_state;
+    OK_INFLATER_STATE_READY_FOR_HEAD = 0,
+    OK_INFLATER_STATE_READY_FOR_NEXT_BLOCK,
+    OK_INFLATER_STATE_READING_STORED_BLOCK_HEADER,
+    OK_INFLATER_STATE_READING_STORED_BLOCK,
+    OK_INFLATER_STATE_READING_DYNAMIC_BLOCK_HEADER,
+    OK_INFLATER_STATE_READING_DYNAMIC_CODE_LENGTHS,
+    OK_INFLATER_STATE_READING_DYNAMIC_LITERAL_TREE,
+    OK_INFLATER_STATE_READING_DYNAMIC_DISTANCE_TREE,
+    OK_INFLATER_STATE_READING_DYNAMIC_COMPRESSED_BLOCK,
+    OK_INFLATER_STATE_READING_FIXED_COMPRESSED_BLOCK,
+    OK_INFLATER_STATE_READING_DYNAMIC_DISTANCE,
+    OK_INFLATER_STATE_READING_FIXED_DISTANCE,
+    OK_INFLATER_STATE_DONE,
+    OK_INFLATER_STATE_ERROR,
+    OK_INFLATER_NUM_STATES,
+} ok_inflater_state;
 
 #define VALUE_BITS 9
 #define VALUE_BIT_MASK ((1 << VALUE_BITS) - 1)
 #define MAX_NUM_CODES 289
 #define MAX_CODE_LENGTH 16
 
-static const int DISTANCE_TABLE[] = {
+static const int OK_INFLATER_DISTANCE_TABLE[] = {
     1,    2,    3,    4,    5,    7,    9,    13,    17,    25,
     33,   49,   65,   97,   129,  193,  257,  385,   513,   769,
     1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577
 };
-static const int DISTANCE_TABLE_LENGTH = 30;
+static const int OK_INFLATER_DISTANCE_TABLE_LENGTH = 30;
 
-static const int LENGTH_TABLE[] = {
+static const int OK_INFLATER_LENGTH_TABLE[] = {
     3,  4,  5,  6,   7,   8,   9,   10,  11, 13,
     15, 17, 19, 23,  27,  31,  35,  43,  51, 59,
     67, 83, 99, 115, 131, 163, 195, 227, 258
 };
 
-static const int BIT_LENGTH_TABLE[] = {
+static const int OK_INFLATER_BIT_LENGTH_TABLE[] = {
     16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15
 };
-static const int BIT_LENGTH_TABLE_LENGTH = 19;
+static const int OK_INFLATER_BIT_LENGTH_TABLE_LENGTH = 19;
 
 typedef struct {
     uint16_t lookup_table[1 << (MAX_CODE_LENGTH - 1)];
     int bits;
     int bit_mask;
-} huffman_tree;
+} ok_inflater_huffman_tree;
 
 struct ok_inflater {
     // Options
@@ -1051,7 +1051,7 @@ struct ok_inflater {
     uint16_t buffer_start_pos;
     uint16_t buffer_end_pos;
     bool final_block;
-    inflater_state state;
+    ok_inflater_state state;
     int state_count;
     int state_literal;
     int state_distance;
@@ -1061,22 +1061,22 @@ struct ok_inflater {
     int num_distance_codes;
     int num_code_length_codes;
     uint8_t tree_codes[MAX_NUM_CODES];
-    huffman_tree *code_length_huffman;
+    ok_inflater_huffman_tree *code_length_huffman;
     int huffman_code;
 
     // Huffman
-    huffman_tree *literal_huffman;
-    huffman_tree *distance_huffman;
-    huffman_tree *fixed_literal_huffman;
-    huffman_tree *fixed_distance_huffman;
+    ok_inflater_huffman_tree *literal_huffman;
+    ok_inflater_huffman_tree *distance_huffman;
+    ok_inflater_huffman_tree *fixed_literal_huffman;
+    ok_inflater_huffman_tree *fixed_distance_huffman;
 
     // Error
     char error_message[80];
 };
 
-static void inflater_error(ok_inflater *inflater, const char *message) {
+static void ok_inflater_error(ok_inflater *inflater, const char *message) {
     if (inflater) {
-        inflater->state = STATE_ERROR;
+        inflater->state = OK_INFLATER_STATE_ERROR;
         const size_t len = sizeof(inflater->error_message) - 1;
         strncpy(inflater->error_message, message, len);
         inflater->error_message[len] = 0;
@@ -1093,7 +1093,7 @@ static void inflater_error(ok_inflater *inflater, const char *message) {
 //}
 
 // Number of bytes that can be written until full or buffer wrap
-inline static uint16_t can_write(const ok_inflater *inflater) {
+inline static uint16_t ok_inflater_can_write(const ok_inflater *inflater) {
     if (inflater->buffer_start_pos == 0) {
         return -inflater->buffer_end_pos - 1;
     } else if (inflater->buffer_start_pos > inflater->buffer_end_pos) {
@@ -1103,19 +1103,20 @@ inline static uint16_t can_write(const ok_inflater *inflater) {
     }
 }
 
-inline static uint16_t can_write_total(const ok_inflater *inflater) {
+inline static uint16_t ok_inflater_can_write_total(const ok_inflater *inflater) {
     return inflater->buffer_start_pos - inflater->buffer_end_pos - 1;
 }
 
-inline static void write_byte(ok_inflater *inflater, const uint8_t b) {
+inline static void ok_inflater_write_byte(ok_inflater *inflater, const uint8_t b) {
     inflater->buffer[inflater->buffer_end_pos & BUFFER_SIZE_MASK] = b;
     inflater->buffer_end_pos++;
 }
 
-inline static size_t write_bytes(ok_inflater *inflater, const uint8_t *src, const size_t len) {
+inline static size_t ok_inflater_write_bytes(ok_inflater *inflater, const uint8_t *src,
+                                             size_t len) {
     size_t bytes_remaining = len;
     while (bytes_remaining > 0) {
-        size_t n = min(bytes_remaining, can_write(inflater));
+        size_t n = min(bytes_remaining, ok_inflater_can_write(inflater));
         if (n == 0) {
             return len - bytes_remaining;
         }
@@ -1127,10 +1128,10 @@ inline static size_t write_bytes(ok_inflater *inflater, const uint8_t *src, cons
     return len;
 }
 
-inline static size_t write_byte_n(ok_inflater *inflater, const uint8_t b, const size_t len) {
+inline static size_t ok_inflater_write_byte_n(ok_inflater *inflater, const uint8_t b, size_t len) {
     size_t bytes_remaining = len;
     while (bytes_remaining > 0) {
-        size_t n = min(bytes_remaining, can_write(inflater));
+        size_t n = min(bytes_remaining, ok_inflater_can_write(inflater));
         if (n == 0) {
             return len - bytes_remaining;
         }
@@ -1141,12 +1142,12 @@ inline static size_t write_byte_n(ok_inflater *inflater, const uint8_t b, const 
     return len;
 }
 
-inline static uint16_t can_flush_total(const ok_inflater *inflater) {
+inline static uint16_t ok_inflater_can_flush_total(const ok_inflater *inflater) {
     return inflater->buffer_end_pos - inflater->buffer_start_pos;
 }
 
 // Number of bytes that can be flushed until empty of buffer wrap
-inline static uint16_t can_flush(const ok_inflater *inflater) {
+inline static uint16_t ok_inflater_can_flush(const ok_inflater *inflater) {
     if (inflater->buffer_start_pos <= inflater->buffer_end_pos) {
         return inflater->buffer_end_pos - inflater->buffer_start_pos;
     } else {
@@ -1154,10 +1155,10 @@ inline static uint16_t can_flush(const ok_inflater *inflater) {
     }
 }
 
-inline static int flush(ok_inflater *inflater, uint8_t *dst, const unsigned int len) {
+inline static int ok_inflater_flush(ok_inflater *inflater, uint8_t *dst, unsigned int len) {
     int bytes_remaining = len;
     while (bytes_remaining > 0) {
-        size_t n = min(bytes_remaining, can_flush(inflater));
+        size_t n = min(bytes_remaining, ok_inflater_can_flush(inflater));
         if (n == 0) {
             return len - bytes_remaining;
         }
@@ -1169,17 +1170,15 @@ inline static int flush(ok_inflater *inflater, uint8_t *dst, const unsigned int 
     return len;
 }
 
-//
 // Read from input
-//
 
-inline static void skip_byte_align(ok_inflater *inflater) {
+inline static void ok_inflater_skip_byte_align(ok_inflater *inflater) {
     int skip_bits = inflater->input_buffer_bits & 7;
     inflater->input_buffer >>= skip_bits;
     inflater->input_buffer_bits -= skip_bits;
 }
 
-inline static bool load_bits(ok_inflater *inflater, const int num_bits) {
+inline static bool ok_inflater_load_bits(ok_inflater *inflater, int num_bits) {
     while (inflater->input_buffer_bits < num_bits) {
         if (inflater->input == inflater->input_end) {
             return false;
@@ -1191,7 +1190,7 @@ inline static bool load_bits(ok_inflater *inflater, const int num_bits) {
 }
 
 // Assumes at least num_bits bits are loaded into buffer (call load_bits first)
-inline static uint32_t read_bits(ok_inflater *inflater, const int num_bits) {
+inline static uint32_t ok_inflater_read_bits(ok_inflater *inflater, int num_bits) {
     uint32_t ans = inflater->input_buffer & ((1 << num_bits) - 1);
     inflater->input_buffer >>= num_bits;
     inflater->input_buffer_bits -= num_bits;
@@ -1199,13 +1198,13 @@ inline static uint32_t read_bits(ok_inflater *inflater, const int num_bits) {
 }
 
 // Assumes at least num_bits bits are loaded into buffer (call load_bits first)
-inline static uint32_t peek_bits(ok_inflater *inflater, const int num_bits) {
+inline static uint32_t ok_inflater_peek_bits(ok_inflater *inflater, int num_bits) {
     return inflater->input_buffer & ((1 << num_bits) - 1);
 }
 
 // Huffman
 
-inline static uint32_t reverse_bits(uint32_t value, int num_bits) {
+inline static uint32_t ok_inflater_reverse_bits(uint32_t value, int num_bits) {
     uint32_t rev_value = value & 1;
     for (int i = num_bits - 1; i > 0; i--) {
         value >>= 1;
@@ -1215,19 +1214,19 @@ inline static uint32_t reverse_bits(uint32_t value, int num_bits) {
     return rev_value;
 }
 
-static int decode_literal(ok_inflater *inflater, const uint16_t *tree_lookup_table,
-                          const int tree_bits) {
-    if (!load_bits(inflater, tree_bits)) {
+static int ok_inflater_decode_literal(ok_inflater *inflater, const uint16_t *tree_lookup_table,
+                                      int tree_bits) {
+    if (!ok_inflater_load_bits(inflater, tree_bits)) {
         return -1;
     }
-    int p = peek_bits(inflater, tree_bits);
+    int p = ok_inflater_peek_bits(inflater, tree_bits);
     int value = tree_lookup_table[p];
-    read_bits(inflater, value >> VALUE_BITS);
+    ok_inflater_read_bits(inflater, value >> VALUE_BITS);
     return value & VALUE_BIT_MASK;
 }
 
-static bool make_huffman_tree_from_array(huffman_tree *tree, const uint8_t *code_length,
-                                         const int length) {
+static bool ok_inflater_make_huffman_tree_from_array(ok_inflater_huffman_tree *tree,
+                                                     const uint8_t *code_length, int length) {
     tree->bits = 1;
 
     // Count the number of codes for each code length.
@@ -1267,7 +1266,8 @@ static bool make_huffman_tree_from_array(huffman_tree *tree, const uint8_t *code
             code = next_code[len];
             next_code[len]++;
 
-            tree->lookup_table[reverse_bits(code, len)] = (uint16_t)(i | (len << VALUE_BITS));
+            tree->lookup_table[ok_inflater_reverse_bits(code, len)] =
+                (uint16_t)(i | (len << VALUE_BITS));
         }
     }
 
@@ -1289,11 +1289,11 @@ static bool make_huffman_tree_from_array(huffman_tree *tree, const uint8_t *code
     return true;
 }
 
-static bool inflate_huffman_tree(ok_inflater *inflater, huffman_tree *tree,
-                                 huffman_tree *code_length_huffman,
-                                 int num_codes) {
+static bool ok_inflater_inflate_huffman_tree(ok_inflater *inflater, ok_inflater_huffman_tree *tree,
+                                             ok_inflater_huffman_tree *code_length_huffman,
+                                             int num_codes) {
     if (num_codes < 0 || num_codes >= MAX_NUM_CODES) {
-        inflater_error(inflater, "Invalid num_codes");
+        ok_inflater_error(inflater, "Invalid num_codes");
         return false;
     }
     const uint16_t *tree_lookup_table = code_length_huffman->lookup_table;
@@ -1307,7 +1307,8 @@ static bool inflate_huffman_tree(ok_inflater *inflater, huffman_tree *tree,
     //         (7 bits of length)
     while (inflater->state_count < num_codes) {
         if (inflater->huffman_code < 0) {
-            inflater->huffman_code = decode_literal(inflater, tree_lookup_table, tree_bits);
+            inflater->huffman_code = ok_inflater_decode_literal(inflater, tree_lookup_table,
+                                                                tree_bits);
             if (inflater->huffman_code < 0) {
                 return false;
             }
@@ -1323,7 +1324,7 @@ static bool inflate_huffman_tree(ok_inflater *inflater, huffman_tree *tree,
                     len = 3;
                     len_bits = 2;
                     if (inflater->state_count == 0) {
-                        inflater_error(inflater, "Invalid previous code");
+                        ok_inflater_error(inflater, "Invalid previous code");
                         return false;
                     }
                     value = inflater->tree_codes[inflater->state_count - 1];
@@ -1337,15 +1338,15 @@ static bool inflate_huffman_tree(ok_inflater *inflater, huffman_tree *tree,
                     len_bits = 7;
                     break;
                 default:
-                    inflater_error(inflater, "Invalid huffman code");
+                    ok_inflater_error(inflater, "Invalid huffman code");
                     return false;
             }
-            if (!load_bits(inflater, len_bits)) {
+            if (!ok_inflater_load_bits(inflater, len_bits)) {
                 return false;
             }
-            len += read_bits(inflater, len_bits);
+            len += ok_inflater_read_bits(inflater, len_bits);
             if (len > num_codes - inflater->state_count) {
-                inflater_error(inflater, "Invalid length");
+                ok_inflater_error(inflater, "Invalid length");
                 return false;
             }
             memset(inflater->tree_codes + inflater->state_count, value, len);
@@ -1353,49 +1354,49 @@ static bool inflate_huffman_tree(ok_inflater *inflater, huffman_tree *tree,
         }
         inflater->huffman_code = -1;
     }
-    make_huffman_tree_from_array(tree, inflater->tree_codes, num_codes);
+    ok_inflater_make_huffman_tree_from_array(tree, inflater->tree_codes, num_codes);
     return true;
 }
 
 // Inflate
 
-static bool inflate_zlib_header(ok_inflater *inflater) {
-    if (!load_bits(inflater, 16)) {
+static bool ok_inflater_zlib_header(ok_inflater *inflater) {
+    if (!ok_inflater_load_bits(inflater, 16)) {
         return false;
     } else {
-        int compression_method = read_bits(inflater, 4);
-        int compression_info = read_bits(inflater, 4);
-        int flag_check = read_bits(inflater, 5);
-        int flag_dict = read_bits(inflater, 1);
-        int flag_compression_level = read_bits(inflater, 2);
+        int compression_method = ok_inflater_read_bits(inflater, 4);
+        int compression_info = ok_inflater_read_bits(inflater, 4);
+        int flag_check = ok_inflater_read_bits(inflater, 5);
+        int flag_dict = ok_inflater_read_bits(inflater, 1);
+        int flag_compression_level = ok_inflater_read_bits(inflater, 2);
 
         int bits = (compression_info << 12) | (compression_method << 8) |
             (flag_compression_level << 6) | (flag_dict << 5) | flag_check;
         if (bits % 31 != 0) {
-            inflater_error(inflater, "Invalid zlib header");
+            ok_inflater_error(inflater, "Invalid zlib header");
             return false;
         }
         if (compression_method != 8) {
-            inflater_error(inflater, "Invalid inflater compression method");
+            ok_inflater_error(inflater, "Invalid inflater compression method");
             return false;
         }
         if (compression_info > 7) {
-            inflater_error(inflater, "Invalid window size");
+            ok_inflater_error(inflater, "Invalid window size");
             return false;
         }
         if (flag_dict) {
-            inflater_error(inflater, "Needs external dictionary");
+            ok_inflater_error(inflater, "Needs external dictionary");
             return false;
         }
 
-        inflater->state = STATE_READY_FOR_NEXT_BLOCK;
+        inflater->state = OK_INFLATER_STATE_READY_FOR_NEXT_BLOCK;
         return true;
     }
 }
 
-static bool inflate_init_fixed_huffman(ok_inflater *inflater) {
+static bool ok_inflater_init_fixed_huffman(ok_inflater *inflater) {
     if (!inflater->fixed_literal_huffman) {
-        huffman_tree *tree = malloc(sizeof(huffman_tree));
+        ok_inflater_huffman_tree *tree = malloc(sizeof(ok_inflater_huffman_tree));
         if (tree) {
             uint8_t code_length[288];
             int i;
@@ -1411,87 +1412,87 @@ static bool inflate_init_fixed_huffman(ok_inflater *inflater) {
             for (i = 280; i < 288; i++) {
                 code_length[i] = 8;
             }
-            make_huffman_tree_from_array(tree, code_length,
-                                         sizeof(code_length) / sizeof(code_length[0]));
+            ok_inflater_make_huffman_tree_from_array(tree, code_length,
+                                                     sizeof(code_length) / sizeof(code_length[0]));
             inflater->fixed_literal_huffman = tree;
         }
     }
     if (!inflater->fixed_distance_huffman) {
-        huffman_tree *tree = malloc(sizeof(huffman_tree));
+        ok_inflater_huffman_tree *tree = malloc(sizeof(ok_inflater_huffman_tree));
         if (tree) {
             uint8_t distance_code_length[32];
             for (int i = 0; i < 32; i++) {
                 distance_code_length[i] = 5;
             }
-            make_huffman_tree_from_array(tree, distance_code_length, 32);
+            ok_inflater_make_huffman_tree_from_array(tree, distance_code_length, 32);
             inflater->fixed_distance_huffman = tree;
         }
     }
     return inflater->fixed_literal_huffman && inflater->fixed_distance_huffman;
 }
 
-static bool inflate_next_block(ok_inflater *inflater) {
+static bool ok_inflater_next_block(ok_inflater *inflater) {
     if (inflater->final_block) {
-        inflater->state = STATE_DONE;
-        skip_byte_align(inflater);
+        inflater->state = OK_INFLATER_STATE_DONE;
+        ok_inflater_skip_byte_align(inflater);
         return true;
-    } else if (!load_bits(inflater, 3)) {
+    } else if (!ok_inflater_load_bits(inflater, 3)) {
         return false;
     } else {
-        inflater->final_block = read_bits(inflater, 1);
-        int block_type = read_bits(inflater, 2);
+        inflater->final_block = ok_inflater_read_bits(inflater, 1);
+        int block_type = ok_inflater_read_bits(inflater, 2);
         switch (block_type) {
             case BLOCK_TYPE_NO_COMPRESSION:
-                inflater->state = STATE_READING_STORED_BLOCK_HEADER;
+                inflater->state = OK_INFLATER_STATE_READING_STORED_BLOCK_HEADER;
                 break;
             case BLOCK_TYPE_DYNAMIC_HUFFMAN:
-                inflater->state = STATE_READING_DYNAMIC_BLOCK_HEADER;
+                inflater->state = OK_INFLATER_STATE_READING_DYNAMIC_BLOCK_HEADER;
                 break;
             case BLOCK_TYPE_FIXED_HUFFMAN: {
-                if (!inflate_init_fixed_huffman(inflater)) {
-                    inflater_error(inflater, "Couldn't initilize fixed huffman trees");
+                if (!ok_inflater_init_fixed_huffman(inflater)) {
+                    ok_inflater_error(inflater, "Couldn't initilize fixed huffman trees");
                     return false;
                 }
-                inflater->state = STATE_READING_FIXED_COMPRESSED_BLOCK;
+                inflater->state = OK_INFLATER_STATE_READING_FIXED_COMPRESSED_BLOCK;
                 inflater->huffman_code = -1;
                 break;
             }
             default:
-                inflater_error(inflater, "Invalid block type");
+                ok_inflater_error(inflater, "Invalid block type");
                 break;
         }
         return true;
     }
 }
 
-static bool inflate_stored_block_header(ok_inflater *inflater) {
-    skip_byte_align(inflater);
-    if (!load_bits(inflater, 32)) {
+static bool ok_inflater_stored_block_header(ok_inflater *inflater) {
+    ok_inflater_skip_byte_align(inflater);
+    if (!ok_inflater_load_bits(inflater, 32)) {
         return false;
     } else {
-        int len = read_bits(inflater, 16);
-        int clen = read_bits(inflater, 16);
+        int len = ok_inflater_read_bits(inflater, 16);
+        int clen = ok_inflater_read_bits(inflater, 16);
         if ((len & 0xffff) != ((~clen) & 0xffff)) {
-            inflater_error(inflater, "Invalid stored block");
+            ok_inflater_error(inflater, "Invalid stored block");
             return false;
         } else if (len == 0) {
-            inflater->state = STATE_READY_FOR_NEXT_BLOCK;
+            inflater->state = OK_INFLATER_STATE_READY_FOR_NEXT_BLOCK;
             return true;
         } else {
-            inflater->state = STATE_READING_STORED_BLOCK;
+            inflater->state = OK_INFLATER_STATE_READING_STORED_BLOCK;
             inflater->state_count = len;
             return true;
         }
     }
 }
 
-static bool inflate_stored_block(ok_inflater *inflater) {
+static bool ok_inflater_stored_block(ok_inflater *inflater) {
     const size_t can_read = inflater->input_end - inflater->input;
     if (can_read == 0) {
         return false;
     } else {
-        size_t len = write_bytes(inflater, inflater->input,
-                                 min(can_read, (size_t)inflater->state_count));
+        size_t len = ok_inflater_write_bytes(inflater, inflater->input,
+                                             min(can_read, (size_t)inflater->state_count));
         if (len == 0) {
             // Buffer full
             return false;
@@ -1499,67 +1500,68 @@ static bool inflate_stored_block(ok_inflater *inflater) {
         inflater->input += len;
         inflater->state_count -= len;
         if (inflater->state_count == 0) {
-            inflater->state = STATE_READY_FOR_NEXT_BLOCK;
+            inflater->state = OK_INFLATER_STATE_READY_FOR_NEXT_BLOCK;
         }
         return true;
     }
 }
 
-static int decode_distance(ok_inflater *inflater, int value) {
-    if (value < 0 || value >= DISTANCE_TABLE_LENGTH) {
-        inflater_error(inflater, "Invalid distance");
+static int ok_inflater_decode_distance(ok_inflater *inflater, int value) {
+    if (value < 0 || value >= OK_INFLATER_DISTANCE_TABLE_LENGTH) {
+        ok_inflater_error(inflater, "Invalid distance");
         return -1;
     }
-    int distance = DISTANCE_TABLE[value];
+    int distance = OK_INFLATER_DISTANCE_TABLE[value];
     int extra_bits = (value >> 1) - 1;
     if (extra_bits > 0) {
-        if (!load_bits(inflater, extra_bits)) {
+        if (!ok_inflater_load_bits(inflater, extra_bits)) {
             return -1;
         }
-        distance += read_bits(inflater, extra_bits);
+        distance += ok_inflater_read_bits(inflater, extra_bits);
     }
     return distance;
 }
 
-static int decode_length(ok_inflater *inflater, int value) {
-    int len = LENGTH_TABLE[value];
+static int ok_inflater_decode_length(ok_inflater *inflater, int value) {
+    int len = OK_INFLATER_LENGTH_TABLE[value];
     int extra_bits = (value >> 2) - 1;
     if (extra_bits > 0 && extra_bits <= 5) {
-        if (!load_bits(inflater, extra_bits)) {
+        if (!ok_inflater_load_bits(inflater, extra_bits)) {
             return -1;
         }
-        len += read_bits(inflater, extra_bits);
+        len += ok_inflater_read_bits(inflater, extra_bits);
     }
     return len;
 }
 
-static bool inflate_distance(ok_inflater *inflater) {
-    const bool is_fixed = inflater->state == STATE_READING_FIXED_DISTANCE;
+static bool ok_inflater_distance(ok_inflater *inflater) {
+    const bool is_fixed = inflater->state == OK_INFLATER_STATE_READING_FIXED_DISTANCE;
     if (inflater->state_count < 0) {
-        inflater->state_count = decode_length(inflater, inflater->huffman_code);
+        inflater->state_count = ok_inflater_decode_length(inflater, inflater->huffman_code);
         if (inflater->state_count < 0) {
             // Needs input
             return false;
         }
     }
     if (inflater->state_literal < 0) {
-        huffman_tree *curr_distance_huffman =
+        ok_inflater_huffman_tree *curr_distance_huffman =
             (is_fixed ? inflater->fixed_distance_huffman : inflater->distance_huffman);
         const uint16_t *tree_lookup_table = curr_distance_huffman->lookup_table;
         const int tree_bits = curr_distance_huffman->bits;
-        inflater->state_literal = decode_literal(inflater, tree_lookup_table, tree_bits);
+        inflater->state_literal = ok_inflater_decode_literal(inflater, tree_lookup_table,
+                                                             tree_bits);
         if (inflater->state_literal < 0) {
             // Needs input
             return false;
         }
     }
     if (inflater->state_distance < 0) {
-        inflater->state_distance = decode_distance(inflater, inflater->state_literal);
+        inflater->state_distance = ok_inflater_decode_distance(inflater, inflater->state_literal);
         if (inflater->state_distance < 0) {
             // Needs input
             return false;
         } else if (inflater->state_distance == 0 || inflater->state_distance >= BUFFER_SIZE) {
-            inflater_error(inflater, "Invalid distance");
+            ok_inflater_error(inflater, "Invalid distance");
             return false;
         }
     }
@@ -1569,8 +1571,8 @@ static bool inflate_distance(ok_inflater *inflater) {
         int buffer_offset = (inflater->buffer_end_pos - inflater->state_distance) & BUFFER_SIZE_MASK;
         if (inflater->state_distance == 1) {
             // Optimization: can use memset
-            const size_t n = inflater->state_count;
-            const size_t n2 = write_byte_n(inflater, inflater->buffer[buffer_offset], n);
+            size_t n = inflater->state_count;
+            size_t n2 = ok_inflater_write_byte_n(inflater, inflater->buffer[buffer_offset], n);
             inflater->state_count -= n2;
             if (n2 != n) {
                 // Full buffer
@@ -1580,8 +1582,8 @@ static bool inflate_distance(ok_inflater *inflater) {
             // Optimization: the offset won't wrap
             size_t bytes_copyable = inflater->state_distance;
             while (inflater->state_count > 0) {
-                const size_t n = min((size_t)inflater->state_count, bytes_copyable);
-                const size_t n2 = write_bytes(inflater, inflater->buffer + buffer_offset, n);
+                size_t n = min((size_t)inflater->state_count, bytes_copyable);
+                size_t n2 = ok_inflater_write_bytes(inflater, inflater->buffer + buffer_offset, n);
                 inflater->state_count -= n2;
                 bytes_copyable += n2;
                 if (n2 != n) {
@@ -1594,7 +1596,7 @@ static bool inflate_distance(ok_inflater *inflater) {
             while (inflater->state_count > 0) {
                 size_t n = min(inflater->state_count, inflater->state_distance);
                 n = min(n, (size_t)(BUFFER_SIZE - buffer_offset));
-                const size_t n2 = write_bytes(inflater, inflater->buffer + buffer_offset, n);
+                size_t n2 = ok_inflater_write_bytes(inflater, inflater->buffer + buffer_offset, n);
                 inflater->state_count -= n2;
                 buffer_offset = (buffer_offset + n2) & BUFFER_SIZE_MASK;
                 if (n2 != n) {
@@ -1606,82 +1608,84 @@ static bool inflate_distance(ok_inflater *inflater) {
     }
 
     if (is_fixed) {
-        inflater->state = STATE_READING_FIXED_COMPRESSED_BLOCK;
+        inflater->state = OK_INFLATER_STATE_READING_FIXED_COMPRESSED_BLOCK;
     } else {
-        inflater->state = STATE_READING_DYNAMIC_COMPRESSED_BLOCK;
+        inflater->state = OK_INFLATER_STATE_READING_DYNAMIC_COMPRESSED_BLOCK;
     }
     inflater->huffman_code = -1;
     return true;
 }
 
-static bool inflate_dynamic_block_header(ok_inflater *inflater) {
-    if (!load_bits(inflater, 14)) {
+static bool ok_inflater_dynamic_block_header(ok_inflater *inflater) {
+    if (!ok_inflater_load_bits(inflater, 14)) {
         return false;
     } else {
-        inflater->num_literal_codes = read_bits(inflater, 5) + 257;
-        inflater->num_distance_codes = read_bits(inflater, 5) + 1;
-        inflater->num_code_length_codes = read_bits(inflater, 4) + 4;
+        inflater->num_literal_codes = ok_inflater_read_bits(inflater, 5) + 257;
+        inflater->num_distance_codes = ok_inflater_read_bits(inflater, 5) + 1;
+        inflater->num_code_length_codes = ok_inflater_read_bits(inflater, 4) + 4;
 
-        for (int i = inflater->num_code_length_codes; i < BIT_LENGTH_TABLE_LENGTH; i++) {
-            inflater->tree_codes[BIT_LENGTH_TABLE[i]] = 0;
+        for (int i = inflater->num_code_length_codes; i < OK_INFLATER_BIT_LENGTH_TABLE_LENGTH; i++) {
+            inflater->tree_codes[OK_INFLATER_BIT_LENGTH_TABLE[i]] = 0;
         }
 
-        inflater->state = STATE_READING_DYNAMIC_CODE_LENGTHS;
+        inflater->state = OK_INFLATER_STATE_READING_DYNAMIC_CODE_LENGTHS;
         inflater->state_count = inflater->num_code_length_codes;
         return true;
     }
 }
 
-static bool inflate_dynamic_block_code_lengths(ok_inflater *inflater) {
+static bool ok_inflater_dynamic_block_code_lengths(ok_inflater *inflater) {
     while (inflater->state_count > 0) {
-        if (!load_bits(inflater, 3)) {
+        if (!ok_inflater_load_bits(inflater, 3)) {
             return false;
         }
         int index = inflater->num_code_length_codes - inflater->state_count;
-        inflater->tree_codes[BIT_LENGTH_TABLE[index]] = (uint8_t)read_bits(inflater, 3);
+        inflater->tree_codes[OK_INFLATER_BIT_LENGTH_TABLE[index]] =
+            (uint8_t)ok_inflater_read_bits(inflater, 3);
         inflater->state_count--;
     }
-    make_huffman_tree_from_array(inflater->code_length_huffman,
-                                 inflater->tree_codes, BIT_LENGTH_TABLE_LENGTH);
+    ok_inflater_make_huffman_tree_from_array(inflater->code_length_huffman,
+                                             inflater->tree_codes,
+                                             OK_INFLATER_BIT_LENGTH_TABLE_LENGTH);
 
-    inflater->state = STATE_READING_DYNAMIC_LITERAL_TREE;
+    inflater->state = OK_INFLATER_STATE_READING_DYNAMIC_LITERAL_TREE;
     inflater->huffman_code = -1;
     inflater->state_count = 0;
     return true;
 }
 
-static bool inflate_compressed_block(ok_inflater *inflater) {
-    const bool is_fixed = inflater->state == STATE_READING_FIXED_COMPRESSED_BLOCK;
-    const huffman_tree *curr_literal_huffman =
+static bool ok_inflater_compressed_block(ok_inflater *inflater) {
+    const bool is_fixed = inflater->state == OK_INFLATER_STATE_READING_FIXED_COMPRESSED_BLOCK;
+    const ok_inflater_huffman_tree *curr_literal_huffman =
         (is_fixed ? inflater->fixed_literal_huffman : inflater->literal_huffman);
 
     // decode literal/length value from input stream
 
-    size_t max_write = can_write_total(inflater);
+    size_t max_write = ok_inflater_can_write_total(inflater);
     if (max_write == 0) {
         return false;
     }
     const uint16_t *tree_lookup_table = curr_literal_huffman->lookup_table;
     const int tree_bits = curr_literal_huffman->bits;
     while (true) {
-        int value = decode_literal(inflater, tree_lookup_table, tree_bits);
+        int value = ok_inflater_decode_literal(inflater, tree_lookup_table, tree_bits);
         if (value < 0) {
             // Needs input
             return false;
         } else if (value < 256) {
-            write_byte(inflater, (uint8_t)value);
+            ok_inflater_write_byte(inflater, (uint8_t)value);
             max_write--;
             if (max_write == 0) {
                 return false;
             }
         } else if (value == 256) {
-            inflater->state = STATE_READY_FOR_NEXT_BLOCK;
+            inflater->state = OK_INFLATER_STATE_READY_FOR_NEXT_BLOCK;
             return true;
         } else if (value < 286) {
             if (is_fixed) {
-                inflater->state = STATE_READING_FIXED_DISTANCE;
+                inflater->state = OK_INFLATER_STATE_READING_FIXED_DISTANCE;
             } else {
-                inflater->state = STATE_READING_DYNAMIC_DISTANCE;
+                inflater->state = OK_INFLATER_STATE_READING_DYNAMIC_DISTANCE;
             }
             inflater->huffman_code = value - 257;
             inflater->state_count = -1;
@@ -1689,17 +1693,18 @@ static bool inflate_compressed_block(ok_inflater *inflater) {
             inflater->state_distance = -1;
             return true;
         } else {
-            inflater_error(inflater, "Invalid inflater literal");
+            ok_inflater_error(inflater, "Invalid inflater literal");
             return false;
         }
     }
 }
 
-static bool inflate_literal_tree(ok_inflater *inflater) {
-    bool done = inflate_huffman_tree(inflater, inflater->literal_huffman,
-                                     inflater->code_length_huffman, inflater->num_literal_codes);
+static bool ok_inflater_literal_tree(ok_inflater *inflater) {
+    bool done = ok_inflater_inflate_huffman_tree(inflater, inflater->literal_huffman,
+                                                 inflater->code_length_huffman,
+                                                 inflater->num_literal_codes);
     if (done) {
-        inflater->state = STATE_READING_DYNAMIC_DISTANCE_TREE;
+        inflater->state = OK_INFLATER_STATE_READING_DYNAMIC_DISTANCE_TREE;
         inflater->huffman_code = -1;
         inflater->state_count = 0;
         return true;
@@ -1708,11 +1713,12 @@ static bool inflate_literal_tree(ok_inflater *inflater) {
     }
 }
 
-static bool inflate_distance_tree(ok_inflater *inflater) {
-    bool done = inflate_huffman_tree(inflater, inflater->distance_huffman,
-                                     inflater->code_length_huffman, inflater->num_distance_codes);
+static bool ok_inflater_distance_tree(ok_inflater *inflater) {
+    bool done = ok_inflater_inflate_huffman_tree(inflater, inflater->distance_huffman,
+                                                 inflater->code_length_huffman,
+                                                 inflater->num_distance_codes);
     if (done) {
-        inflater->state = STATE_READING_DYNAMIC_COMPRESSED_BLOCK;
+        inflater->state = OK_INFLATER_STATE_READING_DYNAMIC_COMPRESSED_BLOCK;
         inflater->huffman_code = -1;
         return true;
     } else {
@@ -1720,39 +1726,40 @@ static bool inflate_distance_tree(ok_inflater *inflater) {
     }
 }
 
-static bool inflate_noop(ok_inflater *inflater) {
+static bool ok_inflater_noop(ok_inflater *inflater) {
     (void)inflater;
     return false;
 }
 
-static bool (*STATE_FUNCTIONS[NUM_STATES])(ok_inflater *);
+static bool (*OK_INFLATER_STATE_FUNCTIONS[OK_INFLATER_NUM_STATES])(ok_inflater *);
 
 // Public Inflater API
 
 ok_inflater *ok_inflater_init(bool nowrap) {
-    STATE_FUNCTIONS[STATE_READY_FOR_HEAD] = inflate_zlib_header;
-    STATE_FUNCTIONS[STATE_READY_FOR_NEXT_BLOCK] = inflate_next_block;
-    STATE_FUNCTIONS[STATE_READING_STORED_BLOCK_HEADER] = inflate_stored_block_header;
-    STATE_FUNCTIONS[STATE_READING_STORED_BLOCK] = inflate_stored_block;
-    STATE_FUNCTIONS[STATE_READING_DYNAMIC_BLOCK_HEADER] = inflate_dynamic_block_header;
-    STATE_FUNCTIONS[STATE_READING_DYNAMIC_CODE_LENGTHS] = inflate_dynamic_block_code_lengths;
-    STATE_FUNCTIONS[STATE_READING_DYNAMIC_LITERAL_TREE] = inflate_literal_tree;
-    STATE_FUNCTIONS[STATE_READING_DYNAMIC_DISTANCE_TREE] = inflate_distance_tree;
-    STATE_FUNCTIONS[STATE_READING_DYNAMIC_COMPRESSED_BLOCK] = inflate_compressed_block;
-    STATE_FUNCTIONS[STATE_READING_FIXED_COMPRESSED_BLOCK] = inflate_compressed_block;
-    STATE_FUNCTIONS[STATE_READING_DYNAMIC_DISTANCE] = inflate_distance;
-    STATE_FUNCTIONS[STATE_READING_FIXED_DISTANCE] = inflate_distance;
-    STATE_FUNCTIONS[STATE_DONE] = inflate_noop;
-    STATE_FUNCTIONS[STATE_ERROR] = inflate_noop;
+    OK_INFLATER_STATE_FUNCTIONS[OK_INFLATER_STATE_READY_FOR_HEAD] = ok_inflater_zlib_header;
+    OK_INFLATER_STATE_FUNCTIONS[OK_INFLATER_STATE_READY_FOR_NEXT_BLOCK] = ok_inflater_next_block;
+    OK_INFLATER_STATE_FUNCTIONS[OK_INFLATER_STATE_READING_STORED_BLOCK_HEADER] = ok_inflater_stored_block_header;
+    OK_INFLATER_STATE_FUNCTIONS[OK_INFLATER_STATE_READING_STORED_BLOCK] = ok_inflater_stored_block;
+    OK_INFLATER_STATE_FUNCTIONS[OK_INFLATER_STATE_READING_DYNAMIC_BLOCK_HEADER] = ok_inflater_dynamic_block_header;
+    OK_INFLATER_STATE_FUNCTIONS[OK_INFLATER_STATE_READING_DYNAMIC_CODE_LENGTHS] = ok_inflater_dynamic_block_code_lengths;
+    OK_INFLATER_STATE_FUNCTIONS[OK_INFLATER_STATE_READING_DYNAMIC_LITERAL_TREE] = ok_inflater_literal_tree;
+    OK_INFLATER_STATE_FUNCTIONS[OK_INFLATER_STATE_READING_DYNAMIC_DISTANCE_TREE] = ok_inflater_distance_tree;
+    OK_INFLATER_STATE_FUNCTIONS[OK_INFLATER_STATE_READING_DYNAMIC_COMPRESSED_BLOCK] = ok_inflater_compressed_block;
+    OK_INFLATER_STATE_FUNCTIONS[OK_INFLATER_STATE_READING_FIXED_COMPRESSED_BLOCK] = ok_inflater_compressed_block;
+    OK_INFLATER_STATE_FUNCTIONS[OK_INFLATER_STATE_READING_DYNAMIC_DISTANCE] = ok_inflater_distance;
+    OK_INFLATER_STATE_FUNCTIONS[OK_INFLATER_STATE_READING_FIXED_DISTANCE] = ok_inflater_distance;
+    OK_INFLATER_STATE_FUNCTIONS[OK_INFLATER_STATE_DONE] = ok_inflater_noop;
+    OK_INFLATER_STATE_FUNCTIONS[OK_INFLATER_STATE_ERROR] = ok_inflater_noop;
 
     ok_inflater *inflater = calloc(1, sizeof(ok_inflater));
     if (inflater) {
         inflater->nowrap = nowrap;
-        inflater->state = nowrap ? STATE_READY_FOR_NEXT_BLOCK : STATE_READY_FOR_HEAD;
+        inflater->state = (nowrap ? OK_INFLATER_STATE_READY_FOR_NEXT_BLOCK :
+                           OK_INFLATER_STATE_READY_FOR_HEAD);
         inflater->buffer = malloc(BUFFER_SIZE);
-        inflater->code_length_huffman = malloc(sizeof(huffman_tree));
-        inflater->literal_huffman = malloc(sizeof(huffman_tree));
-        inflater->distance_huffman = malloc(sizeof(huffman_tree));
+        inflater->code_length_huffman = malloc(sizeof(ok_inflater_huffman_tree));
+        inflater->literal_huffman = malloc(sizeof(ok_inflater_huffman_tree));
+        inflater->distance_huffman = malloc(sizeof(ok_inflater_huffman_tree));
 
         if (!inflater->buffer ||
             !inflater->code_length_huffman ||
@@ -1775,7 +1782,8 @@ void ok_inflater_reset(ok_inflater *inflater) {
         inflater->buffer_start_pos = 0;
         inflater->buffer_end_pos = 0;
         inflater->final_block = false;
-        inflater->state = inflater->nowrap ? STATE_READY_FOR_NEXT_BLOCK : STATE_READY_FOR_HEAD;
+        inflater->state = (inflater->nowrap ? OK_INFLATER_STATE_READY_FOR_NEXT_BLOCK :
+                           OK_INFLATER_STATE_READY_FOR_HEAD);
 
         memset(inflater->error_message, 0, sizeof(inflater->error_message));
     }
@@ -1799,8 +1807,8 @@ const char *ok_inflater_error_message(const struct ok_inflater *inflater) {
 
 bool ok_inflater_needs_input(const ok_inflater *inflater) {
     return inflater &&
-        inflater->state != STATE_ERROR &&
-        can_flush_total(inflater) == 0 &&
+        inflater->state != OK_INFLATER_STATE_ERROR &&
+        ok_inflater_can_flush_total(inflater) == 0 &&
         inflater->input == inflater->input_end;
 }
 
@@ -1810,13 +1818,13 @@ void ok_inflater_set_input(ok_inflater *inflater, const void *buffer, unsigned i
             inflater->input = (const uint8_t *)buffer;
             inflater->input_end = inflater->input + buffer_length;
         } else {
-            inflater_error(inflater, "ok_inflater_set_input was called with unread input data.");
+            ok_inflater_error(inflater, "ok_inflater_set_input was called with unread input data.");
         }
     }
 }
 
 int ok_inflater_inflate(ok_inflater *inflater, uint8_t *dst, unsigned int dst_len) {
-    if (!inflater || inflater->state == STATE_ERROR) {
+    if (!inflater || inflater->state == OK_INFLATER_STATE_ERROR) {
         return -1;
     }
 
@@ -1827,8 +1835,8 @@ int ok_inflater_inflate(ok_inflater *inflater, uint8_t *dst, unsigned int dst_le
     // 3. Needs more input,
     // 4. Done inflating, or
     // 5. An error occured.
-    while (can_flush_total(inflater) < dst_len &&
-           (*STATE_FUNCTIONS[inflater->state])(inflater)) {
+    while (ok_inflater_can_flush_total(inflater) < dst_len &&
+           (*OK_INFLATER_STATE_FUNCTIONS[inflater->state])(inflater)) {
     }
-    return flush(inflater, dst, dst_len);
+    return ok_inflater_flush(inflater, dst, dst_len);
 }
