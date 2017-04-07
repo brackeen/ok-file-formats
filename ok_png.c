@@ -34,28 +34,28 @@
 
 #define PNG_TYPE(a, b, c, d) ((a << 24) | (b << 16) | (c << 8) | d)
 
-static const uint32_t CHUNK_IHDR = PNG_TYPE('I', 'H', 'D', 'R');
-static const uint32_t CHUNK_PLTE = PNG_TYPE('P', 'L', 'T', 'E');
-static const uint32_t CHUNK_TRNS = PNG_TYPE('t', 'R', 'N', 'S');
-static const uint32_t CHUNK_IDAT = PNG_TYPE('I', 'D', 'A', 'T');
-static const uint32_t CHUNK_IEND = PNG_TYPE('I', 'E', 'N', 'D');
-static const uint32_t CHUNK_CGBI = PNG_TYPE('C', 'g', 'B', 'I');
+static const uint32_t OK_PNG_CHUNK_IHDR = PNG_TYPE('I', 'H', 'D', 'R');
+static const uint32_t OK_PNG_CHUNK_PLTE = PNG_TYPE('P', 'L', 'T', 'E');
+static const uint32_t OK_PNG_CHUNK_TRNS = PNG_TYPE('t', 'R', 'N', 'S');
+static const uint32_t OK_PNG_CHUNK_IDAT = PNG_TYPE('I', 'D', 'A', 'T');
+static const uint32_t OK_PNG_CHUNK_IEND = PNG_TYPE('I', 'E', 'N', 'D');
+static const uint32_t OK_PNG_CHUNK_CGBI = PNG_TYPE('C', 'g', 'B', 'I');
 
-static const uint8_t COLOR_TYPE_GRAYSCALE = 0;
-static const uint8_t COLOR_TYPE_RGB = 2;
-static const uint8_t COLOR_TYPE_PALETTE = 3;
-static const uint8_t COLOR_TYPE_GRAYSCALE_WITH_ALPHA = 4;
-static const uint8_t COLOR_TYPE_RGB_WITH_ALPHA = 6;
-static const int SAMPLES_PER_PIXEL[] = {1, 0, 3, 1, 2, 0, 4};
+static const uint8_t OK_PNG_COLOR_TYPE_GRAYSCALE = 0;
+static const uint8_t OK_PNG_COLOR_TYPE_RGB = 2;
+static const uint8_t OK_PNG_COLOR_TYPE_PALETTE = 3;
+static const uint8_t OK_PNG_COLOR_TYPE_GRAYSCALE_WITH_ALPHA = 4;
+static const uint8_t OK_PNG_COLOR_TYPE_RGB_WITH_ALPHA = 6;
+static const int OK_PNG_SAMPLES_PER_PIXEL[] = {1, 0, 3, 1, 2, 0, 4};
 
 typedef enum {
-    FILTER_NONE = 0,
-    FILTER_SUB,
-    FILTER_UP,
-    FILTER_AVG,
-    FILTER_PAETH,
-    NUM_FILTERS
-} filter_type;
+    OK_PNG_FILTER_NONE = 0,
+    OK_PNG_FILTER_SUB,
+    OK_PNG_FILTER_UP,
+    OK_PNG_FILTER_AVG,
+    OK_PNG_FILTER_PAETH,
+    OK_PNG_NUM_FILTERS
+} ok_png_filter_type;
 
 typedef struct {
     // Image
@@ -92,7 +92,7 @@ typedef struct {
     bool has_single_transparent_color;
     bool is_ios_format;
 
-} png_decoder;
+} ok_png_decoder;
 
 static void ok_png_error(ok_png *png, const char *message) {
     if (png) {
@@ -107,7 +107,7 @@ static void ok_png_error(ok_png *png, const char *message) {
     }
 }
 
-static bool ok_read(png_decoder *decoder, uint8_t *buffer, size_t length) {
+static bool ok_read(ok_png_decoder *decoder, uint8_t *buffer, size_t length) {
     if (decoder->input_read_func(decoder->input_data, buffer, length) == length) {
         return true;
     } else {
@@ -116,7 +116,7 @@ static bool ok_read(png_decoder *decoder, uint8_t *buffer, size_t length) {
     }
 }
 
-static bool ok_seek(png_decoder *decoder, long length) {
+static bool ok_seek(ok_png_decoder *decoder, long length) {
     if (decoder->input_seek_func(decoder->input_data, length)) {
         return true;
     } else {
@@ -137,33 +137,33 @@ static bool ok_file_seek_func(void *user_data, long count) {
 
 #endif
 
-static ok_png *decode_png(void *user_data, ok_png_read_func input_read_func,
-                          ok_png_seek_func input_seek_func, ok_png_decode_flags decode_flags,
-                          bool info_only, bool check_user_data);
+static ok_png *ok_png_decode(void *user_data, ok_png_read_func input_read_func,
+                             ok_png_seek_func input_seek_func, ok_png_decode_flags decode_flags,
+                             bool info_only, bool check_user_data);
 
 // Public API
 
 #ifndef OK_NO_STDIO
 
 ok_png *ok_png_read_info(FILE *file) {
-    return decode_png(file, ok_file_read_func, ok_file_seek_func, OK_PNG_COLOR_FORMAT_RGBA,
-                      true, true);
+    return ok_png_decode(file, ok_file_read_func, ok_file_seek_func, OK_PNG_COLOR_FORMAT_RGBA,
+                         true, true);
 }
 
 ok_png *ok_png_read(FILE *file, ok_png_decode_flags decode_flags) {
-    return decode_png(file, ok_file_read_func, ok_file_seek_func, decode_flags, false, true);
+    return ok_png_decode(file, ok_file_read_func, ok_file_seek_func, decode_flags, false, true);
 }
 
 #endif
 
 ok_png *ok_png_read_info_from_callbacks(void *user_data, ok_png_read_func read_func,
                                         ok_png_seek_func seek_func) {
-    return decode_png(user_data, read_func, seek_func, OK_PNG_COLOR_FORMAT_RGBA, true, false);
+    return ok_png_decode(user_data, read_func, seek_func, OK_PNG_COLOR_FORMAT_RGBA, true, false);
 }
 
 ok_png *ok_png_read_from_callbacks(void *user_data, ok_png_read_func read_func,
                                    ok_png_seek_func seek_func, ok_png_decode_flags decode_flags) {
-    return decode_png(user_data, read_func, seek_func, decode_flags, false, false);
+    return ok_png_decode(user_data, read_func, seek_func, decode_flags, false, false);
 }
 
 void ok_png_free(ok_png *png) {
@@ -183,7 +183,7 @@ static inline uint32_t readBE32(const uint8_t *data) {
     return (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
 }
 
-static inline void premultiply(uint8_t *dst) {
+static inline void ok_png_premultiply(uint8_t *dst) {
     const uint8_t a = dst[3];
     if (a == 0) {
         dst[0] = 0;
@@ -196,7 +196,7 @@ static inline void premultiply(uint8_t *dst) {
     }
 }
 
-static inline void unpremultiply(uint8_t *dst) {
+static inline void ok_png_unpremultiply(uint8_t *dst) {
     const uint8_t a = dst[3];
     if (a > 0 && a < 255) {
         dst[0] = 255 * dst[0] / a;
@@ -205,7 +205,7 @@ static inline void unpremultiply(uint8_t *dst) {
     }
 }
 
-static bool read_header(png_decoder *decoder, const uint32_t chunk_length) {
+static bool ok_png_read_header(ok_png_decoder *decoder, uint32_t chunk_length) {
     ok_png *png = decoder->png;
     if (chunk_length != 13) {
         ok_png_error(png, "Invalid IHDR chunk length");
@@ -237,24 +237,25 @@ static bool read_header(png_decoder *decoder, const uint32_t chunk_length) {
     const int c = decoder->color_type;
     const int b = decoder->bit_depth;
     const bool valid =
-        (c == COLOR_TYPE_GRAYSCALE && (b == 1 || b == 2 || b == 4 || b == 8 || b == 16)) ||
-        (c == COLOR_TYPE_RGB && (b == 8 || b == 16)) ||
-        (c == COLOR_TYPE_PALETTE && (b == 1 || b == 2 || b == 4 || b == 8)) ||
-        (c == COLOR_TYPE_GRAYSCALE_WITH_ALPHA && (b == 8 || b == 16)) ||
-        (c == COLOR_TYPE_RGB_WITH_ALPHA && (b == 8 || b == 16));
+        (c == OK_PNG_COLOR_TYPE_GRAYSCALE && (b == 1 || b == 2 || b == 4 || b == 8 || b == 16)) ||
+        (c == OK_PNG_COLOR_TYPE_RGB && (b == 8 || b == 16)) ||
+        (c == OK_PNG_COLOR_TYPE_PALETTE && (b == 1 || b == 2 || b == 4 || b == 8)) ||
+        (c == OK_PNG_COLOR_TYPE_GRAYSCALE_WITH_ALPHA && (b == 8 || b == 16)) ||
+        (c == OK_PNG_COLOR_TYPE_RGB_WITH_ALPHA && (b == 8 || b == 16));
 
     if (!valid) {
         ok_png_error(png, "Invalid combination of color type and bit depth");
         return false;
     }
 
-    png->has_alpha = c == COLOR_TYPE_GRAYSCALE_WITH_ALPHA || c == COLOR_TYPE_RGB_WITH_ALPHA;
+    png->has_alpha = (c == OK_PNG_COLOR_TYPE_GRAYSCALE_WITH_ALPHA ||
+                      c == OK_PNG_COLOR_TYPE_RGB_WITH_ALPHA);
     decoder->interlace_pass = 0;
     decoder->ready_for_next_interlace_pass = true;
     return true;
 }
 
-static bool read_palette(png_decoder *decoder, const uint32_t chunk_length) {
+static bool ok_png_read_palette(ok_png_decoder *decoder, uint32_t chunk_length) {
     ok_png *png = decoder->png;
     decoder->palette_length = chunk_length / 3;
 
@@ -285,11 +286,11 @@ static bool read_palette(png_decoder *decoder, const uint32_t chunk_length) {
     return true;
 }
 
-static bool read_transparency(png_decoder *decoder, const uint32_t chunk_length) {
+static bool ok_png_read_transparency(ok_png_decoder *decoder, uint32_t chunk_length) {
     ok_png *png = decoder->png;
     png->has_alpha = true;
 
-    if (decoder->color_type == COLOR_TYPE_PALETTE) {
+    if (decoder->color_type == OK_PNG_COLOR_TYPE_PALETTE) {
         if (chunk_length > decoder->palette_length) {
             ok_png_error(png, "Invalid transparency length for palette color type");
             return false;
@@ -302,12 +303,12 @@ static bool read_transparency(png_decoder *decoder, const uint32_t chunk_length)
                 return false;
             }
             if (should_premultiply) {
-                premultiply(dst);
+                ok_png_premultiply(dst);
             }
             dst += 4;
         }
         return true;
-    } else if (decoder->color_type == COLOR_TYPE_GRAYSCALE) {
+    } else if (decoder->color_type == OK_PNG_COLOR_TYPE_GRAYSCALE) {
         if (chunk_length != 2) {
             ok_png_error(png, "Invalid transparency length for grayscale color type");
             return false;
@@ -323,7 +324,7 @@ static bool read_transparency(png_decoder *decoder, const uint32_t chunk_length)
             decoder->has_single_transparent_color = true;
             return true;
         }
-    } else if (decoder->color_type == COLOR_TYPE_RGB) {
+    } else if (decoder->color_type == OK_PNG_COLOR_TYPE_RGB) {
         if (chunk_length != 6) {
             ok_png_error(png, "Invalid transparency length for truecolor color type");
             return false;
@@ -344,7 +345,7 @@ static bool read_transparency(png_decoder *decoder, const uint32_t chunk_length)
     }
 }
 
-static inline int paeth_predictor(int a, int b, int c) {
+static inline int ok_png_paeth_predictor(int a, int b, int c) {
     int p = a + b - c;
     int pa = abs(p - a);
     int pb = abs(p - b);
@@ -358,13 +359,13 @@ static inline int paeth_predictor(int a, int b, int c) {
     }
 }
 
-static void decode_filter(uint8_t *RESTRICT curr, const uint8_t *RESTRICT prev,
-                          const uint32_t length, const int filter, const int bpp) {
+static void ok_png_decode_filter(uint8_t * RESTRICT curr, const uint8_t * RESTRICT prev,
+                                 uint32_t length, int filter, int bpp) {
     switch (filter) {
-        case FILTER_NONE:
+        case OK_PNG_FILTER_NONE:
             // Do nothing
             break;
-        case FILTER_SUB: {
+        case OK_PNG_FILTER_SUB: {
             // Input = Sub
             // Raw(x) = Sub(x) + Raw(x-bpp)
             // For all x < 0, assume Raw(x) = 0.
@@ -373,7 +374,7 @@ static void decode_filter(uint8_t *RESTRICT curr, const uint8_t *RESTRICT prev,
             }
             break;
         }
-        case FILTER_UP: {
+        case OK_PNG_FILTER_UP: {
             // Input = Up
             // Raw(x) = Up(x) + Prior(x)
             for (uint32_t i = 0; i < length; i++) {
@@ -381,7 +382,7 @@ static void decode_filter(uint8_t *RESTRICT curr, const uint8_t *RESTRICT prev,
             }
             break;
         }
-        case FILTER_AVG: {
+        case OK_PNG_FILTER_AVG: {
             // Input = Average
             // Raw(x) = Average(x) + floor((Raw(x-bpp)+Prior(x))/2)
             for (int i = 0; i < bpp; i++) {
@@ -392,21 +393,21 @@ static void decode_filter(uint8_t *RESTRICT curr, const uint8_t *RESTRICT prev,
             }
             break;
         }
-        case FILTER_PAETH: {
+        case OK_PNG_FILTER_PAETH: {
             // Input = Paeth
             // Raw(x) = Paeth(x) + PaethPredictor(Raw(x-bpp), Prior(x), Prior(x-bpp))
             for (int i = 0; i < bpp; i++) {
                 curr[i] += prev[i];
             }
             for (uint32_t j = bpp; j < length; j++) {
-                curr[j] += paeth_predictor(curr[j - bpp], prev[j], prev[j - bpp]);
+                curr[j] += ok_png_paeth_predictor(curr[j - bpp], prev[j], prev[j - bpp]);
             }
             break;
         }
     }
 }
 
-static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const uint32_t width) {
+static bool ok_png_transform_scanline(ok_png_decoder *decoder, const uint8_t *src, uint32_t width) {
     ok_png *png = decoder->png;
     const bool dst_flip_y = (decoder->decode_flags & OK_PNG_FLIP_Y) != 0;
     const uint32_t dst_stride = png->width * 4;
@@ -428,17 +429,17 @@ static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const u
     const int c = decoder->color_type;
     const int d = decoder->bit_depth;
     const bool t = decoder->has_single_transparent_color;
-    const bool has_full_alpha = (c == COLOR_TYPE_GRAYSCALE_WITH_ALPHA ||
-                                 c == COLOR_TYPE_RGB_WITH_ALPHA);
+    const bool has_full_alpha = (c == OK_PNG_COLOR_TYPE_GRAYSCALE_WITH_ALPHA ||
+                                 c == OK_PNG_COLOR_TYPE_RGB_WITH_ALPHA);
     const bool src_is_premultiplied = decoder->is_ios_format;
     const bool dst_is_premultiplied = (decoder->decode_flags & OK_PNG_PREMULTIPLIED_ALPHA) != 0;
     const bool src_is_bgr = decoder->is_ios_format;
     const bool dst_is_bgr = (decoder->decode_flags & OK_PNG_COLOR_FORMAT_BGRA) != 0;
-    bool should_byteswap = ((c == COLOR_TYPE_RGB || c == COLOR_TYPE_RGB_WITH_ALPHA) &&
+    bool should_byteswap = ((c == OK_PNG_COLOR_TYPE_RGB || c == OK_PNG_COLOR_TYPE_RGB_WITH_ALPHA) &&
                             src_is_bgr != dst_is_bgr);
 
     // Simple transforms
-    if (c == COLOR_TYPE_GRAYSCALE && d == 8 && !t) {
+    if (c == OK_PNG_COLOR_TYPE_GRAYSCALE && d == 8 && !t) {
         uint8_t *dst = dst_start;
         while (dst < dst_end) {
             uint8_t v = *src++;
@@ -447,7 +448,7 @@ static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const u
             *dst++ = v;
             *dst++ = 0xff;
         }
-    } else if (c == COLOR_TYPE_PALETTE && d == 8) {
+    } else if (c == OK_PNG_COLOR_TYPE_PALETTE && d == 8) {
         uint8_t *dst = dst_start;
         const uint8_t *palette = decoder->palette;
         while (dst < dst_end) {
@@ -457,7 +458,7 @@ static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const u
             *dst++ = *psrc++;
             *dst++ = *psrc++;
         }
-    } else if (c == COLOR_TYPE_RGB && d == 8 && !t) {
+    } else if (c == OK_PNG_COLOR_TYPE_RGB && d == 8 && !t) {
         if (should_byteswap) {
             uint8_t *dst = dst_start;
             while (dst < dst_end) {
@@ -477,7 +478,7 @@ static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const u
                 *dst++ = 0xff;
             }
         }
-    } else if (c == COLOR_TYPE_GRAYSCALE_WITH_ALPHA && d == 8) {
+    } else if (c == OK_PNG_COLOR_TYPE_GRAYSCALE_WITH_ALPHA && d == 8) {
         uint8_t *dst = dst_start;
         while (dst < dst_end) {
             uint8_t v = *src++;
@@ -487,7 +488,7 @@ static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const u
             *dst++ = v;
             *dst++ = a;
         }
-    } else if (c == COLOR_TYPE_RGB_WITH_ALPHA && d == 8) {
+    } else if (c == OK_PNG_COLOR_TYPE_RGB_WITH_ALPHA && d == 8) {
         memcpy(dst_start, src, width * 4);
     } else {
         // Complex transforms: 1-, 2-, 4- and 16-bit, and 8-bit with single-color transparency.
@@ -515,7 +516,7 @@ static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const u
                     src++;
                 }
                 int v = (*src >> bit) & bitmask;
-                if (c == COLOR_TYPE_GRAYSCALE) {
+                if (c == OK_PNG_COLOR_TYPE_GRAYSCALE) {
                     r = g = b = (uint16_t)(v * (255 / bitmask));
                 } else {
                     const uint8_t *psrc = palette + (v * 4);
@@ -526,41 +527,41 @@ static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const u
                 }
                 bit -= d;
             } else if (d == 8) {
-                if (c == COLOR_TYPE_GRAYSCALE) {
+                if (c == OK_PNG_COLOR_TYPE_GRAYSCALE) {
                     r = g = b = *src++;
-                } else if (c == COLOR_TYPE_PALETTE) {
+                } else if (c == OK_PNG_COLOR_TYPE_PALETTE) {
                     const uint8_t *psrc = palette + (*src++ * 4);
                     r = *psrc++;
                     g = *psrc++;
                     b = *psrc++;
                     a = *psrc++;
-                } else if (c == COLOR_TYPE_GRAYSCALE_WITH_ALPHA) {
+                } else if (c == OK_PNG_COLOR_TYPE_GRAYSCALE_WITH_ALPHA) {
                     r = g = b = *src++;
                     a = *src++;
-                } else if (c == COLOR_TYPE_RGB) {
+                } else if (c == OK_PNG_COLOR_TYPE_RGB) {
                     r = *src++;
                     g = *src++;
                     b = *src++;
-                } else if (c == COLOR_TYPE_RGB_WITH_ALPHA) {
+                } else if (c == OK_PNG_COLOR_TYPE_RGB_WITH_ALPHA) {
                     r = *src++;
                     g = *src++;
                     b = *src++;
                     a = *src++;
                 }
             } else if (d == 16) {
-                if (c == COLOR_TYPE_GRAYSCALE) {
+                if (c == OK_PNG_COLOR_TYPE_GRAYSCALE) {
                     r = g = b = readBE16(src);
                     src += 2;
-                } else if (c == COLOR_TYPE_GRAYSCALE_WITH_ALPHA) {
+                } else if (c == OK_PNG_COLOR_TYPE_GRAYSCALE_WITH_ALPHA) {
                     r = g = b = readBE16(src);
                     a = readBE16(src + 2);
                     src += 4;
-                } else if (c == COLOR_TYPE_RGB) {
+                } else if (c == OK_PNG_COLOR_TYPE_RGB) {
                     r = readBE16(src);
                     g = readBE16(src + 2);
                     b = readBE16(src + 4);
                     src += 6;
-                } else if (c == COLOR_TYPE_RGB_WITH_ALPHA) {
+                } else if (c == OK_PNG_COLOR_TYPE_RGB_WITH_ALPHA) {
                     r = readBE16(src);
                     g = readBE16(src + 2);
                     b = readBE16(src + 4);
@@ -607,7 +608,7 @@ static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const u
                 const uint8_t v = dst[0];
                 dst[0] = dst[2];
                 dst[2] = v;
-                unpremultiply(dst);
+                ok_png_unpremultiply(dst);
             }
         } else if (has_full_alpha && !src_is_premultiplied && dst_is_premultiplied) {
             // Convert from BGRA to RGBA_PRE
@@ -615,7 +616,7 @@ static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const u
                 const uint8_t v = dst[0];
                 dst[0] = dst[2];
                 dst[2] = v;
-                premultiply(dst);
+                ok_png_premultiply(dst);
             }
         } else {
             // Convert from BGRA to RGBA (or BGRA_PRE to RGBA_PRE)
@@ -629,12 +630,12 @@ static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const u
         if (src_is_premultiplied && !dst_is_premultiplied) {
             // Convert from RGBA_PRE to RGBA
             for (uint8_t *dst = dst_start; dst < dst_end; dst += 4) {
-                unpremultiply(dst);
+                ok_png_unpremultiply(dst);
             }
         } else if (!src_is_premultiplied && dst_is_premultiplied) {
             // Convert from RGBA to RGBA_PRE
             for (uint8_t *dst = dst_start; dst < dst_end; dst += 4) {
-                premultiply(dst);
+                ok_png_premultiply(dst);
             }
         } else {
             // Do nothing: Already in correct format, RGBA or RGBA_PRE
@@ -672,7 +673,7 @@ static bool transform_scanline(png_decoder *decoder, const uint8_t *src, const u
     return true;
 }
 
-static uint32_t get_width_for_pass(const png_decoder *decoder) {
+static uint32_t ok_png_get_width_for_pass(const ok_png_decoder *decoder) {
     const uint32_t w = decoder->png->width;
     if (decoder->interlace_method == 0) {
         return w;
@@ -690,7 +691,7 @@ static uint32_t get_width_for_pass(const png_decoder *decoder) {
     }
 }
 
-static uint32_t get_height_for_pass(const png_decoder *decoder) {
+static uint32_t ok_png_get_height_for_pass(const ok_png_decoder *decoder) {
     const uint32_t h = decoder->png->height;
     if (decoder->interlace_method == 0) {
         return h;
@@ -708,11 +709,11 @@ static uint32_t get_height_for_pass(const png_decoder *decoder) {
     }
 }
 
-static bool read_data(png_decoder *decoder, uint32_t bytes_remaining) {
+static bool ok_png_read_data(ok_png_decoder *decoder, uint32_t bytes_remaining) {
     ok_png *png = decoder->png;
     const int inflate_buffer_size = 64 * 1024;
     const int num_passes = decoder->interlace_method == 0 ? 1 : 7;
-    const int bits_per_pixel = decoder->bit_depth * SAMPLES_PER_PIXEL[decoder->color_type];
+    const int bits_per_pixel = decoder->bit_depth * OK_PNG_SAMPLES_PER_PIXEL[decoder->color_type];
     const int bytes_per_pixel = (bits_per_pixel + 7) / 8;
     const int max_bytes_per_scanline = 1 + (png->width * bits_per_pixel + 7) / 8;
 
@@ -765,8 +766,8 @@ static bool read_data(png_decoder *decoder, uint32_t bytes_remaining) {
     }
 
     // Read data
-    uint32_t curr_width = get_width_for_pass(decoder);
-    uint32_t curr_height = get_height_for_pass(decoder);
+    uint32_t curr_width = ok_png_get_width_for_pass(decoder);
+    uint32_t curr_height = ok_png_get_height_for_pass(decoder);
     uint32_t curr_bytes_per_scanline = 1 + (curr_width * bits_per_pixel + 7) / 8;
     while (true) {
         // Setup pass
@@ -783,8 +784,8 @@ static bool read_data(png_decoder *decoder, uint32_t bytes_remaining) {
                     return true;
                 }
             }
-            curr_width = get_width_for_pass(decoder);
-            curr_height = get_height_for_pass(decoder);
+            curr_width = ok_png_get_width_for_pass(decoder);
+            curr_height = ok_png_get_height_for_pass(decoder);
             curr_bytes_per_scanline = 1 + (curr_width * bits_per_pixel + 7) / 8;
             if (curr_width == 0 || curr_height == 0) {
                 // No data for this pass - happens if width or height <= 4
@@ -823,16 +824,16 @@ static bool read_data(png_decoder *decoder, uint32_t bytes_remaining) {
         if (decoder->inflater_bytes_read == curr_bytes_per_scanline) {
             // Apply filter
             const int filter = decoder->curr_scanline[0];
-            if (filter > 0 && filter < NUM_FILTERS) {
-                decode_filter(decoder->curr_scanline + 1, decoder->prev_scanline + 1,
-                              curr_bytes_per_scanline - 1, filter, bytes_per_pixel);
+            if (filter > 0 && filter < OK_PNG_NUM_FILTERS) {
+                ok_png_decode_filter(decoder->curr_scanline + 1, decoder->prev_scanline + 1,
+                                     curr_bytes_per_scanline - 1, filter, bytes_per_pixel);
             } else if (filter != 0) {
                 ok_png_error(png, "Invalid filter type");
                 return false;
             }
 
             // Transform
-            if (!transform_scanline(decoder, decoder->curr_scanline + 1, curr_width)) {
+            if (!ok_png_transform_scanline(decoder, decoder->curr_scanline + 1, curr_width)) {
                 return false;
             }
 
@@ -850,7 +851,7 @@ static bool read_data(png_decoder *decoder, uint32_t bytes_remaining) {
     }
 }
 
-static void decode_png2(png_decoder *decoder) {
+static void ok_png_decode2(ok_png_decoder *decoder) {
     ok_png *png = decoder->png;
 
     uint8_t png_header[8];
@@ -875,8 +876,8 @@ static void decode_png2(png_decoder *decoder) {
         const uint32_t chunk_length = readBE32(chunk_header);
         const uint32_t chunk_type = readBE32(chunk_header + 4);
         bool success = false;
-        if (chunk_type == CHUNK_IHDR) {
-            success = read_header(decoder, chunk_length);
+        if (chunk_type == OK_PNG_CHUNK_IHDR) {
+            success = ok_png_read_header(decoder, chunk_length);
             if (success && decoder->info_only) {
                 // If the png has alpha, then we have all the info we need.
                 // Otherwise, continue scanning to see if the tRNS chunk exists.
@@ -884,26 +885,26 @@ static void decode_png2(png_decoder *decoder) {
                     return;
                 }
             }
-        } else if (chunk_type == CHUNK_CGBI) {
+        } else if (chunk_type == OK_PNG_CHUNK_CGBI) {
             success = ok_seek(decoder, chunk_length);
             decoder->is_ios_format = true;
-        } else if (chunk_type == CHUNK_PLTE && !decoder->info_only) {
-            success = read_palette(decoder, chunk_length);
-        } else if (chunk_type == CHUNK_TRNS) {
+        } else if (chunk_type == OK_PNG_CHUNK_PLTE && !decoder->info_only) {
+            success = ok_png_read_palette(decoder, chunk_length);
+        } else if (chunk_type == OK_PNG_CHUNK_TRNS) {
             if (decoder->info_only) {
                 // No need to parse this chunk, we have all the info we need.
                 png->has_alpha = true;
                 return;
             } else {
-                success = read_transparency(decoder, chunk_length);
+                success = ok_png_read_transparency(decoder, chunk_length);
             }
-        } else if (chunk_type == CHUNK_IDAT) {
+        } else if (chunk_type == OK_PNG_CHUNK_IDAT) {
             if (decoder->info_only) {
                 // Both IHDR and tRNS must come before IDAT, so we have all the info we need.
                 return;
             }
-            success = read_data(decoder, chunk_length);
-        } else if (chunk_type == CHUNK_IEND) {
+            success = ok_png_read_data(decoder, chunk_length);
+        } else if (chunk_type == OK_PNG_CHUNK_IEND) {
             success = ok_seek(decoder, chunk_length);
             end_found = true;
         } else {
@@ -927,9 +928,9 @@ static void decode_png2(png_decoder *decoder) {
     }
 }
 
-static ok_png *decode_png(void *user_data, ok_png_read_func input_read_func,
-                          ok_png_seek_func input_seek_func, ok_png_decode_flags decode_flags,
-                          bool info_only, bool check_user_data) {
+static ok_png *ok_png_decode(void *user_data, ok_png_read_func input_read_func,
+                             ok_png_seek_func input_seek_func, ok_png_decode_flags decode_flags,
+                             bool info_only, bool check_user_data) {
     ok_png *png = calloc(1, sizeof(ok_png));
     if (!png) {
         return NULL;
@@ -943,7 +944,7 @@ static ok_png *decode_png(void *user_data, ok_png_read_func input_read_func,
         return png;
     }
 
-    png_decoder *decoder = calloc(1, sizeof(png_decoder));
+    ok_png_decoder *decoder = calloc(1, sizeof(ok_png_decoder));
     if (!decoder) {
         ok_png_error(png, "Couldn't allocate decoder.");
         return png;
@@ -956,7 +957,7 @@ static ok_png *decode_png(void *user_data, ok_png_read_func input_read_func,
     decoder->decode_flags = decode_flags;
     decoder->info_only = info_only;
 
-    decode_png2(decoder);
+    ok_png_decode2(decoder);
 
     // Cleanup decoder
     ok_inflater_free(decoder->inflater);
