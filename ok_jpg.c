@@ -44,7 +44,7 @@
 #define MAX_SAMPLING_FACTOR 2
 #define C_WIDTH (MAX_SAMPLING_FACTOR * 8)
 
-typedef void (*idct_func)(const int *const input, uint8_t *output);
+typedef void (*ok_jpg_idct_func)(const int *const input, uint8_t *output);
 
 typedef struct {
     uint8_t id;
@@ -55,8 +55,8 @@ typedef struct {
     uint8_t Ta;
     uint8_t output[C_WIDTH * C_WIDTH];
     int pred;
-    idct_func idct;
-} component;
+    ok_jpg_idct_func idct;
+} ok_jpg_component;
 
 typedef struct {
     uint16_t code[256];
@@ -68,7 +68,7 @@ typedef struct {
     int mincode[16];
     int valptr[16];
     int count; // "lastk" in spec
-} huffman_table;
+} ok_jpg_huffman_table;
 
 typedef struct {
     // Output image
@@ -101,12 +101,12 @@ typedef struct {
     int data_units_x;
     int data_units_y;
     int num_components;
-    component components[3];
+    ok_jpg_component components[3];
     uint8_t q_table[4][8 * 8];
 
     // 0 = DC table, 1 = AC table
-    huffman_table huffman_tables[2][4];
-} jpg_decoder;
+    ok_jpg_huffman_table huffman_tables[2][4];
+} ok_jpg_decoder;
 
 static void ok_jpg_error(ok_jpg *jpg, const char *message) {
     if (jpg) {
@@ -121,7 +121,7 @@ static void ok_jpg_error(ok_jpg *jpg, const char *message) {
     }
 }
 
-static bool ok_read(jpg_decoder *decoder, uint8_t *buffer, size_t length) {
+static bool ok_read(ok_jpg_decoder *decoder, uint8_t *buffer, size_t length) {
     if (decoder->input_read_func(decoder->input_data, buffer, length) == length) {
         return true;
     } else {
@@ -130,7 +130,7 @@ static bool ok_read(jpg_decoder *decoder, uint8_t *buffer, size_t length) {
     }
 }
 
-static bool ok_seek(jpg_decoder *decoder, long length) {
+static bool ok_seek(ok_jpg_decoder *decoder, long length) {
     if (decoder->input_seek_func(decoder->input_data, length)) {
         return true;
     } else {
@@ -151,35 +151,35 @@ static bool ok_file_seek_func(void *user_data, long count) {
 
 #endif
 
-static ok_jpg *decode_jpg(void *user_data, ok_jpg_read_func input_read_func,
-                          ok_jpg_seek_func input_seek_func, ok_jpg_decode_flags decode_flags,
-                          bool info_only, bool check_user_data);
+static ok_jpg *ok_jpg_decode(void *user_data, ok_jpg_read_func input_read_func,
+                             ok_jpg_seek_func input_seek_func, ok_jpg_decode_flags decode_flags,
+                             bool info_only, bool check_user_data);
 
 // MARK: Public API
 
 #ifndef OK_NO_STDIO
 
 ok_jpg *ok_jpg_read_info(FILE *file) {
-    return decode_jpg(file, ok_file_read_func, ok_file_seek_func, OK_JPG_COLOR_FORMAT_RGBA,
-                      true, true);
+    return ok_jpg_decode(file, ok_file_read_func, ok_file_seek_func, OK_JPG_COLOR_FORMAT_RGBA,
+                         true, true);
 }
 
 ok_jpg *ok_jpg_read(FILE *file, ok_jpg_decode_flags decode_flags) {
-    return decode_jpg(file, ok_file_read_func, ok_file_seek_func, decode_flags, false, true);
+    return ok_jpg_decode(file, ok_file_read_func, ok_file_seek_func, decode_flags, false, true);
 }
 
 #endif
 
 ok_jpg *ok_jpg_read_info_from_callbacks(void *user_data, ok_jpg_read_func input_read_func,
                                         ok_jpg_seek_func input_seek_func) {
-    return decode_jpg(user_data, input_read_func, input_seek_func, OK_JPG_COLOR_FORMAT_RGBA,
-                      true, false);
+    return ok_jpg_decode(user_data, input_read_func, input_seek_func, OK_JPG_COLOR_FORMAT_RGBA,
+                         true, false);
 }
 
 ok_jpg *ok_jpg_read_from_callbacks(void *user_data, ok_jpg_read_func input_read_func,
                                    ok_jpg_seek_func input_seek_func,
                                    ok_jpg_decode_flags decode_flags) {
-    return decode_jpg(user_data, input_read_func, input_seek_func, decode_flags, false, false);
+    return ok_jpg_decode(user_data, input_read_func, input_seek_func, decode_flags, false, false);
 }
 
 void ok_jpg_free(ok_jpg *jpg) {
@@ -208,7 +208,7 @@ static inline uint32_t readLE32(const uint8_t *data) {
 }
 
 // Load bits without reading them
-static inline bool load_bits(jpg_decoder *decoder, const int num_bits) {
+static inline bool ok_jpg_load_bits(ok_jpg_decoder *decoder, int num_bits) {
     // Needs optimization? Buffer the data instead of calling ok_read for every byte
     while (decoder->input_buffer_bits < num_bits) {
         if (decoder->next_marker != 0) {
@@ -237,28 +237,28 @@ static inline bool load_bits(jpg_decoder *decoder, const int num_bits) {
 }
 
 // Assumes at least 1 bit of data was previously loaded in load_bits
-static inline int next_bit(jpg_decoder *decoder) {
+static inline int ok_jpg_next_bit(ok_jpg_decoder *decoder) {
     decoder->input_buffer_bits--;
     return (decoder->input_buffer >> decoder->input_buffer_bits) & 1;
 }
 
 // Assumes at least 8 bits of data was previously loaded in load_bits
-static inline int peek_byte(jpg_decoder *decoder) {
+static inline int ok_jpg_peek_byte(ok_jpg_decoder *decoder) {
     return (decoder->input_buffer >> (decoder->input_buffer_bits - 8)) & 0xff;
 }
 
 // Assumes at least num_bits of data was previously loaded in load_bits
-static inline void consume_bits(jpg_decoder *decoder, const int num_bits) {
+static inline void ok_jpg_consume_bits(ok_jpg_decoder *decoder, int num_bits) {
     decoder->input_buffer_bits -= num_bits;
 }
 
-static inline void dump_bits(jpg_decoder *decoder) {
+static inline void ok_jpg_dump_bits(ok_jpg_decoder *decoder) {
     decoder->input_buffer = 0;
     decoder->input_buffer_bits = 0;
 }
 
-static inline int load_next_bits(jpg_decoder *decoder, const int num_bits) {
-    if (!load_bits(decoder, num_bits)) {
+static inline int ok_jpg_load_next_bits(ok_jpg_decoder *decoder, int num_bits) {
+    if (!ok_jpg_load_bits(decoder, num_bits)) {
         return -1;
     }
     decoder->input_buffer_bits -= num_bits;
@@ -267,7 +267,7 @@ static inline int load_next_bits(jpg_decoder *decoder, const int num_bits) {
 
 // MARK: Huffman decoding
 
-static void generate_huffman_table(huffman_table *huff, const uint8_t *bits) {
+static void ok_jpg_generate_huffman_table(ok_jpg_huffman_table *huff, const uint8_t *bits) {
     // JPEG spec: "Generate_size_table"
     int k = 0;
     for (uint8_t i = 1; i <= 16; i++) {
@@ -310,7 +310,7 @@ static void generate_huffman_table(huffman_table *huff, const uint8_t *bits) {
     }
 }
 
-static void generate_huffman_table_lookups(huffman_table *huff) {
+static void ok_jpg_generate_huffman_table_lookups(ok_jpg_huffman_table *huff) {
     // Look up table for codes that use 8 bits or less (most of them)
     for (int q = 0; q < 256; q++) {
         huff->lookup_num_bits[q] = 0;
@@ -329,28 +329,29 @@ static void generate_huffman_table_lookups(huffman_table *huff) {
     }
 }
 
-static inline int huffman_decode(jpg_decoder *decoder, const huffman_table *table) {
+static inline int ok_jpg_huffman_decode(ok_jpg_decoder *decoder,
+                                        const ok_jpg_huffman_table *table) {
     // JPEG spec: "Decode" (Figure F.16)
 
     // First, try 8-bit lookup tables (most codes wil be 8-bit or less)
-    if (!load_bits(decoder, 8)) {
+    if (!ok_jpg_load_bits(decoder, 8)) {
         return -1;
     }
-    int code = peek_byte(decoder);
+    int code = ok_jpg_peek_byte(decoder);
     int num_bits = table->lookup_num_bits[code];
     if (num_bits != 0) {
-        consume_bits(decoder, num_bits);
+        ok_jpg_consume_bits(decoder, num_bits);
         return table->lookup_val[code];
     }
 
     // Next, try a code up to 16-bits
     // Needs optimization for codes > 8 bits?
-    consume_bits(decoder, 8);
-    if (!load_bits(decoder, 8)) {
+    ok_jpg_consume_bits(decoder, 8);
+    if (!ok_jpg_load_bits(decoder, 8)) {
         return -1;
     }
     for (int i = 8; i < 16; i++) {
-        code = (code << 1) | next_bit(decoder);
+        code = (code << 1) | ok_jpg_next_bit(decoder);
         if (code <= table->maxcode[i]) {
             int j = table->valptr[i];
             j += code - table->mincode[i];
@@ -364,16 +365,16 @@ static inline int huffman_decode(jpg_decoder *decoder, const huffman_table *tabl
 
 // MARK: JPEG color conversion
 
-static inline uint8_t clip_uint8(const int x) {
+static inline uint8_t ok_jpg_clip_uint8(const int x) {
     return ((unsigned int)x) < 0xff ? (uint8_t)x : (x < 0 ? 0 : 0xff);
 }
 
-static inline uint8_t clip_fp_uint8(const int fx) {
+static inline uint8_t ok_jpg_clip_fp_uint8(const int fx) {
     return ((unsigned int)fx) < 0xff0000 ? (uint8_t)(fx >> 16) : (fx < 0 ? 0 : 0xff);
 }
 
-static inline void convert_YCbCr_to_RGB(uint8_t Y, uint8_t Cb, uint8_t Cr,
-                                        uint8_t *r, uint8_t *g, uint8_t *b) {
+static inline void ok_jpg_convert_YCbCr_to_RGB(uint8_t Y, uint8_t Cb, uint8_t Cr,
+                                               uint8_t *r, uint8_t *g, uint8_t *b) {
     // From the JFIF spec. Converted to 16:16 fixed point.
     static const int fx1 = 91881; // 1.402
     static const int fx2 = -22553; // 0.34414
@@ -384,16 +385,16 @@ static inline void convert_YCbCr_to_RGB(uint8_t Y, uint8_t Cb, uint8_t Cr,
     const int fr = fy + fx1 * (Cr - 128);
     const int fg = fy + fx2 * (Cb - 128) + fx3 * (Cr - 128);
     const int fb = fy + fx4 * (Cb - 128);
-    *r = clip_fp_uint8(fr);
-    *g = clip_fp_uint8(fg);
-    *b = clip_fp_uint8(fb);
+    *r = ok_jpg_clip_fp_uint8(fr);
+    *g = ok_jpg_clip_fp_uint8(fg);
+    *b = ok_jpg_clip_fp_uint8(fb);
 }
 
 // Convert from grayscale to RGBA
-static void convert_data_unit_grayscale(const uint8_t *y,
-                                        uint8_t *r, uint8_t *g, uint8_t *b, uint8_t *a,
-                                        const int x_inc, const int y_inc,
-                                        const int max_width, const int max_height) {
+static void ok_jpg_convert_data_unit_grayscale(const uint8_t *y,
+                                               uint8_t *r, uint8_t *g, uint8_t *b, uint8_t *a,
+                                               const int x_inc, const int y_inc,
+                                               const int max_width, const int max_height) {
     const int in_row_offfset = C_WIDTH - max_width;
     const int out_row_offset = y_inc - x_inc * max_width;
 
@@ -417,17 +418,17 @@ static void convert_data_unit_grayscale(const uint8_t *y,
 }
 
 // Convert from YCbCr to RGBA
-static void convert_data_unit_color(const uint8_t *y, const uint8_t *cb, const uint8_t *cr,
-                                    uint8_t *r, uint8_t *g, uint8_t *b, uint8_t *a,
-                                    const int x_inc, const int y_inc,
-                                    const int max_width, const int max_height) {
+static void ok_jpg_convert_data_unit_color(const uint8_t *y, const uint8_t *cb, const uint8_t *cr,
+                                           uint8_t *r, uint8_t *g, uint8_t *b, uint8_t *a,
+                                           const int x_inc, const int y_inc,
+                                           const int max_width, const int max_height) {
     const int in_row_offfset = C_WIDTH - max_width;
     const int out_row_offset = y_inc - x_inc * max_width;
 
     for (int v = 0; v < max_height; v++) {
         const uint8_t *y_end = y + max_width;
         while (y < y_end) {
-            convert_YCbCr_to_RGB(*y, *cb, *cr, r, g, b);
+            ok_jpg_convert_YCbCr_to_RGB(*y, *cb, *cr, r, g, b);
             *a = 0xff;
             r += x_inc;
             g += x_inc;
@@ -447,9 +448,9 @@ static void convert_data_unit_color(const uint8_t *y, const uint8_t *cb, const u
     }
 }
 
-static void convert_data_unit(jpg_decoder *decoder, const int data_unit_x, const int data_unit_y) {
+static void ok_jpg_convert_data_unit(ok_jpg_decoder *decoder, int data_unit_x, int data_unit_y) {
     ok_jpg *jpg = decoder->jpg;
-    component *c = decoder->components;
+    ok_jpg_component *c = decoder->components;
     int x = data_unit_x * c->H * 8;
     int y = data_unit_y * c->V * 8;
     const int width = min(c->H * 8, decoder->in_width - x);
@@ -481,25 +482,25 @@ static void convert_data_unit(jpg_decoder *decoder, const int data_unit_x, const
     }
 
     if (decoder->num_components == 1) {
-        convert_data_unit_grayscale(c->output, data, data + 1, data + 2, data + 3,
-                                    x_inc, y_inc, width, height);
+        ok_jpg_convert_data_unit_grayscale(c->output, data, data + 1, data + 2, data + 3,
+                                           x_inc, y_inc, width, height);
     } else if (decoder->color_rgba) {
-        convert_data_unit_color(c->output, (c + 1)->output, (c + 2)->output,
-                                data, data + 1, data + 2, data + 3,
-                                x_inc, y_inc, width, height);
+        ok_jpg_convert_data_unit_color(c->output, (c + 1)->output, (c + 2)->output,
+                                       data, data + 1, data + 2, data + 3,
+                                       x_inc, y_inc, width, height);
     } else {
-        convert_data_unit_color(c->output, (c + 1)->output, (c + 2)->output,
-                                data + 2, data + 1, data, data + 3,
-                                x_inc, y_inc, width, height);
+        ok_jpg_convert_data_unit_color(c->output, (c + 1)->output, (c + 2)->output,
+                                       data + 2, data + 1, data, data + 3,
+                                       x_inc, y_inc, width, height);
     }
 }
 
 // MARK: IDCT
 
 // Output is scaled by (1 << 12) * sqrt(2) / (1 << out_shift)
-static inline void idct_1d_8(int *out, const int out_shift,
-                             const int v0, const int v1, const int v2, const int v3,
-                             const int v4, const int v5, const int v6, const int v7) {
+static inline void ok_jpg_idct_1d_8(int *out, const int out_shift,
+                                    const int v0, const int v1, const int v2, const int v3,
+                                    const int v4, const int v5, const int v6, const int v7) {
     // Constants scaled by (1 << 12).
     static const int c1 = 5681; // cos(1*pi/16) * sqrt(2)
     static const int c2 = 5352; // cos(2*pi/16) * sqrt(2)
@@ -571,9 +572,9 @@ static inline void idct_1d_8(int *out, const int out_shift,
 }
 
 // Output is scaled by (1 << 12) * sqrt(2) / (1 << out_shift)
-static inline void idct_1d_16(int *out, const int out_shift,
-                              const int v0, const int v1, const int v2, const int v3,
-                              const int v4, const int v5, const int v6, const int v7) {
+static inline void ok_jpg_idct_1d_16(int *out, const int out_shift,
+                                     const int v0, const int v1, const int v2, const int v3,
+                                     const int v4, const int v5, const int v6, const int v7) {
     // Constants scaled by (1 << 12).
     static const int c1 = 5765;  // cos( 1*pi/32) * sqrt(2)
     static const int c2 = 5681;  // cos( 2*pi/32) * sqrt(2)
@@ -681,7 +682,7 @@ static inline void idct_1d_16(int *out, const int out_shift,
 // Once loops were unrolled, redundant computations were obvious, and they could be eliminated.
 // 1. Converted to integer (fixed-point)
 // 2. Scaled output by sqrt(2).
-static void idct_wxh(const int *const input, uint8_t *output, const int w, const int h) {
+static void ok_jpg_idct_wxh(const int *const input, uint8_t *output, const int w, const int h) {
     int temp[16 * 16];
     int temp_row[16];
     const int *in = input;
@@ -691,17 +692,17 @@ static void idct_wxh(const int *const input, uint8_t *output, const int w, const
     // Shift-right by 8 so output is scaled ((1 << 4) * sqrt(2)).
     if (h == 8) {
         for (int u = 0; u < 8; u++) {
-            idct_1d_8(out, 8,
-                      in[0 * 8], in[1 * 8], in[2 * 8], in[3 * 8],
-                      in[4 * 8], in[5 * 8], in[6 * 8], in[7 * 8]);
+            ok_jpg_idct_1d_8(out, 8,
+                             in[0 * 8], in[1 * 8], in[2 * 8], in[3 * 8],
+                             in[4 * 8], in[5 * 8], in[6 * 8], in[7 * 8]);
             in++;
             out += 16;
         }
     } else { // h == 16
         for (int u = 0; u < 8; u++) {
-            idct_1d_16(out, 8,
-                       in[0 * 8], in[1 * 8], in[2 * 8], in[3 * 8],
-                       in[4 * 8], in[5 * 8], in[6 * 8], in[7 * 8]);
+            ok_jpg_idct_1d_16(out, 8,
+                              in[0 * 8], in[1 * 8], in[2 * 8], in[3 * 8],
+                              in[4 * 8], in[5 * 8], in[6 * 8], in[7 * 8]);
             in++;
             out += 16;
         }
@@ -714,22 +715,22 @@ static void idct_wxh(const int *const input, uint8_t *output, const int w, const
     in = temp;
     if (w == 8) {
         for (int y = 0; y < h; y++) {
-            idct_1d_8(temp_row, 19,
-                      in[0 * 16], in[1 * 16], in[2 * 16], in[3 * 16],
-                      in[4 * 16], in[5 * 16], in[6 * 16], in[7 * 16]);
+            ok_jpg_idct_1d_8(temp_row, 19,
+                             in[0 * 16], in[1 * 16], in[2 * 16], in[3 * 16],
+                             in[4 * 16], in[5 * 16], in[6 * 16], in[7 * 16]);
             for (int x = 0; x < 8; x++) {
-                output[x] = clip_uint8(temp_row[x] + 128);
+                output[x] = ok_jpg_clip_uint8(temp_row[x] + 128);
             }
             in++;
             output += C_WIDTH;
         }
     } else { // w == 16
         for (int y = 0; y < h; y++) {
-            idct_1d_16(temp_row, 19,
-                       in[0 * 16], in[1 * 16], in[2 * 16], in[3 * 16],
-                       in[4 * 16], in[5 * 16], in[6 * 16], in[7 * 16]);
+            ok_jpg_idct_1d_16(temp_row, 19,
+                              in[0 * 16], in[1 * 16], in[2 * 16], in[3 * 16],
+                              in[4 * 16], in[5 * 16], in[6 * 16], in[7 * 16]);
             for (int x = 0; x < 16; x++) {
-                output[x] = clip_uint8(temp_row[x] + 128);
+                output[x] = ok_jpg_clip_uint8(temp_row[x] + 128);
             }
             in++;
             output += C_WIDTH;
@@ -738,28 +739,28 @@ static void idct_wxh(const int *const input, uint8_t *output, const int w, const
 }
 
 // IDCT a 8x8 input block to 8x8 in an output of size (C_WIDTH x C_WIDTH)
-static void idct_8x8(const int *const input, uint8_t *output) {
-    idct_wxh(input, output, 8, 8);
+static void ok_jpg_idct_8x8(const int * const input, uint8_t *output) {
+    ok_jpg_idct_wxh(input, output, 8, 8);
 }
 
 // IDCT a 8x8 block to 8x16 in an output of size (C_WIDTH x C_WIDTH)
-static void idct_8x16(const int *const input, uint8_t *output) {
-    idct_wxh(input, output, 8, 16);
+static void ok_jpg_idct_8x16(const int * const input, uint8_t *output) {
+    ok_jpg_idct_wxh(input, output, 8, 16);
 }
 
 // IDCT a 8x8 block to 16x8 in an output of size (C_WIDTH x C_WIDTH)
-static void idct_16x8(const int *const input, uint8_t *output) {
-    idct_wxh(input, output, 16, 8);
+static void ok_jpg_idct_16x8(const int * const input, uint8_t *output) {
+    ok_jpg_idct_wxh(input, output, 16, 8);
 }
 
 // IDCT a 8x8 block to 16x16 in an output of size (C_WIDTH x C_WIDTH)
-static void idct_16x16(const int *const input, uint8_t *output) {
-    idct_wxh(input, output, 16, 16);
+static void ok_jpg_idct_16x16(const int * const input, uint8_t *output) {
+    ok_jpg_idct_wxh(input, output, 16, 16);
 }
 
 // MARK: Entropy decoding
 
-static const uint8_t zig_zag[] = {
+static const uint8_t ok_jpg_zig_zag[] = {
      0,  1,  8, 16,  9,  2,  3, 10,
     17, 24, 32, 25, 18, 11,  4,  5,
     12, 19, 26, 33, 40, 48, 41, 34,
@@ -770,7 +771,7 @@ static const uint8_t zig_zag[] = {
     53, 60, 61, 54, 47, 55, 62, 63,
 };
 
-static inline int extend(const int v, const int t) {
+static inline int ok_jpg_extend(const int v, const int t) {
     // Figure F.12
     if (v < (1 << (t - 1))) {
         return v + ((-1) << t) + 1;
@@ -779,33 +780,33 @@ static inline int extend(const int v, const int t) {
     }
 }
 
-static bool decode_data_unit(jpg_decoder *decoder, component *c, uint8_t *out) {
+static bool ok_jpg_decode_data_unit(ok_jpg_decoder *decoder, ok_jpg_component *c, uint8_t *out) {
     int block[8 * 8];
     memset(block, 0, sizeof(block));
 
     // Decode DC coefficients - F.2.2.1
     const uint8_t *q_table = decoder->q_table[c->Tq];
-    huffman_table *dc = decoder->huffman_tables[0] + c->Td;
-    int t = huffman_decode(decoder, dc);
+    ok_jpg_huffman_table *dc = decoder->huffman_tables[0] + c->Td;
+    int t = ok_jpg_huffman_decode(decoder, dc);
     if (t < 0) {
         return false;
     }
     if (t > 0) {
-        int diff = load_next_bits(decoder, t);
+        int diff = ok_jpg_load_next_bits(decoder, t);
         if (diff < 0) {
             return false;
         }
-        diff = extend(diff, t);
+        diff = ok_jpg_extend(diff, t);
         c->pred += diff;
     }
 
     block[0] = c->pred * q_table[0];
 
     // Decode AC coefficients - Figure F.13 and F.14
-    huffman_table *ac = decoder->huffman_tables[1] + c->Ta;
+    ok_jpg_huffman_table *ac = decoder->huffman_tables[1] + c->Ta;
     int k = 1;
     while (k < 64) {
-        int rs = huffman_decode(decoder, ac);
+        int rs = ok_jpg_huffman_decode(decoder, ac);
         if (rs < 0) {
             return false;
         }
@@ -822,11 +823,11 @@ static bool decode_data_unit(jpg_decoder *decoder, component *c, uint8_t *out) {
                 ok_jpg_error(decoder->jpg, "Invalid block index");
                 return false;
             }
-            int zzk = load_next_bits(decoder, s);
+            int zzk = ok_jpg_load_next_bits(decoder, s);
             if (zzk < 0) {
                 return false;
             }
-            block[zig_zag[k]] = extend(zzk, s) * q_table[k];
+            block[ok_jpg_zig_zag[k]] = ok_jpg_extend(zzk, s) * q_table[k];
             k++;
         }
     }
@@ -835,26 +836,26 @@ static bool decode_data_unit(jpg_decoder *decoder, component *c, uint8_t *out) {
     return true;
 }
 
-static void decode_restart(jpg_decoder *decoder) {
+static void ok_jpg_decode_restart(ok_jpg_decoder *decoder) {
     decoder->restart_intervals_remaining = decoder->restart_intervals;
     for (int i = 0; i < decoder->num_components; i++) {
         decoder->components[i].pred = 0;
     }
 }
 
-static bool decode_scan(jpg_decoder *decoder) {
+static bool ok_jpg_decode_scan(ok_jpg_decoder *decoder) {
     ok_jpg *jpg = decoder->jpg;
     int next_restart = 0;
-    decode_restart(decoder);
+    ok_jpg_decode_restart(decoder);
     for (int data_unit_y = 0; data_unit_y < decoder->data_units_y; data_unit_y++) {
         for (int data_unit_x = 0; data_unit_x < decoder->data_units_x; data_unit_x++) {
             for (int i = 0; i < decoder->num_components; i++) {
-                component *c = decoder->components + i;
+                ok_jpg_component *c = decoder->components + i;
                 int offset_y = 0;
                 for (int y = 0; y < c->V; y++) {
                     int offset_x = 0;
                     for (int x = 0; x < c->H; x++) {
-                        if (!decode_data_unit(decoder, c, c->output + offset_x + offset_y)) {
+                        if (!ok_jpg_decode_data_unit(decoder, c, c->output + offset_x + offset_y)) {
                             return false;
                         }
                         offset_x += 8;
@@ -863,7 +864,7 @@ static bool decode_scan(jpg_decoder *decoder) {
                 }
             }
 
-            convert_data_unit(decoder, data_unit_x, data_unit_y);
+            ok_jpg_convert_data_unit(decoder, data_unit_x, data_unit_y);
 
             if (decoder->restart_intervals_remaining > 0) {
                 decoder->restart_intervals_remaining--;
@@ -873,7 +874,7 @@ static bool decode_scan(jpg_decoder *decoder) {
                     const bool at_end = (data_unit_x == decoder->data_units_x - 1 &&
                                          data_unit_y == decoder->data_units_y - 1);
                     if (!at_end) {
-                        dump_bits(decoder);
+                        ok_jpg_dump_bits(decoder);
                         if (decoder->next_marker != 0) {
                             if (decoder->next_marker == 0xD0 + next_restart) {
                                 decoder->next_marker = 0;
@@ -893,14 +894,14 @@ static bool decode_scan(jpg_decoder *decoder) {
                         }
                         next_restart = (next_restart + 1) & 7;
 
-                        decode_restart(decoder);
+                        ok_jpg_decode_restart(decoder);
                     }
                 }
             }
         }
     }
     decoder->complete = true;
-    dump_bits(decoder);
+    ok_jpg_dump_bits(decoder);
     return true;
 }
 
@@ -908,7 +909,7 @@ static bool decode_scan(jpg_decoder *decoder) {
 
 #define intDivCeil(x, y) (((x) + (y)-1) / (y))
 
-static bool read_sof(jpg_decoder *decoder) {
+static bool ok_jpg_read_sof(ok_jpg_decoder *decoder) {
     ok_jpg *jpg = decoder->jpg;
     uint8_t buffer[3 * 3];
     if (!ok_read(decoder, buffer, 8)) {
@@ -945,7 +946,7 @@ static bool read_sof(jpg_decoder *decoder) {
     int maxH = 1;
     int maxV = 1;
     for (int i = 0; i < decoder->num_components; i++) {
-        component *c = decoder->components + i;
+        ok_jpg_component *c = decoder->components + i;
         c->id = buffer[i * 3 + 0];
         c->H = buffer[i * 3 + 1] >> 4;
         c->V = buffer[i * 3 + 1] & 0x0F;
@@ -977,15 +978,15 @@ static bool read_sof(jpg_decoder *decoder) {
 
     // Setup idct
     for (int i = 0; i < decoder->num_components; i++) {
-        component *c = decoder->components + i;
+        ok_jpg_component *c = decoder->components + i;
         if (c->H == maxH && c->V == maxV) {
-            c->idct = idct_8x8;
+            c->idct = ok_jpg_idct_8x8;
         } else if (c->H * 2 == maxH && c->V * 2 == maxV) {
-            c->idct = idct_16x16;
+            c->idct = ok_jpg_idct_16x16;
         } else if (c->H == maxH && c->V * 2 == maxV) {
-            c->idct = idct_8x16;
+            c->idct = ok_jpg_idct_8x16;
         } else if (c->H * 2 == maxH && c->V == maxV) {
-            c->idct = idct_16x8;
+            c->idct = ok_jpg_idct_16x8;
         } else {
             ok_jpg_error(jpg, "Unsupported IDCT sampling factor");
             return false;
@@ -1012,7 +1013,7 @@ static bool read_sof(jpg_decoder *decoder) {
     return true;
 }
 
-static bool read_exif(jpg_decoder *decoder) {
+static bool ok_jpg_read_exif(ok_jpg_decoder *decoder) {
     static const char exif_magic[] = {'E', 'x', 'i', 'f', 0, 0};
     static const char tiff_magic_little_endian[] = {0x49, 0x49, 0x2a, 0x00};
     static const char tiff_magic_big_endian[] = {0x4d, 0x4d, 0x00, 0x2a};
@@ -1139,7 +1140,7 @@ static bool read_exif(jpg_decoder *decoder) {
     return ok_seek(decoder, length);
 }
 
-static bool read_dqt(jpg_decoder *decoder) {
+static bool ok_jpg_read_dqt(ok_jpg_decoder *decoder) {
     ok_jpg *jpg = decoder->jpg;
     uint8_t buffer[2];
     if (!ok_read(decoder, buffer, sizeof(buffer))) {
@@ -1175,7 +1176,7 @@ static bool read_dqt(jpg_decoder *decoder) {
     }
 }
 
-static bool read_dri(jpg_decoder *decoder) {
+static bool ok_jpg_read_dri(ok_jpg_decoder *decoder) {
     uint8_t buffer[4];
     if (!ok_read(decoder, buffer, sizeof(buffer))) {
         return false;
@@ -1190,7 +1191,7 @@ static bool read_dri(jpg_decoder *decoder) {
     }
 }
 
-static bool read_dht(jpg_decoder *decoder) {
+static bool ok_jpg_read_dht(ok_jpg_decoder *decoder) {
     ok_jpg *jpg = decoder->jpg;
     uint8_t buffer[17];
     if (!ok_read(decoder, buffer, 2)) {
@@ -1209,8 +1210,8 @@ static bool read_dht(jpg_decoder *decoder) {
             ok_jpg_error(jpg, "Invalid JPEG (Bad DHT Tc/Th)");
             return false;
         }
-        huffman_table *table = decoder->huffman_tables[Tc] + Th;
-        generate_huffman_table(table, buffer);
+        ok_jpg_huffman_table *table = decoder->huffman_tables[Tc] + Th;
+        ok_jpg_generate_huffman_table(table, buffer);
         if (table->count > 0) {
             if (table->count > 256 || table->count > length) {
                 ok_jpg_error(jpg, "Invalid DHT segment length");
@@ -1221,7 +1222,7 @@ static bool read_dht(jpg_decoder *decoder) {
             }
             length -= table->count;
         }
-        generate_huffman_table_lookups(table);
+        ok_jpg_generate_huffman_table_lookups(table);
     }
     if (length != 0) {
         ok_jpg_error(jpg, "Invalid DHT segment length");
@@ -1231,7 +1232,7 @@ static bool read_dht(jpg_decoder *decoder) {
     }
 }
 
-static bool read_sos(jpg_decoder *decoder) {
+static bool ok_jpg_read_sos(ok_jpg_decoder *decoder) {
     ok_jpg *jpg = decoder->jpg;
     const size_t expected_size = 6 + (size_t)decoder->num_components * 2;
     uint8_t buffer[16];
@@ -1254,7 +1255,7 @@ static bool read_sos(jpg_decoder *decoder) {
 
     uint8_t *src = buffer + 3;
     for (int i = 0; i < decoder->num_components; i++, src += 2) {
-        component *comp = decoder->components + i;
+        ok_jpg_component *comp = decoder->components + i;
         int C = src[0];
         if (C != comp->id) {
             ok_jpg_error(jpg, "Invalid SOS segment (C)");
@@ -1274,10 +1275,10 @@ static bool read_sos(jpg_decoder *decoder) {
         return false;
     }
 
-    return decode_scan(decoder);
+    return ok_jpg_decode_scan(decoder);
 }
 
-static bool skip_segment(jpg_decoder *decoder) {
+static bool ok_jpg_skip_segment(ok_jpg_decoder *decoder) {
     uint8_t buffer[2];
     if (!ok_read(decoder, buffer, sizeof(buffer))) {
         return false;
@@ -1288,7 +1289,7 @@ static bool skip_segment(jpg_decoder *decoder) {
 
 // MARK: JPEG decoding entry point
 
-static void decode_jpg2(jpg_decoder *decoder) {
+static void ok_jpg_decode2(ok_jpg_decoder *decoder) {
     ok_jpg *jpg = decoder->jpg;
 
     // Read header
@@ -1322,22 +1323,22 @@ static void decode_jpg2(jpg_decoder *decoder) {
         bool success = true;
         if (marker == 0xC0) {
             // SOF
-            success = read_sof(decoder);
+            success = ok_jpg_read_sof(decoder);
             if (success && decoder->info_only) {
                 return;
             }
         } else if (marker == 0xC4) {
             // DHT
-            success = decoder->info_only ? skip_segment(decoder) : read_dht(decoder);
+            success = decoder->info_only ? ok_jpg_skip_segment(decoder) : ok_jpg_read_dht(decoder);
         } else if (marker == 0xD9) {
             // EOI
             decoder->eoi_found = true;
         } else if (marker == 0xDA) {
             // SOS
             if (!decoder->info_only) {
-                success = read_sos(decoder);
+                success = ok_jpg_read_sos(decoder);
             } else {
-                success = skip_segment(decoder);
+                success = ok_jpg_skip_segment(decoder);
                 if (success) {
                     // Scan to next marker
                     while (true) {
@@ -1358,16 +1359,16 @@ static void decode_jpg2(jpg_decoder *decoder) {
             }
         } else if (marker == 0xDB) {
             // DQT
-            success = decoder->info_only ? skip_segment(decoder) : read_dqt(decoder);
+            success = decoder->info_only ? ok_jpg_skip_segment(decoder) : ok_jpg_read_dqt(decoder);
         } else if (marker == 0xDD) {
             // DRI
-            success = read_dri(decoder);
+            success = ok_jpg_read_dri(decoder);
         } else if (marker == 0xE1) {
             // APP1 - EXIF metadata
-            success = read_exif(decoder);
+            success = ok_jpg_read_exif(decoder);
         } else if ((marker >= 0xE0 && marker <= 0xEF) || marker == 0xFE) {
             // APP or Comment
-            success = skip_segment(decoder);
+            success = ok_jpg_skip_segment(decoder);
         } else if ((marker & 0xF0) == 0xC0) {
             ok_jpg_error(jpg, "Unsupported JPEG: progressive, extended, or lossless");
             success = false;
@@ -1386,9 +1387,9 @@ static void decode_jpg2(jpg_decoder *decoder) {
     }
 }
 
-static ok_jpg *decode_jpg(void *user_data, ok_jpg_read_func input_read_func,
-                          ok_jpg_seek_func input_seek_func, ok_jpg_decode_flags decode_flags,
-                          bool info_only, bool check_user_data) {
+static ok_jpg *ok_jpg_decode(void *user_data, ok_jpg_read_func input_read_func,
+                             ok_jpg_seek_func input_seek_func, ok_jpg_decode_flags decode_flags,
+                             bool info_only, bool check_user_data) {
     ok_jpg *jpg = calloc(1, sizeof(ok_jpg));
     if (!jpg) {
         return NULL;
@@ -1402,7 +1403,7 @@ static ok_jpg *decode_jpg(void *user_data, ok_jpg_read_func input_read_func,
         return jpg;
     }
 
-    jpg_decoder *decoder = calloc(1, sizeof(jpg_decoder));
+    ok_jpg_decoder *decoder = calloc(1, sizeof(ok_jpg_decoder));
     if (!decoder) {
         ok_jpg_error(jpg, "Couldn't allocate decoder.");
         return jpg;
@@ -1416,7 +1417,7 @@ static ok_jpg *decode_jpg(void *user_data, ok_jpg_read_func input_read_func,
     decoder->flip_y = (decode_flags & OK_JPG_FLIP_Y) != 0;
     decoder->info_only = info_only;
 
-    decode_jpg2(decoder);
+    ok_jpg_decode2(decoder);
 
     free(decoder);
     return jpg;
