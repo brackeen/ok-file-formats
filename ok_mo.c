@@ -48,9 +48,9 @@ typedef struct {
     ok_mo_read_func input_read_func;
     ok_mo_seek_func input_seek_func;
 
-} mo_decoder;
+} ok_mo_decoder;
 
-static void decode_mo2(mo_decoder *decoder);
+static void ok_mo_decode2(ok_mo_decoder *decoder);
 
 static void ok_mo_cleanup(ok_mo *mo) {
     if (mo) {
@@ -75,10 +75,10 @@ static void ok_mo_error(ok_mo *mo, const char *message) {
     }
 }
 
-static void decode_mo(ok_mo *mo, void *input_data, ok_mo_read_func input_read_func,
-                      ok_mo_seek_func input_seek_func) {
+static void ok_mo_decode(ok_mo *mo, void *input_data, ok_mo_read_func input_read_func,
+                         ok_mo_seek_func input_seek_func) {
     if (mo) {
-        mo_decoder *decoder = calloc(1, sizeof(mo_decoder));
+        ok_mo_decoder *decoder = calloc(1, sizeof(ok_mo_decoder));
         if (!decoder) {
             ok_mo_error(mo, "Couldn't allocate decoder.");
             return;
@@ -88,7 +88,7 @@ static void decode_mo(ok_mo *mo, void *input_data, ok_mo_read_func input_read_fu
         decoder->input_read_func = input_read_func;
         decoder->input_seek_func = input_seek_func;
 
-        decode_mo2(decoder);
+        ok_mo_decode2(decoder);
 
         if (decoder->key_offset_buffer) {
             free(decoder->key_offset_buffer);
@@ -100,7 +100,7 @@ static void decode_mo(ok_mo *mo, void *input_data, ok_mo_read_func input_read_fu
     }
 }
 
-static bool ok_read(mo_decoder *decoder, uint8_t *buffer, size_t length) {
+static bool ok_read(ok_mo_decoder *decoder, uint8_t *buffer, size_t length) {
     if (decoder->input_read_func(decoder->input_data, buffer, length) == length) {
         return true;
     } else {
@@ -109,7 +109,7 @@ static bool ok_read(mo_decoder *decoder, uint8_t *buffer, size_t length) {
     }
 }
 
-static bool ok_seek(mo_decoder *decoder, long length) {
+static bool ok_seek(ok_mo_decoder *decoder, long length) {
     if (decoder->input_seek_func(decoder->input_data, length)) {
         return true;
     } else {
@@ -137,7 +137,7 @@ static bool ok_file_seek_func(void *user_data, long count) {
 ok_mo *ok_mo_read(FILE *file) {
     ok_mo *mo = calloc(1, sizeof(ok_mo));
     if (file) {
-        decode_mo(mo, file, ok_file_read_func, ok_file_seek_func);
+        ok_mo_decode(mo, file, ok_file_read_func, ok_file_seek_func);
     } else {
         ok_mo_error(mo, "File not found");
     }
@@ -150,7 +150,7 @@ ok_mo *ok_mo_read_from_callbacks(void *user_data, ok_mo_read_func read_func,
                                  ok_mo_seek_func seek_func) {
     ok_mo *mo = calloc(1, sizeof(ok_mo));
     if (read_func && seek_func) {
-        decode_mo(mo, user_data, read_func, seek_func);
+        ok_mo_decode(mo, user_data, read_func, seek_func);
     } else {
         ok_mo_error(mo, "Invalid argument: read_func and seek_func must not be NULL");
     }
@@ -182,7 +182,7 @@ static inline uint32_t read32(const uint8_t *data, const bool little_endian) {
     }
 }
 
-static void decode_mo2(mo_decoder *decoder) {
+static void ok_mo_decode2(ok_mo_decoder *decoder) {
     ok_mo *mo = decoder->mo;
     uint8_t header[20];
     if (!ok_read(decoder, header, sizeof(header))) {
@@ -297,17 +297,18 @@ static void decode_mo2(mo_decoder *decoder) {
 
 // MARK: Getters
 
-static int bsearch_strcmp(const void *s1, const void *s2) {
+static int ok_mo_bsearch_strcmp(const void *s1, const void *s2) {
     const char *key = s1;
     const struct ok_mo_string *elem = s2;
     return strcmp(key, (elem)->key);
 }
 
-static struct ok_mo_string *find_value(ok_mo *mo, const char *context, const char *key) {
+static struct ok_mo_string *ok_mo_find_value(ok_mo *mo, const char *context, const char *key) {
     if (!mo || !key) {
         return NULL;
     } else if (!context) {
-        return bsearch(key, mo->strings, mo->num_strings, sizeof(mo->strings[0]), bsearch_strcmp);
+        return bsearch(key, mo->strings, mo->num_strings, sizeof(mo->strings[0]),
+                       ok_mo_bsearch_strcmp);
     } else {
         // Complete key is (context + EOT + key)
         const size_t context_length = strlen(context);
@@ -321,7 +322,7 @@ static struct ok_mo_string *find_value(ok_mo *mo, const char *context, const cha
         strcpy(complete_key + context_length + 1, key);
         complete_key[complete_key_length - 1] = 0;
         struct ok_mo_string *r = bsearch(complete_key, mo->strings, mo->num_strings,
-                                         sizeof(mo->strings[0]), bsearch_strcmp);
+                                         sizeof(mo->strings[0]), ok_mo_bsearch_strcmp);
         free(complete_key);
         return r;
     }
@@ -336,21 +337,21 @@ const char *ok_mo_plural_value(ok_mo *mo, const char *key, const char *plural_ke
 }
 
 const char *ok_mo_value_in_context(ok_mo *mo, const char *context, const char *key) {
-    struct ok_mo_string *s = find_value(mo, context, key);
+    struct ok_mo_string *s = ok_mo_find_value(mo, context, key);
     return s ? s->value : key;
 }
 
-static int get_plural_index(const int num_variants, const int n) {
+static int ok_mo_get_plural_index(const int num_variants, const int n) {
     // This is probably too simple for some languages
     return n <= 0 ? num_variants : min(n - 1, num_variants);
 }
 
 const char *ok_mo_plural_value_in_context(ok_mo *mo, const char *context, const char *key,
                                           const char *plural_key, int n) {
-    struct ok_mo_string *s = find_value(mo, context, key);
+    struct ok_mo_string *s = ok_mo_find_value(mo, context, key);
     if (s) {
         // This is probably too simple for some languages
-        const int plural_index = get_plural_index(s->num_plural_variants, n);
+        const int plural_index = ok_mo_get_plural_index(s->num_plural_variants, n);
         const char *v = s->value;
         for (int i = 0; i < plural_index; i++) {
             while (*v++ != 0) {
@@ -359,7 +360,7 @@ const char *ok_mo_plural_value_in_context(ok_mo *mo, const char *context, const 
         }
         return v;
     } else {
-        if (get_plural_index(1, n) == 0) {
+        if (ok_mo_get_plural_index(1, n) == 0) {
             return key;
         } else {
             return plural_key;
