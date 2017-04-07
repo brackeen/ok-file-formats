@@ -29,7 +29,7 @@ typedef struct {
     void *input_data;
     ok_fnt_read_func input_read_func;
 
-} fnt_decoder;
+} ok_fnt_decoder;
 
 static void ok_fnt_error(ok_fnt *fnt, const char *message) {
     if (fnt) {
@@ -40,7 +40,7 @@ static void ok_fnt_error(ok_fnt *fnt, const char *message) {
     }
 }
 
-static bool ok_read(fnt_decoder *decoder, uint8_t *data, size_t length) {
+static bool ok_read(ok_fnt_decoder *decoder, uint8_t *data, size_t length) {
     if (decoder->input_read_func(decoder->input_data, data, length) == length) {
         return true;
     } else {
@@ -49,7 +49,7 @@ static bool ok_read(fnt_decoder *decoder, uint8_t *data, size_t length) {
     }
 }
 
-static void decode_fnt(ok_fnt *fnt, void *input_data, ok_fnt_read_func input_read_func);
+static void ok_fnt_decode(ok_fnt *fnt, void *input_data, ok_fnt_read_func input_read_func);
 
 #ifndef OK_NO_STDIO
 
@@ -66,7 +66,7 @@ static size_t ok_file_read_func(void *user_data, uint8_t *buffer, size_t length)
 ok_fnt *ok_fnt_read(FILE *file) {
     ok_fnt *fnt = calloc(1, sizeof(ok_fnt));
     if (file) {
-        decode_fnt(fnt, file, ok_file_read_func);
+        ok_fnt_decode(fnt, file, ok_file_read_func);
     } else {
         ok_fnt_error(fnt, "File not found");
     }
@@ -78,7 +78,7 @@ ok_fnt *ok_fnt_read(FILE *file) {
 ok_fnt *ok_fnt_read_from_callbacks(void *user_data, ok_fnt_read_func input_read_func) {
     ok_fnt *fnt = calloc(1, sizeof(ok_fnt));
     if (input_read_func) {
-        decode_fnt(fnt, user_data, input_read_func);
+        ok_fnt_decode(fnt, user_data, input_read_func);
     } else {
         ok_fnt_error(fnt, "Invalid argument: read_func is NULL");
     }
@@ -114,14 +114,14 @@ static inline uint32_t readLE32(const uint8_t *data) {
 }
 
 typedef enum {
-    BLOCK_TYPE_INFO = 1,
-    BLOCK_TYPE_COMMON = 2,
-    BLOCK_TYPE_PAGES = 3,
-    BLOCK_TYPE_CHARS = 4,
-    BLOCK_TYPE_KERNING = 5,
-} block_type;
+    OK_FNT_BLOCK_TYPE_INFO = 1,
+    OK_FNT_BLOCK_TYPE_COMMON = 2,
+    OK_FNT_BLOCK_TYPE_PAGES = 3,
+    OK_FNT_BLOCK_TYPE_CHARS = 4,
+    OK_FNT_BLOCK_TYPE_KERNING = 5,
+} ok_fnt_block_type;
 
-static void decode_fnt2(fnt_decoder *decoder) {
+static void ok_fnt_decode2(ok_fnt_decoder *decoder) {
     ok_fnt *fnt = decoder->fnt;
 
     uint8_t header[4];
@@ -151,12 +151,12 @@ static void decode_fnt2(fnt_decoder *decoder) {
             return;
         }
 
-        block_type block_type = block_header[0];
+        ok_fnt_block_type block_type = block_header[0];
         uint32_t block_length = readLE32(block_header + 1);
 
         block_types_found |= (1 << block_type);
         switch (block_type) {
-            case BLOCK_TYPE_INFO: {
+            case OK_FNT_BLOCK_TYPE_INFO: {
                 uint8_t info_header[14];
                 if (block_length <= sizeof(info_header)) {
                     ok_fnt_error(fnt, "Invalid info block");
@@ -183,7 +183,7 @@ static void decode_fnt2(fnt_decoder *decoder) {
                 break;
             }
 
-            case BLOCK_TYPE_COMMON: {
+            case OK_FNT_BLOCK_TYPE_COMMON: {
                 uint8_t common[15];
                 if (block_length != sizeof(common)) {
                     ok_fnt_error(fnt, "Invalid common block");
@@ -199,7 +199,7 @@ static void decode_fnt2(fnt_decoder *decoder) {
                 break;
             }
 
-            case BLOCK_TYPE_PAGES: {
+            case OK_FNT_BLOCK_TYPE_PAGES: {
                 if (fnt->num_pages <= 0 || block_length == 0) {
                     ok_fnt_error(fnt, "Couldn't get page names");
                     return;
@@ -242,7 +242,7 @@ static void decode_fnt2(fnt_decoder *decoder) {
                 break;
             }
 
-            case BLOCK_TYPE_CHARS: {
+            case OK_FNT_BLOCK_TYPE_CHARS: {
                 uint8_t data[20];
                 fnt->num_glyphs = block_length / sizeof(data);
                 fnt->glyphs = malloc(fnt->num_glyphs * sizeof(ok_fnt_glyph));
@@ -272,7 +272,7 @@ static void decode_fnt2(fnt_decoder *decoder) {
                 break;
             }
 
-            case BLOCK_TYPE_KERNING: {
+            case OK_FNT_BLOCK_TYPE_KERNING: {
                 uint8_t data[10];
                 fnt->num_kerning_pairs = block_length / sizeof(data);
                 fnt->kerning_pairs = malloc(fnt->num_kerning_pairs * sizeof(ok_fnt_kerning));
@@ -302,9 +302,9 @@ static void decode_fnt2(fnt_decoder *decoder) {
     }
 }
 
-static void decode_fnt(ok_fnt *fnt, void *input_data, ok_fnt_read_func input_read_func) {
+static void ok_fnt_decode(ok_fnt *fnt, void *input_data, ok_fnt_read_func input_read_func) {
     if (fnt) {
-        fnt_decoder *decoder = calloc(1, sizeof(fnt_decoder));
+        ok_fnt_decoder *decoder = calloc(1, sizeof(ok_fnt_decoder));
         if (!decoder) {
             ok_fnt_error(fnt, "Couldn't allocate decoder.");
             return;
@@ -313,7 +313,7 @@ static void decode_fnt(ok_fnt *fnt, void *input_data, ok_fnt_read_func input_rea
         decoder->input_data = input_data;
         decoder->input_read_func = input_read_func;
 
-        decode_fnt2(decoder);
+        ok_fnt_decode2(decoder);
 
         free(decoder);
     }
