@@ -211,17 +211,17 @@ bool ok_inflater_needs_input(const ok_inflater *inflater);
  * @param buffer The input buffer.
  * @param buffer_length The length of the input buffer.
  */
-void ok_inflater_set_input(ok_inflater *inflater, const void *buffer, unsigned int buffer_length);
+void ok_inflater_set_input(ok_inflater *inflater, const uint8_t *buffer, size_t buffer_length);
 
 /**
- * Inflates at most `dst_length` bytes. Returns the number of bytes inflated, or a negative value
+ * Inflates at most `dst_length` bytes. Returns the number of bytes inflated, or `SIZE_MAX`
  * if an error occured.
  *
  * @param inflater The inflater.
  * @param dst The destination buffer to inflate bytes to.
  * @param dst_length The maximum number of bytes to inflate.
  */
-int ok_inflater_inflate(ok_inflater *inflater, uint8_t *dst, unsigned int dst_length);
+size_t ok_inflater_inflate(ok_inflater *inflater, uint8_t *dst, size_t dst_length);
 
 /**
  * Gets the error message, if any. Returns a zero-length string if no error.

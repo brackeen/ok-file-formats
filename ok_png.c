@@ -32,6 +32,8 @@
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
+#define OK_SIZE_MAX (~(size_t)0)
+
 #define PNG_TYPE(a, b, c, d) ((a << 24) | (b << 16) | (c << 8) | d)
 
 static const uint32_t OK_PNG_CHUNK_IHDR = PNG_TYPE('I', 'H', 'D', 'R');
@@ -46,7 +48,7 @@ static const uint8_t OK_PNG_COLOR_TYPE_RGB = 2;
 static const uint8_t OK_PNG_COLOR_TYPE_PALETTE = 3;
 static const uint8_t OK_PNG_COLOR_TYPE_GRAYSCALE_WITH_ALPHA = 4;
 static const uint8_t OK_PNG_COLOR_TYPE_RGB_WITH_ALPHA = 6;
-static const int OK_PNG_SAMPLES_PER_PIXEL[] = {1, 0, 3, 1, 2, 0, 4};
+static const uint8_t OK_PNG_SAMPLES_PER_PIXEL[] = {1, 0, 3, 1, 2, 0, 4};
 
 typedef enum {
     OK_PNG_FILTER_NONE = 0,
@@ -72,7 +74,7 @@ typedef struct {
 
     // Decoding
     struct ok_inflater *inflater;
-    uint32_t inflater_bytes_read;
+    size_t inflater_bytes_read;
     uint8_t *inflate_buffer;
     uint8_t *curr_scanline;
     uint8_t *prev_scanline;
@@ -180,7 +182,7 @@ static inline uint16_t readBE16(const uint8_t *data) {
 }
 
 static inline uint32_t readBE32(const uint8_t *data) {
-    return (data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3];
+    return (uint32_t)((data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3]);
 }
 
 static inline void ok_png_premultiply(uint8_t *dst) {
@@ -360,7 +362,7 @@ static inline int ok_png_paeth_predictor(int a, int b, int c) {
 }
 
 static void ok_png_decode_filter(uint8_t * RESTRICT curr, const uint8_t * RESTRICT prev,
-                                 uint32_t length, int filter, int bpp) {
+                                 size_t length, int filter, uint8_t bpp) {
     switch (filter) {
         case OK_PNG_FILTER_NONE:
             // Do nothing
@@ -369,7 +371,7 @@ static void ok_png_decode_filter(uint8_t * RESTRICT curr, const uint8_t * RESTRI
             // Input = Sub
             // Raw(x) = Sub(x) + Raw(x-bpp)
             // For all x < 0, assume Raw(x) = 0.
-            for (uint32_t i = bpp; i < length; i++) {
+            for (size_t i = bpp; i < length; i++) {
                 curr[i] = curr[i] + curr[i - bpp];
             }
             break;
@@ -377,7 +379,7 @@ static void ok_png_decode_filter(uint8_t * RESTRICT curr, const uint8_t * RESTRI
         case OK_PNG_FILTER_UP: {
             // Input = Up
             // Raw(x) = Up(x) + Prior(x)
-            for (uint32_t i = 0; i < length; i++) {
+            for (size_t i = 0; i < length; i++) {
                 curr[i] = curr[i] + prev[i];
             }
             break;
@@ -385,10 +387,10 @@ static void ok_png_decode_filter(uint8_t * RESTRICT curr, const uint8_t * RESTRI
         case OK_PNG_FILTER_AVG: {
             // Input = Average
             // Raw(x) = Average(x) + floor((Raw(x-bpp)+Prior(x))/2)
-            for (int i = 0; i < bpp; i++) {
+            for (size_t i = 0; i < bpp; i++) {
                 curr[i] = curr[i] + (prev[i] >> 1);
             }
-            for (uint32_t j = bpp; j < length; j++) {
+            for (size_t j = bpp; j < length; j++) {
                 curr[j] = curr[j] + ((curr[j - bpp] + prev[j]) >> 1);
             }
             break;
@@ -396,10 +398,10 @@ static void ok_png_decode_filter(uint8_t * RESTRICT curr, const uint8_t * RESTRI
         case OK_PNG_FILTER_PAETH: {
             // Input = Paeth
             // Raw(x) = Paeth(x) + PaethPredictor(Raw(x-bpp), Prior(x), Prior(x-bpp))
-            for (int i = 0; i < bpp; i++) {
+            for (size_t i = 0; i < bpp; i++) {
                 curr[i] += prev[i];
             }
-            for (uint32_t j = bpp; j < length; j++) {
+            for (size_t j = bpp; j < length; j++) {
                 curr[j] += ok_png_paeth_predictor(curr[j - bpp], prev[j], prev[j - bpp]);
             }
             break;
@@ -499,9 +501,9 @@ static bool ok_png_transform_scanline(ok_png_decoder *decoder, const uint8_t *sr
         uint16_t tg = decoder->single_transparent_color_key[1];
         uint16_t tb = decoder->single_transparent_color_key[2];
         if (d <= 8) {
-            tr = (tr & bitmask) * (255 / bitmask);
-            tg = (tg & bitmask) * (255 / bitmask);
-            tb = (tb & bitmask) * (255 / bitmask);
+            tr = (uint16_t)((tr & bitmask) * (255 / bitmask));
+            tg = (uint16_t)((tg & bitmask) * (255 / bitmask));
+            tb = (uint16_t)((tb & bitmask) * (255 / bitmask));
         }
         uint8_t *dst = dst_start;
         while (dst < dst_end) {
@@ -711,11 +713,11 @@ static uint32_t ok_png_get_height_for_pass(const ok_png_decoder *decoder) {
 
 static bool ok_png_read_data(ok_png_decoder *decoder, uint32_t bytes_remaining) {
     ok_png *png = decoder->png;
-    const int inflate_buffer_size = 64 * 1024;
-    const int num_passes = decoder->interlace_method == 0 ? 1 : 7;
-    const int bits_per_pixel = decoder->bit_depth * OK_PNG_SAMPLES_PER_PIXEL[decoder->color_type];
-    const int bytes_per_pixel = (bits_per_pixel + 7) / 8;
-    const int max_bytes_per_scanline = 1 + (png->width * bits_per_pixel + 7) / 8;
+    size_t inflate_buffer_size = 64 * 1024;
+    size_t num_passes = decoder->interlace_method == 0 ? 1 : 7;
+    uint8_t bits_per_pixel = decoder->bit_depth * OK_PNG_SAMPLES_PER_PIXEL[decoder->color_type];
+    uint8_t bytes_per_pixel = (bits_per_pixel + 7) / 8;
+    size_t max_bytes_per_scanline = 1 + (png->width * bits_per_pixel + 7) / 8;
 
     // Create buffers
     if (!png->data) {
@@ -759,7 +761,7 @@ static bool ok_png_read_data(ok_png_decoder *decoder, uint32_t bytes_remaining) 
     // Sanity check - this happened with one file in the PNG suite
     if (decoder->decoding_completed) {
         if (bytes_remaining > 0) {
-            return ok_seek(decoder, bytes_remaining);
+            return ok_seek(decoder, (long)bytes_remaining);
         } else {
             return true;
         }
@@ -768,7 +770,7 @@ static bool ok_png_read_data(ok_png_decoder *decoder, uint32_t bytes_remaining) 
     // Read data
     uint32_t curr_width = ok_png_get_width_for_pass(decoder);
     uint32_t curr_height = ok_png_get_height_for_pass(decoder);
-    uint32_t curr_bytes_per_scanline = 1 + (curr_width * bits_per_pixel + 7) / 8;
+    size_t curr_bytes_per_scanline = 1 + (curr_width * bits_per_pixel + 7) / 8;
     while (true) {
         // Setup pass
         while (decoder->ready_for_next_interlace_pass) {
@@ -779,7 +781,7 @@ static bool ok_png_read_data(ok_png_decoder *decoder, uint32_t bytes_remaining) 
                 // Done decoding - skip any remaining chunk data
                 decoder->decoding_completed = true;
                 if (bytes_remaining > 0) {
-                    return ok_seek(decoder, bytes_remaining);
+                    return ok_seek(decoder, (long)bytes_remaining);
                 } else {
                     return true;
                 }
@@ -804,7 +806,7 @@ static bool ok_png_read_data(ok_png_decoder *decoder, uint32_t bytes_remaining) 
                 // There may be another IDAT chunk.
                 return true;
             }
-            const uint32_t len = min(inflate_buffer_size, bytes_remaining);
+            const size_t len = min(inflate_buffer_size, bytes_remaining);
             if (!ok_read(decoder, decoder->inflate_buffer, len)) {
                 return false;
             }
@@ -813,10 +815,10 @@ static bool ok_png_read_data(ok_png_decoder *decoder, uint32_t bytes_remaining) 
         }
 
         // Decompress data
-        intptr_t len = ok_inflater_inflate(decoder->inflater,
-                                           decoder->curr_scanline + decoder->inflater_bytes_read,
-                                           curr_bytes_per_scanline - decoder->inflater_bytes_read);
-        if (len < 0) {
+        size_t len = ok_inflater_inflate(decoder->inflater,
+                                         decoder->curr_scanline + decoder->inflater_bytes_read,
+                                         curr_bytes_per_scanline - decoder->inflater_bytes_read);
+        if (len == OK_SIZE_MAX) {
             ok_png_error(png, ok_inflater_error_message(decoder->inflater));
             return false;
         }
@@ -886,7 +888,7 @@ static void ok_png_decode2(ok_png_decoder *decoder) {
                 }
             }
         } else if (chunk_type == OK_PNG_CHUNK_CGBI) {
-            success = ok_seek(decoder, chunk_length);
+            success = ok_seek(decoder, (long)chunk_length);
             decoder->is_ios_format = true;
         } else if (chunk_type == OK_PNG_CHUNK_PLTE && !decoder->info_only) {
             success = ok_png_read_palette(decoder, chunk_length);
@@ -905,11 +907,11 @@ static void ok_png_decode2(ok_png_decoder *decoder) {
             }
             success = ok_png_read_data(decoder, chunk_length);
         } else if (chunk_type == OK_PNG_CHUNK_IEND) {
-            success = ok_seek(decoder, chunk_length);
+            success = ok_seek(decoder, (long)chunk_length);
             end_found = true;
         } else {
             // Ignore this chunk
-            success = ok_seek(decoder, chunk_length);
+            success = ok_seek(decoder, (long)chunk_length);
         }
 
         if (!success) {
@@ -1033,8 +1035,8 @@ static const int OK_INFLATER_BIT_LENGTH_TABLE_LENGTH = 19;
 
 typedef struct {
     uint16_t lookup_table[1 << (MAX_CODE_LENGTH - 1)];
-    int bits;
-    int bit_mask;
+    unsigned int bits;
+    unsigned int bit_mask;
 } ok_inflater_huffman_tree;
 
 struct ok_inflater {
@@ -1045,7 +1047,7 @@ struct ok_inflater {
     const uint8_t *input;
     const uint8_t *input_end;
     uint32_t input_buffer;
-    int input_buffer_bits;
+    unsigned int input_buffer_bits;
 
     // Inflate data
     uint8_t *buffer;
@@ -1113,11 +1115,10 @@ inline static void ok_inflater_write_byte(ok_inflater *inflater, const uint8_t b
     inflater->buffer_end_pos++;
 }
 
-inline static size_t ok_inflater_write_bytes(ok_inflater *inflater, const uint8_t *src,
-                                             size_t len) {
-    size_t bytes_remaining = len;
+inline static int ok_inflater_write_bytes(ok_inflater *inflater, const uint8_t *src, int len) {
+    int bytes_remaining = len;
     while (bytes_remaining > 0) {
-        size_t n = min(bytes_remaining, ok_inflater_can_write(inflater));
+        int n = min(bytes_remaining, ok_inflater_can_write(inflater));
         if (n == 0) {
             return len - bytes_remaining;
         }
@@ -1129,10 +1130,10 @@ inline static size_t ok_inflater_write_bytes(ok_inflater *inflater, const uint8_
     return len;
 }
 
-inline static size_t ok_inflater_write_byte_n(ok_inflater *inflater, const uint8_t b, size_t len) {
-    size_t bytes_remaining = len;
+inline static int ok_inflater_write_byte_n(ok_inflater *inflater, const uint8_t b, int len) {
+    int bytes_remaining = len;
     while (bytes_remaining > 0) {
-        size_t n = min(bytes_remaining, ok_inflater_can_write(inflater));
+        int n = min(bytes_remaining, ok_inflater_can_write(inflater));
         if (n == 0) {
             return len - bytes_remaining;
         }
@@ -1156,8 +1157,8 @@ inline static uint16_t ok_inflater_can_flush(const ok_inflater *inflater) {
     }
 }
 
-inline static int ok_inflater_flush(ok_inflater *inflater, uint8_t *dst, unsigned int len) {
-    int bytes_remaining = len;
+inline static size_t ok_inflater_flush(ok_inflater *inflater, uint8_t *dst, size_t len) {
+    size_t bytes_remaining = len;
     while (bytes_remaining > 0) {
         size_t n = min(bytes_remaining, ok_inflater_can_flush(inflater));
         if (n == 0) {
@@ -1174,24 +1175,25 @@ inline static int ok_inflater_flush(ok_inflater *inflater, uint8_t *dst, unsigne
 // Read from input
 
 inline static void ok_inflater_skip_byte_align(ok_inflater *inflater) {
-    int skip_bits = inflater->input_buffer_bits & 7;
+    unsigned int skip_bits = inflater->input_buffer_bits & 7;
     inflater->input_buffer >>= skip_bits;
     inflater->input_buffer_bits -= skip_bits;
 }
 
-inline static bool ok_inflater_load_bits(ok_inflater *inflater, int num_bits) {
+inline static bool ok_inflater_load_bits(ok_inflater *inflater, unsigned int num_bits) {
     while (inflater->input_buffer_bits < num_bits) {
         if (inflater->input == inflater->input_end) {
             return false;
         }
-        inflater->input_buffer |= (*inflater->input++ << inflater->input_buffer_bits);
+        uint32_t input = *inflater->input++;
+        inflater->input_buffer |= input << inflater->input_buffer_bits;
         inflater->input_buffer_bits += 8;
     }
     return true;
 }
 
 // Assumes at least num_bits bits are loaded into buffer (call load_bits first)
-inline static uint32_t ok_inflater_read_bits(ok_inflater *inflater, int num_bits) {
+inline static uint32_t ok_inflater_read_bits(ok_inflater *inflater, unsigned int num_bits) {
     uint32_t ans = inflater->input_buffer & ((1 << num_bits) - 1);
     inflater->input_buffer >>= num_bits;
     inflater->input_buffer_bits -= num_bits;
@@ -1199,15 +1201,15 @@ inline static uint32_t ok_inflater_read_bits(ok_inflater *inflater, int num_bits
 }
 
 // Assumes at least num_bits bits are loaded into buffer (call load_bits first)
-inline static uint32_t ok_inflater_peek_bits(ok_inflater *inflater, int num_bits) {
+inline static uint32_t ok_inflater_peek_bits(ok_inflater *inflater, unsigned int num_bits) {
     return inflater->input_buffer & ((1 << num_bits) - 1);
 }
 
 // Huffman
 
-inline static uint32_t ok_inflater_reverse_bits(uint32_t value, int num_bits) {
+inline static uint32_t ok_inflater_reverse_bits(uint32_t value, unsigned int num_bits) {
     uint32_t rev_value = value & 1;
-    for (int i = num_bits - 1; i > 0; i--) {
+    for (unsigned int i = num_bits - 1; i > 0; i--) {
         value >>= 1;
         rev_value <<= 1;
         rev_value |= value & 1;
@@ -1216,12 +1218,12 @@ inline static uint32_t ok_inflater_reverse_bits(uint32_t value, int num_bits) {
 }
 
 static int ok_inflater_decode_literal(ok_inflater *inflater, const uint16_t *tree_lookup_table,
-                                      int tree_bits) {
+                                      unsigned int tree_bits) {
     if (!ok_inflater_load_bits(inflater, tree_bits)) {
         return -1;
     }
-    int p = ok_inflater_peek_bits(inflater, tree_bits);
-    int value = tree_lookup_table[p];
+    uint32_t p = ok_inflater_peek_bits(inflater, tree_bits);
+    uint16_t value = tree_lookup_table[p];
     ok_inflater_read_bits(inflater, value >> VALUE_BITS);
     return value & VALUE_BIT_MASK;
 }
@@ -1232,7 +1234,7 @@ static bool ok_inflater_make_huffman_tree_from_array(ok_inflater_huffman_tree *t
 
     // Count the number of codes for each code length.
     // Let code_length_count[n] be the number of codes of length n, n >= 1.
-    int code_length_count[MAX_CODE_LENGTH];
+    unsigned int code_length_count[MAX_CODE_LENGTH];
     int i;
     for (i = 0; i < MAX_CODE_LENGTH; i++) {
         code_length_count[i] = 0;
@@ -1242,19 +1244,19 @@ static bool ok_inflater_make_huffman_tree_from_array(ok_inflater_huffman_tree *t
     }
 
     // Find the numerical value of the smallest code for each code length:
-    int next_code[MAX_CODE_LENGTH];
-    int code = 0;
+    unsigned int next_code[MAX_CODE_LENGTH];
+    unsigned int code = 0;
     for (i = 1; i < MAX_CODE_LENGTH; i++) {
         code = (code + code_length_count[i - 1]) << 1;
         next_code[i] = code;
         if (code_length_count[i] != 0) {
-            tree->bits = i;
+            tree->bits = (unsigned int)i;
         }
     }
 
     // Init lookup table
-    const int max = 1 << tree->bits;
-    tree->bit_mask = (max)-1;
+    const unsigned int max = 1 << tree->bits;
+    tree->bit_mask = max - 1;
     memset(tree->lookup_table, 0, sizeof(tree->lookup_table[0]) * max);
 
     // Assign numerical values to all codes, using consecutive values for all
@@ -1262,13 +1264,13 @@ static bool ok_inflater_make_huffman_tree_from_array(ok_inflater_huffman_tree *t
     // Codes that are never used (which have a bit length of zero) must not be
     // assigned a value.
     for (i = 0; i < length; i++) {
-        int len = code_length[i];
+        unsigned int len = code_length[i];
         if (len != 0) {
             code = next_code[len];
             next_code[len]++;
 
-            tree->lookup_table[ok_inflater_reverse_bits(code, len)] =
-                (uint16_t)(i | (len << VALUE_BITS));
+            unsigned int value = (unsigned int)i | (len << VALUE_BITS);
+            tree->lookup_table[ok_inflater_reverse_bits(code, len)] = (uint16_t)value;
         }
     }
 
@@ -1276,7 +1278,7 @@ static bool ok_inflater_make_huffman_tree_from_array(ok_inflater_huffman_tree *t
     int next_limit = 1;
     int num_bits = 0;
     int mask = 0;
-    for (i = 1; i < max; i++) {
+    for (i = 1; i < (int)max; i++) {
         if (i == next_limit) {
             mask = (1 << num_bits) - 1;
             num_bits++;
@@ -1298,7 +1300,7 @@ static bool ok_inflater_inflate_huffman_tree(ok_inflater *inflater, ok_inflater_
         return false;
     }
     const uint16_t *tree_lookup_table = code_length_huffman->lookup_table;
-    const int tree_bits = code_length_huffman->bits;
+    const unsigned int tree_bits = code_length_huffman->bits;
     // 0 - 15: Represent code lengths of 0 - 15
     //     16: Copy the previous code length 3 - 6 times.
     //         (2 bits of length)
@@ -1319,7 +1321,7 @@ static bool ok_inflater_inflate_huffman_tree(ok_inflater *inflater, ok_inflater_
         } else {
             int value = 0;
             int len;
-            int len_bits;
+            unsigned int len_bits;
             switch (inflater->huffman_code) {
                 case 16:
                     len = 3;
@@ -1365,14 +1367,14 @@ static bool ok_inflater_zlib_header(ok_inflater *inflater) {
     if (!ok_inflater_load_bits(inflater, 16)) {
         return false;
     } else {
-        int compression_method = ok_inflater_read_bits(inflater, 4);
-        int compression_info = ok_inflater_read_bits(inflater, 4);
-        int flag_check = ok_inflater_read_bits(inflater, 5);
-        int flag_dict = ok_inflater_read_bits(inflater, 1);
-        int flag_compression_level = ok_inflater_read_bits(inflater, 2);
+        uint32_t compression_method = ok_inflater_read_bits(inflater, 4);
+        uint32_t compression_info = ok_inflater_read_bits(inflater, 4);
+        uint32_t flag_check = ok_inflater_read_bits(inflater, 5);
+        uint32_t flag_dict = ok_inflater_read_bits(inflater, 1);
+        uint32_t flag_compression_level = ok_inflater_read_bits(inflater, 2);
 
-        int bits = (compression_info << 12) | (compression_method << 8) |
-            (flag_compression_level << 6) | (flag_dict << 5) | flag_check;
+        uint32_t bits = ((compression_info << 12) | (compression_method << 8) |
+                         (flag_compression_level << 6) | (flag_dict << 5) | flag_check);
         if (bits % 31 != 0) {
             ok_inflater_error(inflater, "Invalid zlib header");
             return false;
@@ -1441,7 +1443,7 @@ static bool ok_inflater_next_block(ok_inflater *inflater) {
         return false;
     } else {
         inflater->final_block = ok_inflater_read_bits(inflater, 1);
-        int block_type = ok_inflater_read_bits(inflater, 2);
+        uint32_t block_type = ok_inflater_read_bits(inflater, 2);
         switch (block_type) {
             case BLOCK_TYPE_NO_COMPRESSION:
                 inflater->state = OK_INFLATER_STATE_READING_STORED_BLOCK_HEADER;
@@ -1471,8 +1473,8 @@ static bool ok_inflater_stored_block_header(ok_inflater *inflater) {
     if (!ok_inflater_load_bits(inflater, 32)) {
         return false;
     } else {
-        int len = ok_inflater_read_bits(inflater, 16);
-        int clen = ok_inflater_read_bits(inflater, 16);
+        uint32_t len = ok_inflater_read_bits(inflater, 16);
+        uint32_t clen = ok_inflater_read_bits(inflater, 16);
         if ((len & 0xffff) != ((~clen) & 0xffff)) {
             ok_inflater_error(inflater, "Invalid stored block");
             return false;
@@ -1481,19 +1483,19 @@ static bool ok_inflater_stored_block_header(ok_inflater *inflater) {
             return true;
         } else {
             inflater->state = OK_INFLATER_STATE_READING_STORED_BLOCK;
-            inflater->state_count = len;
+            inflater->state_count = (int)len;
             return true;
         }
     }
 }
 
 static bool ok_inflater_stored_block(ok_inflater *inflater) {
-    const size_t can_read = inflater->input_end - inflater->input;
+    const intptr_t can_read = inflater->input_end - inflater->input;
     if (can_read == 0) {
         return false;
     } else {
-        size_t len = ok_inflater_write_bytes(inflater, inflater->input,
-                                             min(can_read, (size_t)inflater->state_count));
+        int len = ok_inflater_write_bytes(inflater, inflater->input,
+                                          min((int)can_read, inflater->state_count));
         if (len == 0) {
             // Buffer full
             return false;
@@ -1515,10 +1517,10 @@ static int ok_inflater_decode_distance(ok_inflater *inflater, int value) {
     int distance = OK_INFLATER_DISTANCE_TABLE[value];
     int extra_bits = (value >> 1) - 1;
     if (extra_bits > 0) {
-        if (!ok_inflater_load_bits(inflater, extra_bits)) {
+        if (!ok_inflater_load_bits(inflater, (unsigned int)extra_bits)) {
             return -1;
         }
-        distance += ok_inflater_read_bits(inflater, extra_bits);
+        distance += ok_inflater_read_bits(inflater, (unsigned int)extra_bits);
     }
     return distance;
 }
@@ -1527,10 +1529,10 @@ static int ok_inflater_decode_length(ok_inflater *inflater, int value) {
     int len = OK_INFLATER_LENGTH_TABLE[value];
     int extra_bits = (value >> 2) - 1;
     if (extra_bits > 0 && extra_bits <= 5) {
-        if (!ok_inflater_load_bits(inflater, extra_bits)) {
+        if (!ok_inflater_load_bits(inflater, (unsigned int)extra_bits)) {
             return -1;
         }
-        len += ok_inflater_read_bits(inflater, extra_bits);
+        len += ok_inflater_read_bits(inflater, (unsigned int)extra_bits);
     }
     return len;
 }
@@ -1548,9 +1550,8 @@ static bool ok_inflater_distance(ok_inflater *inflater) {
         ok_inflater_huffman_tree *curr_distance_huffman =
             (is_fixed ? inflater->fixed_distance_huffman : inflater->distance_huffman);
         const uint16_t *tree_lookup_table = curr_distance_huffman->lookup_table;
-        const int tree_bits = curr_distance_huffman->bits;
         inflater->state_literal = ok_inflater_decode_literal(inflater, tree_lookup_table,
-                                                             tree_bits);
+                                                             curr_distance_huffman->bits);
         if (inflater->state_literal < 0) {
             // Needs input
             return false;
@@ -1572,8 +1573,8 @@ static bool ok_inflater_distance(ok_inflater *inflater) {
         int buffer_offset = (inflater->buffer_end_pos - inflater->state_distance) & BUFFER_SIZE_MASK;
         if (inflater->state_distance == 1) {
             // Optimization: can use memset
-            size_t n = inflater->state_count;
-            size_t n2 = ok_inflater_write_byte_n(inflater, inflater->buffer[buffer_offset], n);
+            int n = inflater->state_count;
+            int n2 = ok_inflater_write_byte_n(inflater, inflater->buffer[buffer_offset], n);
             inflater->state_count -= n2;
             if (n2 != n) {
                 // Full buffer
@@ -1581,10 +1582,10 @@ static bool ok_inflater_distance(ok_inflater *inflater) {
             }
         } else if (buffer_offset + inflater->state_count < BUFFER_SIZE) {
             // Optimization: the offset won't wrap
-            size_t bytes_copyable = inflater->state_distance;
+            int bytes_copyable = inflater->state_distance;
             while (inflater->state_count > 0) {
-                size_t n = min((size_t)inflater->state_count, bytes_copyable);
-                size_t n2 = ok_inflater_write_bytes(inflater, inflater->buffer + buffer_offset, n);
+                int n = min(inflater->state_count, bytes_copyable);
+                int n2 = ok_inflater_write_bytes(inflater, inflater->buffer + buffer_offset, n);
                 inflater->state_count -= n2;
                 bytes_copyable += n2;
                 if (n2 != n) {
@@ -1595,9 +1596,9 @@ static bool ok_inflater_distance(ok_inflater *inflater) {
         } else {
             // This could be optimized, but it happens rarely, so it's probably not worth it
             while (inflater->state_count > 0) {
-                size_t n = min(inflater->state_count, inflater->state_distance);
-                n = min(n, (size_t)(BUFFER_SIZE - buffer_offset));
-                size_t n2 = ok_inflater_write_bytes(inflater, inflater->buffer + buffer_offset, n);
+                int n = min(inflater->state_count, inflater->state_distance);
+                n = min(n, (BUFFER_SIZE - buffer_offset));
+                int n2 = ok_inflater_write_bytes(inflater, inflater->buffer + buffer_offset, n);
                 inflater->state_count -= n2;
                 buffer_offset = (buffer_offset + n2) & BUFFER_SIZE_MASK;
                 if (n2 != n) {
@@ -1621,9 +1622,9 @@ static bool ok_inflater_dynamic_block_header(ok_inflater *inflater) {
     if (!ok_inflater_load_bits(inflater, 14)) {
         return false;
     } else {
-        inflater->num_literal_codes = ok_inflater_read_bits(inflater, 5) + 257;
-        inflater->num_distance_codes = ok_inflater_read_bits(inflater, 5) + 1;
-        inflater->num_code_length_codes = ok_inflater_read_bits(inflater, 4) + 4;
+        inflater->num_literal_codes = (int)ok_inflater_read_bits(inflater, 5) + 257;
+        inflater->num_distance_codes = (int)ok_inflater_read_bits(inflater, 5) + 1;
+        inflater->num_code_length_codes = (int)ok_inflater_read_bits(inflater, 4) + 4;
 
         for (int i = inflater->num_code_length_codes; i < OK_INFLATER_BIT_LENGTH_TABLE_LENGTH; i++) {
             inflater->tree_codes[OK_INFLATER_BIT_LENGTH_TABLE[i]] = 0;
@@ -1667,7 +1668,7 @@ static bool ok_inflater_compressed_block(ok_inflater *inflater) {
         return false;
     }
     const uint16_t *tree_lookup_table = curr_literal_huffman->lookup_table;
-    const int tree_bits = curr_literal_huffman->bits;
+    const unsigned int tree_bits = curr_literal_huffman->bits;
     while (true) {
         int value = ok_inflater_decode_literal(inflater, tree_lookup_table, tree_bits);
         if (value < 0) {
@@ -1813,10 +1814,10 @@ bool ok_inflater_needs_input(const ok_inflater *inflater) {
         inflater->input == inflater->input_end;
 }
 
-void ok_inflater_set_input(ok_inflater *inflater, const void *buffer, unsigned int buffer_length) {
+void ok_inflater_set_input(ok_inflater *inflater, const uint8_t *buffer, size_t buffer_length) {
     if (inflater) {
         if (inflater->input == inflater->input_end) {
-            inflater->input = (const uint8_t *)buffer;
+            inflater->input = buffer;
             inflater->input_end = inflater->input + buffer_length;
         } else {
             ok_inflater_error(inflater, "ok_inflater_set_input was called with unread input data.");
@@ -1824,9 +1825,9 @@ void ok_inflater_set_input(ok_inflater *inflater, const void *buffer, unsigned i
     }
 }
 
-int ok_inflater_inflate(ok_inflater *inflater, uint8_t *dst, unsigned int dst_len) {
+size_t ok_inflater_inflate(ok_inflater *inflater, uint8_t *dst, size_t dst_len) {
     if (!inflater || inflater->state == OK_INFLATER_STATE_ERROR) {
-        return -1;
+        return OK_SIZE_MAX;
     }
 
     // Each state function should return false if input is needed or the buffer is full.
