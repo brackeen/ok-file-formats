@@ -2,14 +2,14 @@
 
 C functions for reading a few different file formats. No external dependencies.
 
-| Library                | Description
-|------------------------|----------------------------------------------------------------
-| **[ok_png](ok_png.h)** | Reads any PNG file, including Apple's proprietary extensions.
-| **[ok_jpg](ok_jpg.h)** | Reads most JPEG files. Baseline only, no progressive support.
-| **[ok_wav](ok_wav.h)** | Reads WAV and CAF files. PCM, u-law, a-law, and ADPCM formats.
-| **[ok_fnt](ok_fnt.h)** | Reads AngelCode BMFont files.
-| **[ok_csv](ok_csv.h)** | Reads Comma-Separated Values files.
-| **[ok_mo](ok_mo.h)**   | Reads gettext MO files.
+| Library            | Description
+|--------------------|----------------------------------------------------------------
+| [ok_png](ok_png.h) | Reads any PNG file, including Apple's proprietary extensions.
+| [ok_jpg](ok_jpg.h) | Reads most JPEG files. Baseline only, no progressive support.
+| [ok_wav](ok_wav.h) | Reads WAV and CAF files. PCM, u-law, a-law, and ADPCM formats.
+| [ok_fnt](ok_fnt.h) | Reads AngelCode BMFont files.
+| [ok_csv](ok_csv.h) | Reads Comma-Separated Values files.
+| [ok_mo](ok_mo.h)   | Reads gettext MO files.
 
 The files do not depend on one another. If all you need is to read a PNG file, just
 grab `ok_png.h` and `ok_png.c` and you're good to go.
