@@ -73,8 +73,7 @@ add_executable(ok-file-formats-test ${src_files} ${test_src_files})
 add_dependencies(ok-file-formats-test gen)
 if (CMAKE_C_COMPILER_ID MATCHES "Clang")
     # Enable -Wwrite-strings because -Weverything doesn't enable it in all versions of Clang
-    # TODO: Remove -Wno-sign-conversion
-    set_target_properties(ok-file-formats-test PROPERTIES COMPILE_FLAGS "-Weverything -Wwrite-strings -Wno-padded -Wno-covered-switch-default -Wno-sign-conversion ${TREAT_WARNINGS_AS_ERRORS_FLAG}")
+    set_target_properties(ok-file-formats-test PROPERTIES COMPILE_FLAGS "-Weverything -Wwrite-strings -Wno-padded -Wno-covered-switch-default ${TREAT_WARNINGS_AS_ERRORS_FLAG}")
 elseif (CMAKE_C_COMPILER_ID MATCHES "GNU")
     set_target_properties(ok-file-formats-test PROPERTIES COMPILE_FLAGS "-Wall -Wextra -Wwrite-strings ${TREAT_WARNINGS_AS_ERRORS_FLAG}")
 elseif (CMAKE_C_COMPILER_ID MATCHES "MSVC")
