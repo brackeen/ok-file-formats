@@ -69,7 +69,8 @@ static bool test_wav(const char *path, const char *container_type, const char *f
         free(raw_path);
 
         // Compare
-        unsigned long length = wav->num_frames * wav->num_channels * (wav->bit_depth / 8);
+        unsigned long length = (unsigned long)(wav->num_frames * wav->num_channels *
+                                               (wav->bit_depth / 8));
 
         if (expected_length != length) {
             printf("File:    %24.24s.%s (Invalid data length: Expected %lu, got %lu).\n",
