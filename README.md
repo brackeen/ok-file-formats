@@ -22,7 +22,7 @@ grab `ok_png.h` and `ok_png.c` and you're good to go.
 
 int main() {
     FILE *file = fopen("my_image.png", "rb");
-    ok_png *image = ok_png_read(file, OK_PNG_COLOR_FORMAT_RGBA);
+    ok_png *image = ok_png_read(file, OK_PNG_COLOR_FORMAT_RGBA | OK_PNG_PREMULTIPLIED_ALPHA | OK_PNG_FLIP_Y);
     fclose(file);
     if (image->data) {
         printf("Got image! Size: %li x %li\n", (long)image->width, (long)image->height);
