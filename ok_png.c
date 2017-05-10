@@ -1091,12 +1091,12 @@ static void ok_inflater_error(ok_inflater *inflater, const char *message) {
 //
 
 // is_buffer_full is commented out because it is not used, but it helps to understand how the buffer works.
-//inline static bool is_buffer_full(const ok_inflater *inflater) {
+//static inline bool is_buffer_full(const ok_inflater *inflater) {
 //    return (uint16_t)(inflater->buffer_end_pos + 1) == inflater->buffer_start_pos;
 //}
 
 // Number of bytes that can be written until full or buffer wrap
-inline static uint16_t ok_inflater_can_write(const ok_inflater *inflater) {
+static inline uint16_t ok_inflater_can_write(const ok_inflater *inflater) {
     if (inflater->buffer_start_pos == 0) {
         return -inflater->buffer_end_pos - 1;
     } else if (inflater->buffer_start_pos > inflater->buffer_end_pos) {
@@ -1106,16 +1106,16 @@ inline static uint16_t ok_inflater_can_write(const ok_inflater *inflater) {
     }
 }
 
-inline static uint16_t ok_inflater_can_write_total(const ok_inflater *inflater) {
+static inline uint16_t ok_inflater_can_write_total(const ok_inflater *inflater) {
     return inflater->buffer_start_pos - inflater->buffer_end_pos - 1;
 }
 
-inline static void ok_inflater_write_byte(ok_inflater *inflater, const uint8_t b) {
+static inline void ok_inflater_write_byte(ok_inflater *inflater, const uint8_t b) {
     inflater->buffer[inflater->buffer_end_pos & BUFFER_SIZE_MASK] = b;
     inflater->buffer_end_pos++;
 }
 
-inline static int ok_inflater_write_bytes(ok_inflater *inflater, const uint8_t *src, int len) {
+static inline int ok_inflater_write_bytes(ok_inflater *inflater, const uint8_t *src, int len) {
     int bytes_remaining = len;
     while (bytes_remaining > 0) {
         int n = min(bytes_remaining, ok_inflater_can_write(inflater));
@@ -1130,7 +1130,7 @@ inline static int ok_inflater_write_bytes(ok_inflater *inflater, const uint8_t *
     return len;
 }
 
-inline static int ok_inflater_write_byte_n(ok_inflater *inflater, const uint8_t b, int len) {
+static inline int ok_inflater_write_byte_n(ok_inflater *inflater, const uint8_t b, int len) {
     int bytes_remaining = len;
     while (bytes_remaining > 0) {
         int n = min(bytes_remaining, ok_inflater_can_write(inflater));
@@ -1144,12 +1144,12 @@ inline static int ok_inflater_write_byte_n(ok_inflater *inflater, const uint8_t 
     return len;
 }
 
-inline static uint16_t ok_inflater_can_flush_total(const ok_inflater *inflater) {
+static inline uint16_t ok_inflater_can_flush_total(const ok_inflater *inflater) {
     return inflater->buffer_end_pos - inflater->buffer_start_pos;
 }
 
 // Number of bytes that can be flushed until empty of buffer wrap
-inline static uint16_t ok_inflater_can_flush(const ok_inflater *inflater) {
+static inline uint16_t ok_inflater_can_flush(const ok_inflater *inflater) {
     if (inflater->buffer_start_pos <= inflater->buffer_end_pos) {
         return inflater->buffer_end_pos - inflater->buffer_start_pos;
     } else {
@@ -1157,7 +1157,7 @@ inline static uint16_t ok_inflater_can_flush(const ok_inflater *inflater) {
     }
 }
 
-inline static size_t ok_inflater_flush(ok_inflater *inflater, uint8_t *dst, size_t len) {
+static inline size_t ok_inflater_flush(ok_inflater *inflater, uint8_t *dst, size_t len) {
     size_t bytes_remaining = len;
     while (bytes_remaining > 0) {
         size_t n = min(bytes_remaining, ok_inflater_can_flush(inflater));
@@ -1174,13 +1174,13 @@ inline static size_t ok_inflater_flush(ok_inflater *inflater, uint8_t *dst, size
 
 // Read from input
 
-inline static void ok_inflater_skip_byte_align(ok_inflater *inflater) {
+static inline void ok_inflater_skip_byte_align(ok_inflater *inflater) {
     unsigned int skip_bits = inflater->input_buffer_bits & 7;
     inflater->input_buffer >>= skip_bits;
     inflater->input_buffer_bits -= skip_bits;
 }
 
-inline static bool ok_inflater_load_bits(ok_inflater *inflater, unsigned int num_bits) {
+static inline bool ok_inflater_load_bits(ok_inflater *inflater, unsigned int num_bits) {
     while (inflater->input_buffer_bits < num_bits) {
         if (inflater->input == inflater->input_end) {
             return false;
@@ -1193,7 +1193,7 @@ inline static bool ok_inflater_load_bits(ok_inflater *inflater, unsigned int num
 }
 
 // Assumes at least num_bits bits are loaded into buffer (call load_bits first)
-inline static uint32_t ok_inflater_read_bits(ok_inflater *inflater, unsigned int num_bits) {
+static inline uint32_t ok_inflater_read_bits(ok_inflater *inflater, unsigned int num_bits) {
     uint32_t ans = inflater->input_buffer & ((1 << num_bits) - 1);
     inflater->input_buffer >>= num_bits;
     inflater->input_buffer_bits -= num_bits;
@@ -1201,13 +1201,13 @@ inline static uint32_t ok_inflater_read_bits(ok_inflater *inflater, unsigned int
 }
 
 // Assumes at least num_bits bits are loaded into buffer (call load_bits first)
-inline static uint32_t ok_inflater_peek_bits(ok_inflater *inflater, unsigned int num_bits) {
+static inline uint32_t ok_inflater_peek_bits(ok_inflater *inflater, unsigned int num_bits) {
     return inflater->input_buffer & ((1 << num_bits) - 1);
 }
 
 // Huffman
 
-inline static uint32_t ok_inflater_reverse_bits(uint32_t value, unsigned int num_bits) {
+static inline uint32_t ok_inflater_reverse_bits(uint32_t value, unsigned int num_bits) {
     uint32_t rev_value = value & 1;
     for (unsigned int i = num_bits - 1; i > 0; i--) {
         value >>= 1;
