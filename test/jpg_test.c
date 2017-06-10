@@ -74,7 +74,7 @@ static bool test_image(const char *path_to_jpgs,
     FILE *file = fopen(in_filename, "rb");
     if (file) {
         if (info_only) {
-            jpg = ok_jpg_read_info(file);
+            jpg = ok_jpg_read(file, OK_JPG_INFO_ONLY);
         } else {
             jpg = ok_jpg_read(file, OK_JPG_COLOR_FORMAT_RGBA);
         }

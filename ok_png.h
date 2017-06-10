@@ -88,20 +88,12 @@ typedef enum {
     OK_PNG_PREMULTIPLIED_ALPHA = (1 << 1),
     /// Set to flip the image data along the horizontal axis, so that the first row of data is
     /// the last row in the image.
-    OK_PNG_FLIP_Y = (1 << 2)
+    OK_PNG_FLIP_Y = (1 << 2),
+    /// Set to read an image's dimensions and color format without reading the image data.
+    OK_PNG_INFO_ONLY = (1 << 3)
 } ok_png_decode_flags;
 
 #ifndef OK_NO_STDIO
-
-/**
- * Gets a PNG image's dimensions and color format without reading the image data.
- * On failure, #ok_png.width and #ok_png.height are both zero and #ok_png.error_message is set.
- *
- * @param file The file to read.
- * @return a new #ok_png object. Never returns `NULL`. The object should be freed with
- * #ok_png_free().
- */
-ok_png *ok_png_read_info(FILE *file);
 
 /**
  * Reads a PNG image. On success, #ok_png.data contains the packed image data, with a size of
@@ -153,19 +145,6 @@ typedef size_t (*ok_png_read_func)(void *user_data, uint8_t *buffer, size_t coun
  * @return `true` if success.
  */
 typedef bool (*ok_png_seek_func)(void *user_data, long count);
-
-/**
- * Gets a PNG image's dimensions and color format without reading the image data.
- * On failure, #ok_png.width and #ok_png.height are both zero and #ok_png.error_message is set.
- *
- * @param user_data The parameter to be passed to `read_func` and `seek_func`.
- * @param read_func The read function.
- * @param seek_func The seek function.
- * @return a new #ok_png object. Never returns `NULL`. The object should be freed with
- * #ok_png_free().
- */
-ok_png *ok_png_read_info_from_callbacks(void *user_data, ok_png_read_func read_func,
-                                        ok_png_seek_func seek_func);
 
 /**
  * Reads a PNG image. On success, #ok_png.data contains the packed image data, with a size of

@@ -233,7 +233,7 @@ static bool test_image(const char *path_to_png_suite,
     FILE *file = fopen(in_filename, "rb");
     if (file) {
         if (info_only) {
-            png = ok_png_read_info(file);
+            png = ok_png_read(file, decode_flags | OK_PNG_INFO_ONLY);
         } else {
             png = ok_png_read(file, decode_flags);
         }

@@ -83,21 +83,13 @@ typedef enum {
     OK_JPG_COLOR_FORMAT_BGRA = (1 << 0),
     /// Set to flip the image data along the horizontal axis, so that the first row of data is
     /// the last row in the image.
-    OK_JPG_FLIP_Y = (1 << 2)
+    OK_JPG_FLIP_Y = (1 << 2),
+    /// Set to read an image's dimensions and color format without reading the image data.
+    OK_JPG_INFO_ONLY = (1 << 3)
+
 } ok_jpg_decode_flags;
 
 #ifndef OK_NO_STDIO
-
-/**
- * Gets a JPEG image's dimensions without reading the image data. Its EXIF orientation is taken into
- * consideration.
- * On failure, #ok_jpg.width and #ok_jpg.height are both zero and #ok_jpg.error_message is set.
- *
- * @param file The file to read.
- * @return a new #ok_jpg object. Never returns `NULL`. The object should be freed with
- * #ok_jpg_free().
- */
-ok_jpg *ok_jpg_read_info(FILE *file);
 
 /**
  * Reads a JPEG image. On success, #ok_jpg.data contains the packed image data, with a size of
@@ -147,20 +139,6 @@ typedef size_t (*ok_jpg_read_func)(void *user_data, uint8_t *buffer, size_t coun
  * @return `true` if success.
  */
 typedef bool (*ok_jpg_seek_func)(void *user_data, long count);
-
-/**
- * Gets a JPEG image's dimensions without reading the image data. Its EXIF orientation is taken into
- * consideration.
- * On failure, #ok_jpg.width and #ok_jpg.height are both zero and #ok_jpg.error_message is set.
- *
- * @param user_data The parameter to be passed to `read_func` and `seek_func`.
- * @param read_func The read function.
- * @param seek_func The seek function.
- * @return a new #ok_jpg object. Never returns `NULL`. The object should be freed with
- * #ok_jpg_free().
- */
-ok_jpg *ok_jpg_read_info_from_callbacks(void *user_data, ok_jpg_read_func read_func,
-                                        ok_jpg_seek_func seek_func);
 
 /**
  * Reads a JPEG image. On success, #ok_jpg.data contains the packed image data, with a size of

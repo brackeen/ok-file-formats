@@ -153,33 +153,22 @@ static bool ok_file_seek_func(void *user_data, long count) {
 
 static ok_jpg *ok_jpg_decode(void *user_data, ok_jpg_read_func input_read_func,
                              ok_jpg_seek_func input_seek_func, ok_jpg_decode_flags decode_flags,
-                             bool info_only, bool check_user_data);
+                             bool check_user_data);
 
 // MARK: Public API
 
 #ifndef OK_NO_STDIO
 
-ok_jpg *ok_jpg_read_info(FILE *file) {
-    return ok_jpg_decode(file, ok_file_read_func, ok_file_seek_func, OK_JPG_COLOR_FORMAT_RGBA,
-                         true, true);
-}
-
 ok_jpg *ok_jpg_read(FILE *file, ok_jpg_decode_flags decode_flags) {
-    return ok_jpg_decode(file, ok_file_read_func, ok_file_seek_func, decode_flags, false, true);
+    return ok_jpg_decode(file, ok_file_read_func, ok_file_seek_func, decode_flags, true);
 }
 
 #endif
 
-ok_jpg *ok_jpg_read_info_from_callbacks(void *user_data, ok_jpg_read_func input_read_func,
-                                        ok_jpg_seek_func input_seek_func) {
-    return ok_jpg_decode(user_data, input_read_func, input_seek_func, OK_JPG_COLOR_FORMAT_RGBA,
-                         true, false);
-}
-
 ok_jpg *ok_jpg_read_from_callbacks(void *user_data, ok_jpg_read_func input_read_func,
                                    ok_jpg_seek_func input_seek_func,
                                    ok_jpg_decode_flags decode_flags) {
-    return ok_jpg_decode(user_data, input_read_func, input_seek_func, decode_flags, false, false);
+    return ok_jpg_decode(user_data, input_read_func, input_seek_func, decode_flags, false);
 }
 
 void ok_jpg_free(ok_jpg *jpg) {
@@ -1389,7 +1378,7 @@ static void ok_jpg_decode2(ok_jpg_decoder *decoder) {
 
 static ok_jpg *ok_jpg_decode(void *user_data, ok_jpg_read_func input_read_func,
                              ok_jpg_seek_func input_seek_func, ok_jpg_decode_flags decode_flags,
-                             bool info_only, bool check_user_data) {
+                             bool check_user_data) {
     ok_jpg *jpg = calloc(1, sizeof(ok_jpg));
     if (!jpg) {
         return NULL;
@@ -1415,7 +1404,7 @@ static ok_jpg *ok_jpg_decode(void *user_data, ok_jpg_read_func input_read_func,
     decoder->input_seek_func = input_seek_func;
     decoder->color_rgba = (decode_flags & OK_JPG_COLOR_FORMAT_BGRA) == 0;
     decoder->flip_y = (decode_flags & OK_JPG_FLIP_Y) != 0;
-    decoder->info_only = info_only;
+    decoder->info_only = (decode_flags & OK_JPG_INFO_ONLY) != 0;
 
     ok_jpg_decode2(decoder);
 

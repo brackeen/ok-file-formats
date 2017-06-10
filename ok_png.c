@@ -70,7 +70,6 @@ typedef struct {
 
     // Decode options
     ok_png_decode_flags decode_flags;
-    bool info_only;
 
     // Decoding
     struct ok_inflater *inflater;
@@ -141,31 +140,21 @@ static bool ok_file_seek_func(void *user_data, long count) {
 
 static ok_png *ok_png_decode(void *user_data, ok_png_read_func input_read_func,
                              ok_png_seek_func input_seek_func, ok_png_decode_flags decode_flags,
-                             bool info_only, bool check_user_data);
+                             bool check_user_data);
 
 // Public API
 
 #ifndef OK_NO_STDIO
 
-ok_png *ok_png_read_info(FILE *file) {
-    return ok_png_decode(file, ok_file_read_func, ok_file_seek_func, OK_PNG_COLOR_FORMAT_RGBA,
-                         true, true);
-}
-
 ok_png *ok_png_read(FILE *file, ok_png_decode_flags decode_flags) {
-    return ok_png_decode(file, ok_file_read_func, ok_file_seek_func, decode_flags, false, true);
+    return ok_png_decode(file, ok_file_read_func, ok_file_seek_func, decode_flags, true);
 }
 
 #endif
 
-ok_png *ok_png_read_info_from_callbacks(void *user_data, ok_png_read_func read_func,
-                                        ok_png_seek_func seek_func) {
-    return ok_png_decode(user_data, read_func, seek_func, OK_PNG_COLOR_FORMAT_RGBA, true, false);
-}
-
 ok_png *ok_png_read_from_callbacks(void *user_data, ok_png_read_func read_func,
                                    ok_png_seek_func seek_func, ok_png_decode_flags decode_flags) {
-    return ok_png_decode(user_data, read_func, seek_func, decode_flags, false, false);
+    return ok_png_decode(user_data, read_func, seek_func, decode_flags, false);
 }
 
 void ok_png_free(ok_png *png) {
@@ -868,6 +857,7 @@ static void ok_png_decode2(ok_png_decoder *decoder) {
 
     // When info_only is true, we only care about the IHDR chunk and whether or not
     // the tRNS chunk exists.
+    bool info_only = (decoder->decode_flags & OK_PNG_INFO_ONLY) != 0;
     bool end_found = false;
     while (!end_found) {
         uint8_t chunk_header[8];
@@ -880,7 +870,7 @@ static void ok_png_decode2(ok_png_decoder *decoder) {
         bool success = false;
         if (chunk_type == OK_PNG_CHUNK_IHDR) {
             success = ok_png_read_header(decoder, chunk_length);
-            if (success && decoder->info_only) {
+            if (success && info_only) {
                 // If the png has alpha, then we have all the info we need.
                 // Otherwise, continue scanning to see if the tRNS chunk exists.
                 if (png->has_alpha) {
@@ -890,10 +880,10 @@ static void ok_png_decode2(ok_png_decoder *decoder) {
         } else if (chunk_type == OK_PNG_CHUNK_CGBI) {
             success = ok_seek(decoder, (long)chunk_length);
             decoder->is_ios_format = true;
-        } else if (chunk_type == OK_PNG_CHUNK_PLTE && !decoder->info_only) {
+        } else if (chunk_type == OK_PNG_CHUNK_PLTE && !info_only) {
             success = ok_png_read_palette(decoder, chunk_length);
         } else if (chunk_type == OK_PNG_CHUNK_TRNS) {
-            if (decoder->info_only) {
+            if (info_only) {
                 // No need to parse this chunk, we have all the info we need.
                 png->has_alpha = true;
                 return;
@@ -901,7 +891,7 @@ static void ok_png_decode2(ok_png_decoder *decoder) {
                 success = ok_png_read_transparency(decoder, chunk_length);
             }
         } else if (chunk_type == OK_PNG_CHUNK_IDAT) {
-            if (decoder->info_only) {
+            if (info_only) {
                 // Both IHDR and tRNS must come before IDAT, so we have all the info we need.
                 return;
             }
@@ -932,7 +922,7 @@ static void ok_png_decode2(ok_png_decoder *decoder) {
 
 static ok_png *ok_png_decode(void *user_data, ok_png_read_func input_read_func,
                              ok_png_seek_func input_seek_func, ok_png_decode_flags decode_flags,
-                             bool info_only, bool check_user_data) {
+                             bool check_user_data) {
     ok_png *png = calloc(1, sizeof(ok_png));
     if (!png) {
         return NULL;
@@ -957,7 +947,6 @@ static ok_png *ok_png_decode(void *user_data, ok_png_read_func input_read_func,
     decoder->input_read_func = input_read_func;
     decoder->input_seek_func = input_seek_func;
     decoder->decode_flags = decode_flags;
-    decoder->info_only = info_only;
 
     ok_png_decode2(decoder);
 
