@@ -138,6 +138,8 @@ bool compare(const char *name, const char *ext,
                    "(%u x %u - data length should be %lu but is %u)\n",
                    name, ext, image_width, image_height, rgba_data_length,
                    (image_width * image_height * 4));
+        } else if (image_data != NULL) {
+            printf("Failure: Data incorrectly loaded for %s.%s \n", name, ext);
         } else {
             if (verbose) {
                 printf("File:    %16.16s.%s (Info only: %u x %u)\n", name, ext,
