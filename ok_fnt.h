@@ -89,7 +89,7 @@ typedef struct {
     ok_fnt_glyph *glyphs;
     size_t num_kerning_pairs;
     ok_fnt_kerning *kerning_pairs;
-    char error_message[80];
+    const char *error_message;
 } ok_fnt;
 
 #ifndef OK_NO_STDIO

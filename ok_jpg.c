@@ -108,16 +108,19 @@ typedef struct {
     ok_jpg_huffman_table huffman_tables[2][4];
 } ok_jpg_decoder;
 
-static void ok_jpg_error(ok_jpg *jpg, const char *message) {
+#ifdef NDEBUG
+#define ok_jpg_error(jpg, message) ok_jpg_set_error((jpg), "ok_jpg_error")
+#else
+#define ok_jpg_error(jpg, message) ok_jpg_set_error((jpg), (message))
+#endif
+
+static void ok_jpg_set_error(ok_jpg *jpg, const char *message) {
     if (jpg) {
         free(jpg->data);
         jpg->data = NULL;
         jpg->width = 0;
         jpg->height = 0;
-
-        const size_t len = sizeof(jpg->error_message) - 1;
-        strncpy(jpg->error_message, message, len);
-        jpg->error_message[len] = 0;
+        jpg->error_message = message;
     }
 }
 

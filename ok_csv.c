@@ -144,12 +144,16 @@ static void ok_csv_cleanup(ok_csv *csv) {
     }
 }
 
-static void ok_csv_error(ok_csv *csv, const char *message) {
+#ifdef NDEBUG
+#define ok_csv_error(csv, message) ok_csv_set_error((csv), "ok_csv_error")
+#else
+#define ok_csv_error(csv, message) ok_csv_set_error((csv), (message))
+#endif
+
+static void ok_csv_set_error(ok_csv *csv, const char *message) {
     if (csv) {
         ok_csv_cleanup(csv);
-        const size_t len = sizeof(csv->error_message) - 1;
-        strncpy(csv->error_message, message, len);
-        csv->error_message[len] = 0;
+        csv->error_message = message;
     }
 }
 

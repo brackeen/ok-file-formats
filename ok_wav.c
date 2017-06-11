@@ -54,14 +54,17 @@ typedef struct {
     ok_wav_seek_func input_seek_func;
 } ok_wav_decoder;
 
-static void ok_wav_error(ok_wav *wav, const char *message) {
+#ifdef NDEBUG
+#define ok_wav_error(wav, message) ok_wav_set_error((wav), "ok_wav_error")
+#else
+#define ok_wav_error(wav, message) ok_wav_set_error((wav), (message))
+#endif
+
+static void ok_wav_set_error(ok_wav *wav, const char *message) {
     if (wav) {
         free(wav->data);
         wav->data = NULL;
-
-        const size_t len = sizeof(wav->error_message) - 1;
-        strncpy(wav->error_message, message, len);
-        wav->error_message[len] = 0;
+        wav->error_message = message;
     }
 }
 

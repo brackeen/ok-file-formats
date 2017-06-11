@@ -70,7 +70,7 @@ typedef struct {
     uint32_t width;
     uint32_t height;
     uint8_t *data;
-    char error_message[80];
+    const char *error_message;
 } ok_jpg;
 
 /**

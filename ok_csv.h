@@ -67,7 +67,7 @@ typedef struct {
     /// Fields. The value fields[record][field] is a NULL-terminated string.
     char ***fields;
     /// Error message (if num_records is 0)
-    char error_message[80];
+    const char *error_message;
 } ok_csv;
 
 #ifndef OK_NO_STDIO

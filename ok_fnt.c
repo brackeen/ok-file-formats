@@ -31,12 +31,16 @@ typedef struct {
 
 } ok_fnt_decoder;
 
-static void ok_fnt_error(ok_fnt *fnt, const char *message) {
+#ifdef NDEBUG
+#define ok_fnt_error(fnt, message) ok_fnt_set_error((fnt), "ok_fnt_error")
+#else
+#define ok_fnt_error(fnt, message) ok_fnt_set_error((fnt), (message))
+#endif
+
+static void ok_fnt_set_error(ok_fnt *fnt, const char *message) {
     if (fnt) {
         fnt->num_glyphs = 0;
-        const size_t len = sizeof(fnt->error_message) - 1;
-        strncpy(fnt->error_message, message, len);
-        fnt->error_message[len] = 0;
+        fnt->error_message = message;
     }
 }
 

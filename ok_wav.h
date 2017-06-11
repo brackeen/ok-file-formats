@@ -70,7 +70,7 @@ typedef struct {
     bool little_endian;
     uint64_t num_frames;
     void *data;
-    char error_message[80];
+    const char *error_message;
 } ok_wav;
 
 #ifndef OK_NO_STDIO

@@ -95,16 +95,19 @@ typedef struct {
 
 } ok_png_decoder;
 
-static void ok_png_error(ok_png *png, const char *message) {
+#ifdef NDEBUG
+#define ok_png_error(png, message) ok_png_set_error((png), "ok_png_error")
+#else
+#define ok_png_error(png, message) ok_png_set_error((png), (message))
+#endif
+
+static void ok_png_set_error(ok_png *png, const char *message) {
     if (png) {
         free(png->data);
         png->data = NULL;
         png->width = 0;
         png->height = 0;
-
-        const size_t len = sizeof(png->error_message) - 1;
-        strncpy(png->error_message, message, len);
-        png->error_message[len] = 0;
+        png->error_message = message;
     }
 }
 
@@ -1063,15 +1066,19 @@ struct ok_inflater {
     ok_inflater_huffman_tree *fixed_distance_huffman;
 
     // Error
-    char error_message[80];
+    const char *error_message;
 };
 
-static void ok_inflater_error(ok_inflater *inflater, const char *message) {
+#ifdef NDEBUG
+#define ok_inflater_error(inflater, message) ok_inflater_set_error((inflater), "ok_inflater_error")
+#else
+#define ok_inflater_error(inflater, message) ok_inflater_set_error((inflater), (message))
+#endif
+
+static void ok_inflater_set_error(ok_inflater *inflater, const char *message) {
     if (inflater) {
         inflater->state = OK_INFLATER_STATE_ERROR;
-        const size_t len = sizeof(inflater->error_message) - 1;
-        strncpy(inflater->error_message, message, len);
-        inflater->error_message[len] = 0;
+        inflater->error_message = message;
     }
 }
 
@@ -1776,7 +1783,7 @@ void ok_inflater_reset(ok_inflater *inflater) {
         inflater->state = (inflater->nowrap ? OK_INFLATER_STATE_READY_FOR_NEXT_BLOCK :
                            OK_INFLATER_STATE_READY_FOR_HEAD);
 
-        memset(inflater->error_message, 0, sizeof(inflater->error_message));
+        inflater->error_message = NULL;
     }
 }
 
@@ -1793,7 +1800,7 @@ void ok_inflater_free(ok_inflater *inflater) {
 }
 
 const char *ok_inflater_error_message(const struct ok_inflater *inflater) {
-    return inflater ? inflater->error_message : "";
+    return inflater ? inflater->error_message : NULL;
 }
 
 bool ok_inflater_needs_input(const ok_inflater *inflater) {

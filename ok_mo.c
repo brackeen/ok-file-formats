@@ -66,12 +66,16 @@ static void ok_mo_cleanup(ok_mo *mo) {
     }
 }
 
-static void ok_mo_error(ok_mo *mo, const char *message) {
+#ifdef NDEBUG
+#define ok_mo_error(mo, message) ok_mo_set_error((mo), "ok_mo_error")
+#else
+#define ok_mo_error(mo, message) ok_mo_set_error((mo), (message))
+#endif
+
+static void ok_mo_set_error(ok_mo *mo, const char *message) {
     if (mo) {
         ok_mo_cleanup(mo);
-        const size_t len = sizeof(mo->error_message) - 1;
-        strncpy(mo->error_message, message, len);
-        mo->error_message[len] = 0;
+        mo->error_message = message;
     }
 }
 

@@ -72,7 +72,7 @@ typedef struct {
     uint32_t height;
     bool has_alpha;
     uint8_t *data;
-    char error_message[80];
+    const char *error_message;
 } ok_png;
 
 /**

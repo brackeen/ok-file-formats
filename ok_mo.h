@@ -62,7 +62,7 @@ struct ok_mo_string;
 typedef struct {
     uint32_t num_strings;
     struct ok_mo_string *strings;
-    char error_message[80];
+    const char *error_message;
 } ok_mo;
 
 #ifndef OK_NO_STDIO
