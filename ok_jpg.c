@@ -86,8 +86,13 @@ typedef struct {
     ok_jpg_read_func input_read_func;
     ok_jpg_seek_func input_seek_func;
 
+    // Output
+    uint8_t *dst_buffer;
+    uint32_t dst_stride;
+
     // State
     bool eoi_found;
+    bool sof_found;
     bool complete;
     int next_marker;
     int restart_intervals;
@@ -155,23 +160,38 @@ static bool ok_file_seek_func(void *user_data, long count) {
 #endif
 
 static ok_jpg *ok_jpg_decode(void *user_data, ok_jpg_read_func input_read_func,
-                             ok_jpg_seek_func input_seek_func, ok_jpg_decode_flags decode_flags,
-                             bool check_user_data);
+                             ok_jpg_seek_func input_seek_func,
+                             uint8_t *dst_buffer, uint32_t dst_stride,
+                             ok_jpg_decode_flags decode_flags, bool check_user_data);
 
 // MARK: Public API
 
 #ifndef OK_NO_STDIO
 
 ok_jpg *ok_jpg_read(FILE *file, ok_jpg_decode_flags decode_flags) {
-    return ok_jpg_decode(file, ok_file_read_func, ok_file_seek_func, decode_flags, true);
+    return ok_jpg_decode(file, ok_file_read_func, ok_file_seek_func, NULL, 0, decode_flags, true);
+}
+
+ok_jpg *ok_jpg_read_to_buffer(FILE *file, uint8_t *dst_buffer, uint32_t dst_stride,
+                              ok_jpg_decode_flags decode_flags) {
+    return ok_jpg_decode(file, ok_file_read_func, ok_file_seek_func, dst_buffer, dst_stride,
+                         decode_flags, true);
 }
 
 #endif
 
-ok_jpg *ok_jpg_read_from_callbacks(void *user_data, ok_jpg_read_func input_read_func,
-                                   ok_jpg_seek_func input_seek_func,
+ok_jpg *ok_jpg_read_from_callbacks(void *user_data, ok_jpg_read_func read_func,
+                                   ok_jpg_seek_func seek_func,
                                    ok_jpg_decode_flags decode_flags) {
-    return ok_jpg_decode(user_data, input_read_func, input_seek_func, decode_flags, false);
+    return ok_jpg_decode(user_data, read_func, seek_func, NULL, 0, decode_flags, false);
+}
+
+ok_jpg *ok_jpg_read_from_callbacks_to_buffer(void *user_data, ok_jpg_read_func read_func,
+                                             ok_jpg_seek_func seek_func,
+                                             uint8_t *dst_buffer, uint32_t dst_stride,
+                                             ok_jpg_decode_flags decode_flags) {
+    return ok_jpg_decode(user_data, read_func, seek_func, dst_buffer, dst_stride,
+                         decode_flags, false);
 }
 
 void ok_jpg_free(ok_jpg *jpg) {
@@ -448,15 +468,15 @@ static void ok_jpg_convert_data_unit(ok_jpg_decoder *decoder, int data_unit_x, i
     const int width = min(c->H * 8, decoder->in_width - x);
     const int height = min(c->V * 8, decoder->in_height - y);
     int x_inc = 4;
-    int y_inc = (int)jpg->width * 4;
-    uint8_t *data = jpg->data;
+    int y_inc = (int)(decoder->dst_stride ? decoder->dst_stride : jpg->width * 4);
+    uint8_t *data = decoder->dst_buffer;
     if (decoder->rotate) {
         int temp = x;
         x = y;
         y = temp;
     }
     if (decoder->flip_x) {
-        data += y_inc - (x + 1) * x_inc;
+        data += ((int)jpg->width * 4) - (x + 1) * x_inc;
         x_inc = -x_inc;
     } else {
         data += x * x_inc;
@@ -987,19 +1007,24 @@ static bool ok_jpg_read_sof(ok_jpg_decoder *decoder) {
 
     // Allocate data
     if (!decoder->info_only) {
-        if (jpg->data) {
+        if (decoder->sof_found) {
             ok_jpg_error(jpg, "Invalid JPEG (Multiple SOF markers)");
             return false;
         }
+        decoder->sof_found = true;
 
-        uint64_t size = (uint64_t)jpg->width * jpg->height * 4;
-        size_t platform_size = (size_t)size;
-        if (platform_size == size) {
-            jpg->data = malloc(platform_size);
-        }
-        if (!jpg->data) {
-            ok_jpg_error(jpg, "Couldn't allocate memory for image");
-            return false;
+        if (!decoder->dst_buffer) {
+            uint64_t dst_stride = decoder->dst_stride ? decoder->dst_stride : jpg->width * 4;
+            uint64_t size = dst_stride * jpg->height;
+            size_t platform_size = (size_t)size;
+            if (platform_size == size) {
+                decoder->dst_buffer = malloc(platform_size);
+            }
+            if (!decoder->dst_buffer) {
+                ok_jpg_error(jpg, "Couldn't allocate memory for image");
+                return false;
+            }
+            jpg->data = decoder->dst_buffer;
         }
     }
     return true;
@@ -1380,8 +1405,9 @@ static void ok_jpg_decode2(ok_jpg_decoder *decoder) {
 }
 
 static ok_jpg *ok_jpg_decode(void *user_data, ok_jpg_read_func input_read_func,
-                             ok_jpg_seek_func input_seek_func, ok_jpg_decode_flags decode_flags,
-                             bool check_user_data) {
+                             ok_jpg_seek_func input_seek_func,
+                             uint8_t *dst_buffer, uint32_t dst_stride,
+                             ok_jpg_decode_flags decode_flags, bool check_user_data) {
     ok_jpg *jpg = calloc(1, sizeof(ok_jpg));
     if (!jpg) {
         return NULL;
@@ -1405,6 +1431,8 @@ static ok_jpg *ok_jpg_decode(void *user_data, ok_jpg_read_func input_read_func,
     decoder->input_data = user_data;
     decoder->input_read_func = input_read_func;
     decoder->input_seek_func = input_seek_func;
+    decoder->dst_buffer = dst_buffer;
+    decoder->dst_stride = dst_stride;
     decoder->color_rgba = (decode_flags & OK_JPG_COLOR_FORMAT_BGRA) == 0;
     decoder->flip_y = (decode_flags & OK_JPG_FLIP_Y) != 0;
     decoder->info_only = (decode_flags & OK_JPG_INFO_ONLY) != 0;

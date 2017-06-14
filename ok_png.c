@@ -71,6 +71,10 @@ typedef struct {
     // Decode options
     ok_png_decode_flags decode_flags;
 
+    // Output
+    uint8_t *dst_buffer;
+    uint32_t dst_stride;
+
     // Decoding
     struct ok_inflater *inflater;
     size_t inflater_bytes_read;
@@ -142,22 +146,37 @@ static bool ok_file_seek_func(void *user_data, long count) {
 #endif
 
 static ok_png *ok_png_decode(void *user_data, ok_png_read_func input_read_func,
-                             ok_png_seek_func input_seek_func, ok_png_decode_flags decode_flags,
-                             bool check_user_data);
+                             ok_png_seek_func input_seek_func,
+                             uint8_t *dst_buffer, uint32_t dst_stride,
+                             ok_png_decode_flags decode_flags, bool check_user_data);
 
 // Public API
 
 #ifndef OK_NO_STDIO
 
 ok_png *ok_png_read(FILE *file, ok_png_decode_flags decode_flags) {
-    return ok_png_decode(file, ok_file_read_func, ok_file_seek_func, decode_flags, true);
+    return ok_png_decode(file, ok_file_read_func, ok_file_seek_func, NULL, 0, decode_flags, true);
+}
+
+ok_png *ok_png_read_to_buffer(FILE *file, uint8_t *dst_buffer, uint32_t dst_stride,
+                              ok_png_decode_flags decode_flags) {
+    return ok_png_decode(file, ok_file_read_func, ok_file_seek_func, dst_buffer, dst_stride,
+                         decode_flags, true);
 }
 
 #endif
 
 ok_png *ok_png_read_from_callbacks(void *user_data, ok_png_read_func read_func,
                                    ok_png_seek_func seek_func, ok_png_decode_flags decode_flags) {
-    return ok_png_decode(user_data, read_func, seek_func, decode_flags, false);
+    return ok_png_decode(user_data, read_func, seek_func, NULL, 0, decode_flags, false);
+}
+
+ok_png *ok_png_read_from_callbacks_to_buffer(void *user_data, ok_png_read_func read_func,
+                                             ok_png_seek_func seek_func,
+                                             uint8_t *dst_buffer, uint32_t dst_stride,
+                                             ok_png_decode_flags decode_flags) {
+    return ok_png_decode(user_data, read_func, seek_func, dst_buffer, dst_stride,
+                         decode_flags, false);
 }
 
 void ok_png_free(ok_png *png) {
@@ -404,17 +423,17 @@ static void ok_png_decode_filter(uint8_t * RESTRICT curr, const uint8_t * RESTRI
 static bool ok_png_transform_scanline(ok_png_decoder *decoder, const uint8_t *src, uint32_t width) {
     ok_png *png = decoder->png;
     const bool dst_flip_y = (decoder->decode_flags & OK_PNG_FLIP_Y) != 0;
-    const uint32_t dst_stride = png->width * 4;
+    const uint32_t dst_stride = decoder->dst_stride ? decoder->dst_stride : png->width * 4;
     uint8_t *dst_start;
     uint8_t *dst_end;
     if (decoder->interlace_method == 0) {
         const uint32_t dst_y =
             (dst_flip_y ? (png->height - decoder->scanline - 1) : decoder->scanline);
-        dst_start = png->data + (dst_y * dst_stride);
+        dst_start = decoder->dst_buffer + (dst_y * dst_stride);
     } else if (decoder->interlace_pass == 7) {
         const uint32_t t_scanline = decoder->scanline * 2 + 1;
         const uint32_t dst_y = dst_flip_y ? (png->height - t_scanline - 1) : t_scanline;
-        dst_start = png->data + (dst_y * dst_stride);
+        dst_start = decoder->dst_buffer + (dst_y * dst_stride);
     } else {
         dst_start = decoder->temp_data_row;
     }
@@ -654,7 +673,7 @@ static bool ok_png_transform_scanline(ok_png_decoder *decoder, const uint8_t *sr
 
         src = dst_start;
         uint8_t *src_end = dst_end;
-        uint8_t *dst = png->data + (y * dst_stride) + (x * 4);
+        uint8_t *dst = decoder->dst_buffer + (y * dst_stride) + (x * 4);
         while (src < src_end) {
             *dst++ = *src++;
             *dst++ = *src++;
@@ -712,16 +731,18 @@ static bool ok_png_read_data(ok_png_decoder *decoder, uint32_t bytes_remaining) 
     size_t max_bytes_per_scanline = 1 + (png->width * bits_per_pixel + 7) / 8;
 
     // Create buffers
-    if (!png->data) {
-        uint64_t size = (uint64_t)png->width * png->height * 4;
+    if (!decoder->dst_buffer) {
+        uint64_t dst_stride = decoder->dst_stride ? decoder->dst_stride : png->width * 4;
+        uint64_t size = dst_stride * png->height;
         size_t platform_size = (size_t)size;
         if (platform_size == size) {
-            png->data = malloc(platform_size);
+            decoder->dst_buffer = malloc(platform_size);
         }
-        if (!png->data) {
+        if (!decoder->dst_buffer) {
             ok_png_error(png, "Couldn't allocate memory for image");
             return false;
         }
+        png->data = decoder->dst_buffer;
     }
     if (!decoder->prev_scanline) {
         decoder->prev_scanline = malloc(max_bytes_per_scanline);
@@ -924,8 +945,9 @@ static void ok_png_decode2(ok_png_decoder *decoder) {
 }
 
 static ok_png *ok_png_decode(void *user_data, ok_png_read_func input_read_func,
-                             ok_png_seek_func input_seek_func, ok_png_decode_flags decode_flags,
-                             bool check_user_data) {
+                             ok_png_seek_func input_seek_func,
+                             uint8_t *dst_buffer, uint32_t dst_stride,
+                             ok_png_decode_flags decode_flags, bool check_user_data) {
     ok_png *png = calloc(1, sizeof(ok_png));
     if (!png) {
         return NULL;
@@ -949,6 +971,8 @@ static ok_png *ok_png_decode(void *user_data, ok_png_read_func input_read_func,
     decoder->input_data = user_data;
     decoder->input_read_func = input_read_func;
     decoder->input_seek_func = input_seek_func;
+    decoder->dst_buffer = dst_buffer;
+    decoder->dst_stride = dst_stride;
     decoder->decode_flags = decode_flags;
 
     ok_png_decode2(decoder);

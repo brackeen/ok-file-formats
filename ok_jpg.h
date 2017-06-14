@@ -102,6 +102,26 @@ typedef enum {
  */
 ok_jpg *ok_jpg_read(FILE *file, ok_jpg_decode_flags decode_flags);
 
+/**
+ * Reads a JPEG image, outputing image data to a preallocated buffer.
+ *
+ * On success, #ok_jpg.width and #ok_jpg.height are set.
+ * On failure, #ok_jpg.error_message is set.
+ *
+ * @param file The file to read.
+ * @param dst_buffer The buffer to output data. The buffer must have a minimum size of
+ * (`dst_stride * height`). If `NULL`, a newly allocated buffer is used and assigned to
+ * #ok_jpg.data.
+ * @param dst_stride The stride of the buffer, in bytes. If 0, the stride is assumed to be
+ * (`width * 4`).
+ * @param decode_flags The JPG decode flags. Use `OK_JPG_COLOR_FORMAT_RGBA` for the most cases.
+ * first row of data is the last row in the image.
+ * @return a new #ok_jpg object. Never returns `NULL`. The object should be freed with
+ * #ok_jpg_free().
+ */
+ok_jpg *ok_jpg_read_to_buffer(FILE *file, uint8_t *dst_buffer, uint32_t dst_stride,
+                              ok_jpg_decode_flags decode_flags);
+
 #endif
 
 /**
@@ -120,7 +140,7 @@ void ok_jpg_free(ok_jpg *jpg);
  * `buffer`.
  *
  * @param user_data The parameter that was passed to the #ok_jpg_read_from_callbacks() or
- * ok_png_read_info_from_callbacks() function.
+ * ok_jpg_read_info_from_callbacks() function.
  * @param buffer The data buffer to copy bytes to.
  * @param count The number of bytes to read.
  * @return The number of bytes read.
@@ -134,7 +154,7 @@ typedef size_t (*ok_jpg_read_func)(void *user_data, uint8_t *buffer, size_t coun
  * This function must skip bytes from its source (typically `user_data`).
  *
  * @param user_data The parameter that was passed to the #ok_jpg_read_from_callbacks() or
- * ok_png_read_info_from_callbacks() function.
+ * ok_jpg_read_info_from_callbacks() function.
  * @param count The number of bytes to skip.
  * @return `true` if success.
  */
@@ -153,6 +173,30 @@ typedef bool (*ok_jpg_seek_func)(void *user_data, long count);
  */
 ok_jpg *ok_jpg_read_from_callbacks(void *user_data, ok_jpg_read_func read_func,
                                    ok_jpg_seek_func seek_func, ok_jpg_decode_flags decode_flags);
+
+/**
+ * Reads a JPEG image, outputing image data to a preallocated buffer.
+ *
+ * On success, #ok_jpg.width and #ok_jpg.height are set.
+ * On failure, #ok_jpg.error_message is set.
+ *
+ * @param user_data The parameter to be passed to `read_func` and `seek_func`.
+ * @param read_func The read function.
+ * @param seek_func The seek function.
+ * @param dst_buffer The buffer to output data. The buffer must have a minimum size of
+ * (`dst_stride * height`). If `NULL`, a newly allocated buffer is used and assigned to
+ * #ok_jpg.data.
+ * @param dst_stride The stride of the buffer, in bytes. If 0, the stride is assumed to be
+ * (`width * 4`).
+ * @param decode_flags The JPG decode flags. Use `OK_JPG_COLOR_FORMAT_RGBA` for the most cases.
+ * first row of data is the last row in the image.
+ * @return a new #ok_jpg object. Never returns `NULL`. The object should be freed with
+ * #ok_jpg_free().
+ */
+ok_jpg *ok_jpg_read_from_callbacks_to_buffer(void *user_data, ok_jpg_read_func read_func,
+                                             ok_jpg_seek_func seek_func,
+                                             uint8_t *dst_buffer, uint32_t dst_stride,
+                                             ok_jpg_decode_flags decode_flags);
 
 #ifdef __cplusplus
 }

@@ -108,6 +108,26 @@ typedef enum {
  */
 ok_png *ok_png_read(FILE *file, ok_png_decode_flags decode_flags);
 
+/**
+ * Reads a PNG image, outputing image data to a preallocated buffer.
+ *
+ * On success, #ok_png.width and #ok_png.height are set.
+ * On failure, #ok_png.error_message is set.
+ *
+ * @param file The file to read.
+ * @param dst_buffer The buffer to output data. The buffer must have a minimum size of
+ * (`dst_stride * height`). If `NULL`, a newly allocated buffer is used and assigned to 
+ * #ok_png.data.
+ * @param dst_stride The stride of the buffer, in bytes. If 0, the stride is assumed to be
+ * (`width * 4`).
+ * @param decode_flags The PNG decode flags. Use `OK_PNG_COLOR_FORMAT_RGBA` for the most cases.
+ * first row of data is the last row in the image.
+ * @return a new #ok_png object. Never returns `NULL`. The object should be freed with
+ * #ok_png_free().
+ */
+ok_png *ok_png_read_to_buffer(FILE *file, uint8_t *dst_buffer, uint32_t dst_stride,
+                              ok_png_decode_flags decode_flags);
+
 #endif
 
 /**
@@ -159,6 +179,30 @@ typedef bool (*ok_png_seek_func)(void *user_data, long count);
  */
 ok_png *ok_png_read_from_callbacks(void *user_data, ok_png_read_func read_func,
                                    ok_png_seek_func seek_func, ok_png_decode_flags decode_flags);
+
+/**
+ * Reads a PNG image, outputing image data to a preallocated buffer.
+ *
+ * On success, #ok_png.width and #ok_png.height are set.
+ * On failure, #ok_png.error_message is set.
+ *
+ * @param user_data The parameter to be passed to `read_func` and `seek_func`.
+ * @param read_func The read function.
+ * @param seek_func The seek function.
+ * @param dst_buffer The buffer to output data. The buffer must have a minimum size of
+ * (`dst_stride * height`). If `NULL`, a newly allocated buffer is used and assigned to
+ * #ok_png.data.
+ * @param dst_stride The stride of the buffer, in bytes. If 0, the stride is assumed to be
+ * (`width * 4`).
+ * @param decode_flags The PNG decode flags. Use `OK_PNG_COLOR_FORMAT_RGBA` for the most cases.
+ * first row of data is the last row in the image.
+ * @return a new #ok_png object. Never returns `NULL`. The object should be freed with
+ * #ok_png_free().
+ */
+ok_png *ok_png_read_from_callbacks_to_buffer(void *user_data, ok_png_read_func read_func,
+                                             ok_png_seek_func seek_func,
+                                             uint8_t *dst_buffer, uint32_t dst_stride,
+                                             ok_png_decode_flags decode_flags);
 
 // MARK: Inflater
 
