@@ -96,36 +96,47 @@ uint8_t *read_file(const char *filename, unsigned long *length) {
     return buffer;
 }
 
-static bool fuzzy_memcmp(const uint8_t *data1, const uint8_t *data2, const size_t length,
-                         const uint8_t fuzziness, double *p_identical, int *peak_diff) {
-    if (fuzziness == 0) {
-        return memcmp(data1, data2, length) == 0;
-    } else {
-        *peak_diff = 0;
-        bool success = true;
-        int identical = 0;
-        const uint8_t *data1_end = data1 + length;
-        while (data1 < data1_end) {
-            int diff = abs(*data1 - *data2);
-            if (diff <= 1) {
-                identical++;
+static bool fuzzy_memcmp(const uint8_t *data1, const uint8_t *data2,
+                         size_t pitch1, size_t pitch2,
+                         size_t width, size_t height,
+                         uint8_t fuzziness, double *p_identical, int *peak_diff) {
+    int identical = 0;
+    bool success = true;
+
+    *peak_diff = 0;
+
+    for (size_t i = 0; i < height; i++) {
+        const uint8_t *row1 = data1 + i * pitch1;
+        const uint8_t *row2 = data2 + i * pitch2;
+        if (fuzziness == 0) {
+            if (memcmp(row1, row2, width) != 0) {
+                return false;
             }
-            if (diff > *peak_diff) {
-                *peak_diff = diff;
+        } else {
+            const uint8_t *row1_end = row1 + width;
+            while (row1 < row1_end) {
+                int diff = abs(*row1 - *row2);
+                if (diff <= 1) {
+                    identical++;
+                }
+                if (diff > *peak_diff) {
+                    *peak_diff = diff;
+                }
+                if (diff > fuzziness) {
+                    success = false;
+                }
+                row1++;
+                row2++;
             }
-            if (diff > fuzziness) {
-                success = false;
-            }
-            data1++;
-            data2++;
         }
-        *p_identical = (double)identical / length;
-        return success;
     }
+    *p_identical = (double)identical / (width * height);
+    return success;
 }
 
 bool compare(const char *name, const char *ext,
-             const uint8_t *image_data, uint32_t image_width, uint32_t image_height,
+             const uint8_t *image_data, uint32_t image_data_stride,
+             uint32_t image_width, uint32_t image_height,
              const char *image_error_message,
              const uint8_t *rgba_data, unsigned long rgba_data_length,
              bool info_only, uint8_t fuzziness, bool verbose) {
@@ -161,8 +172,9 @@ bool compare(const char *name, const char *ext,
         printf("Failure: Incorrect dimensions for %s.%s "
                "(%u x %u - data length should be %lu but is %u)\n", name, ext,
                image_width, image_height, rgba_data_length, (image_width * image_height * 4));
-    } else if (!fuzzy_memcmp(image_data, rgba_data, rgba_data_length, fuzziness,
-                             &p_identical, &peak_diff)) {
+    } else if (!fuzzy_memcmp(image_data, rgba_data, image_data_stride, image_width * 4,
+                             image_width * 4, image_height,
+                             fuzziness, &p_identical, &peak_diff)) {
         if (fuzziness > 0) {
             printf("Failure: Data is different for image %s.%s (%f%% diff<=1, peak diff=%i)\n",
                    name, ext, (p_identical * 100.0), peak_diff);
