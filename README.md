@@ -16,6 +16,7 @@ grab `ok_png.h` and `ok_png.c`.
 
 The image loading functions in `ok_png` and `ok_jpg` include the following options:
 * Get the image dimensions without decoding image data.
+* Load image data into preallocated buffers.
 * Premultiply alpha.
 * Flip the image vertically.
 
