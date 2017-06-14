@@ -11,6 +11,12 @@
 #include <TargetConditionals.h>
 #endif
 
+enum png_test_type {
+    test_normal,
+    test_info_only,
+    test_to_buffer,
+};
+
 // This is just copied form a directory listing of the PNG Suite files
 static const char *filenames[] = {
     "basi0g01",
@@ -199,7 +205,7 @@ static const char *filenames[] = {
 static bool test_image(const char *path_to_png_suite,
                        const char *path_to_rgba_files,
                        const char *name,
-                       bool info_only, bool verbose) {
+                       enum png_test_type test_type, bool verbose) {
     bool success = false;
 
     char *rgba_filename = get_full_path(path_to_rgba_files, name, "rgba");
@@ -229,17 +235,43 @@ static bool test_image(const char *path_to_png_suite,
 
     // Load via ok_png
     ok_png *png = NULL;
+    uint8_t *png_data = NULL;
+    uint32_t png_data_stride = 0;
     char *in_filename = get_full_path(path_to_png_suite, name, "png");
     FILE *file = fopen(in_filename, "rb");
     if (file) {
-        if (info_only) {
-            png = ok_png_read(file, decode_flags | OK_PNG_INFO_ONLY);
-        } else {
-            png = ok_png_read(file, decode_flags);
+        switch (test_type) {
+            case test_normal:
+                png = ok_png_read(file, decode_flags);
+                png_data = png->data;
+                png_data_stride = png->width * 4;
+                break;
+            case test_info_only:
+                png = ok_png_read(file, decode_flags | OK_PNG_INFO_ONLY);
+                png_data = png->data;
+                png_data_stride = png->width * 4;
+                break;
+            case test_to_buffer:
+                png = ok_png_read(file, decode_flags | OK_PNG_INFO_ONLY);
+
+                if (png->width > 0 && png->height > 0) {
+                    fclose(file);
+                    uint32_t dst_stride = align_to(png->width * 4, 512);
+                    uint8_t *dst_buffer = malloc(dst_stride * png->height);
+                    ok_png_free(png);
+
+                    file = fopen(in_filename, "rb");
+                    png = ok_png_read_to_buffer(file, dst_buffer, dst_stride, decode_flags);
+                    png_data = dst_buffer;
+                    png_data_stride = dst_stride;
+                }
+                break;
         }
         fclose(file);
 
-        success = compare(name, "png", png->data, png->width, png->height, png->error_message,
+        bool info_only = test_type == test_info_only;
+        success = compare(name, "png", png_data, png_data_stride, png->width, png->height,
+                          png->error_message,
                           rgba_data, rgba_data_length, info_only, 0, verbose);
     } else {
         printf("Warning: File not found: %s.png\n", name);
@@ -263,16 +295,23 @@ int png_suite_test(const char *path_to_png_suite, const char *path_to_rgba_files
     double startTime = clock() / (double)CLOCKS_PER_SEC;
     int num_failures = 0;
     for (int i = 0; i < num_files; i++) {
-        bool success = test_image(path_to_png_suite, path_to_rgba_files, filenames[i], true,
+        bool success = test_image(path_to_png_suite, path_to_rgba_files, filenames[i], test_normal,
                                   verbose);
         if (!success) {
             num_failures++;
-        } else {
-            success = test_image(path_to_png_suite, path_to_rgba_files, filenames[i], false,
-                                 verbose);
-            if (!success) {
-                num_failures++;
-            }
+            continue;
+        }
+        success = test_image(path_to_png_suite, path_to_rgba_files, filenames[i], test_info_only,
+                             verbose);
+        if (!success) {
+            num_failures++;
+            continue;
+        }
+
+        success = test_image(path_to_png_suite, path_to_rgba_files, filenames[i], test_to_buffer,
+                             verbose);
+        if (!success) {
+            num_failures++;
         }
     }
     double endTime = clock() / (double)CLOCKS_PER_SEC;

@@ -5,6 +5,12 @@
 #include <stdlib.h>
 #include <time.h>
 
+enum jpg_test_type {
+    test_normal,
+    test_info_only,
+    test_to_buffer,
+};
+
 static const char *filenames[] = {
 
     // grayscale
@@ -62,7 +68,7 @@ static const char *filenames[] = {
 static bool test_image(const char *path_to_jpgs,
                        const char *path_to_rgba_files,
                        const char *name,
-                       bool info_only, bool verbose) {
+                       enum jpg_test_type test_type, bool verbose) {
     char *rgba_filename = get_full_path(path_to_rgba_files, name, "rgba");
     unsigned long rgba_data_length;
     uint8_t *rgba_data = read_file(rgba_filename, &rgba_data_length);
@@ -70,17 +76,45 @@ static bool test_image(const char *path_to_jpgs,
 
     // Load via ok_jpg
     ok_jpg *jpg = NULL;
+    uint8_t *jpg_data = NULL;
+    uint32_t jpg_data_stride = 0;
     char *in_filename = get_full_path(path_to_jpgs, name, "jpg");
     FILE *file = fopen(in_filename, "rb");
     if (file) {
-        if (info_only) {
-            jpg = ok_jpg_read(file, OK_JPG_INFO_ONLY);
-        } else {
-            jpg = ok_jpg_read(file, OK_JPG_COLOR_FORMAT_RGBA);
+        switch (test_type) {
+            case test_normal:
+                jpg = ok_jpg_read(file, OK_JPG_COLOR_FORMAT_RGBA);
+                jpg_data = jpg->data;
+                jpg_data_stride = jpg->width * 4;
+                break;
+            case test_info_only:
+                jpg = ok_jpg_read(file, OK_JPG_INFO_ONLY);
+                jpg_data = jpg->data;
+                jpg_data_stride = jpg->width * 4;
+                break;
+            case test_to_buffer:
+                jpg = ok_jpg_read(file, OK_JPG_INFO_ONLY);
+
+                if (jpg->width > 0 && jpg->height > 0) {
+                    fclose(file);
+                    uint32_t dst_stride = align_to(jpg->width * 4, 512);
+                    uint8_t *dst_buffer = malloc(dst_stride * jpg->height);
+                    ok_jpg_free(jpg);
+
+                    file = fopen(in_filename, "rb");
+                    jpg = ok_jpg_read_to_buffer(file, dst_buffer, dst_stride,
+                                                OK_JPG_COLOR_FORMAT_RGBA);
+                    jpg_data = dst_buffer;
+                    jpg_data_stride = dst_stride;
+                }
+                break;
         }
         fclose(file);
 
-        success = compare(name, "jpg", jpg->data, jpg->width, jpg->height, jpg->error_message,
+        bool info_only = test_type == test_info_only;
+        success = compare(name, "jpg", jpg_data, jpg_data_stride,
+                          jpg->width, jpg->height,
+                          jpg->error_message,
                           rgba_data, rgba_data_length, info_only, 4, verbose);
     } else {
         printf("Warning: File not found: %s.jpg\n", name);
@@ -104,14 +138,23 @@ int jpg_test(const char *path_to_jpgs, const char *path_to_rgba_files, bool verb
     double startTime = clock() / (double)CLOCKS_PER_SEC;
     int num_failures = 0;
     for (int i = 0; i < num_files; i++) {
-        bool success = test_image(path_to_jpgs, path_to_rgba_files, filenames[i], true, verbose);
+        bool success = test_image(path_to_jpgs, path_to_rgba_files, filenames[i], test_normal,
+                                  verbose);
         if (!success) {
             num_failures++;
-        } else {
-            success = test_image(path_to_jpgs, path_to_rgba_files, filenames[i], false, verbose);
-            if (!success) {
-                num_failures++;
-            }
+            continue;
+        }
+        success = test_image(path_to_jpgs, path_to_rgba_files, filenames[i], test_info_only,
+                             verbose);
+        if (!success) {
+            num_failures++;
+            continue;
+        }
+
+        success = test_image(path_to_jpgs, path_to_rgba_files, filenames[i], test_to_buffer,
+                             verbose);
+        if (!success) {
+            num_failures++;
         }
     }
     double endTime = clock() / (double)CLOCKS_PER_SEC;
