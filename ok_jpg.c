@@ -917,118 +917,7 @@ static bool ok_jpg_decode_scan(ok_jpg_decoder *decoder) {
     return true;
 }
 
-// MARK: Segment reading
-
-#define intDivCeil(x, y) (((x) + (y)-1) / (y))
-
-static bool ok_jpg_read_sof(ok_jpg_decoder *decoder) {
-    ok_jpg *jpg = decoder->jpg;
-    uint8_t buffer[3 * 3];
-    if (!ok_read(decoder, buffer, 8)) {
-        return false;
-    }
-    int length = readBE16(buffer) - 8;
-    int P = buffer[2];
-    if (P != 8) {
-        ok_jpg_error(jpg, "Invalid component size");
-        return false;
-    }
-    decoder->in_height = readBE16(buffer + 3);
-    decoder->in_width = readBE16(buffer + 5);
-    if (decoder->in_width == 0 || decoder->in_height == 0) {
-        ok_jpg_error(jpg, "Invalid image dimensions");
-        return false;
-    }
-    jpg->width = decoder->rotate ? decoder->in_height : decoder->in_width;
-    jpg->height = decoder->rotate ? decoder->in_width : decoder->in_height;
-    decoder->num_components = buffer[7];
-    if (decoder->num_components != 1 && decoder->num_components != 3) {
-        ok_jpg_error(jpg, "Invalid component count");
-        return false;
-    }
-
-    if (length < 3 * decoder->num_components) {
-        ok_jpg_error(jpg, "SOF segment too short");
-        return false;
-    }
-    if (!ok_read(decoder, buffer, 3 * (size_t)decoder->num_components)) {
-        return false;
-    }
-
-    int maxH = 1;
-    int maxV = 1;
-    for (int i = 0; i < decoder->num_components; i++) {
-        ok_jpg_component *c = decoder->components + i;
-        c->id = buffer[i * 3 + 0];
-        c->H = buffer[i * 3 + 1] >> 4;
-        c->V = buffer[i * 3 + 1] & 0x0F;
-        c->Tq = buffer[i * 3 + 2];
-
-        if (c->H == 0 || c->V == 0 || c->H > 4 || c->V > 4 || c->Tq > 3) {
-            ok_jpg_error(jpg, "Bad component");
-            return false;
-        }
-
-        if (c->H > MAX_SAMPLING_FACTOR || c->V > MAX_SAMPLING_FACTOR) {
-            ok_jpg_error(jpg, "Unsupported sampling factor");
-            return false;
-        }
-
-        maxH = max(maxH, c->H);
-        maxV = max(maxV, c->V);
-        length -= 3;
-    }
-    decoder->data_units_x = intDivCeil(decoder->in_width, maxH * 8);
-    decoder->data_units_y = intDivCeil(decoder->in_height, maxV * 8);
-
-    // Skip remaining length, if any
-    if (length > 0) {
-        if (!ok_seek(decoder, length)) {
-            return false;
-        }
-    }
-
-    // Setup idct
-    for (int i = 0; i < decoder->num_components; i++) {
-        ok_jpg_component *c = decoder->components + i;
-        if (c->H == maxH && c->V == maxV) {
-            c->idct = ok_jpg_idct_8x8;
-        } else if (c->H * 2 == maxH && c->V * 2 == maxV) {
-            c->idct = ok_jpg_idct_16x16;
-        } else if (c->H == maxH && c->V * 2 == maxV) {
-            c->idct = ok_jpg_idct_8x16;
-        } else if (c->H * 2 == maxH && c->V == maxV) {
-            c->idct = ok_jpg_idct_16x8;
-        } else {
-            ok_jpg_error(jpg, "Unsupported IDCT sampling factor");
-            return false;
-        }
-    }
-
-    // Allocate data
-    if (!decoder->info_only) {
-        if (decoder->sof_found) {
-            ok_jpg_error(jpg, "Invalid JPEG (Multiple SOF markers)");
-            return false;
-        }
-        decoder->sof_found = true;
-
-        if (!decoder->dst_buffer) {
-            uint64_t dst_stride = decoder->dst_stride ? decoder->dst_stride : jpg->width * 4;
-            uint64_t size = dst_stride * jpg->height;
-            size_t platform_size = (size_t)size;
-            if (platform_size == size) {
-                decoder->dst_buffer = malloc(platform_size);
-            }
-            if (!decoder->dst_buffer) {
-                ok_jpg_error(jpg, "Couldn't allocate memory for image");
-                return false;
-            }
-            jpg->data = decoder->dst_buffer;
-        }
-    }
-    return true;
-}
+// MARK: EXIF
 
 static bool ok_jpg_read_exif(ok_jpg_decoder *decoder) {
     static const char exif_magic[] = {'E', 'x', 'i', 'f', 0, 0};
@@ -1157,99 +1046,122 @@ static bool ok_jpg_read_exif(ok_jpg_decoder *decoder) {
     return ok_seek(decoder, length);
 }
 
-static bool ok_jpg_read_dqt(ok_jpg_decoder *decoder) {
+// MARK: Segment reading
+
+#define intDivCeil(x, y) (((x) + (y)-1) / (y))
+
+static bool ok_jpg_read_sof(ok_jpg_decoder *decoder) {
+    // JPEG spec: Table B.2
     ok_jpg *jpg = decoder->jpg;
-    uint8_t buffer[2];
-    if (!ok_read(decoder, buffer, sizeof(buffer))) {
+    uint8_t buffer[3 * 3];
+    if (!ok_read(decoder, buffer, 8)) {
         return false;
     }
-    int length = readBE16(buffer) - 2;
-    while (length >= 65) {
-        if (!ok_read(decoder, buffer, 1)) {
+    int length = readBE16(buffer) - 8;
+    int P = buffer[2];
+    if (P != 8) {
+        ok_jpg_error(jpg, "Invalid component size");
+        return false;
+    }
+    decoder->in_height = readBE16(buffer + 3);
+    decoder->in_width = readBE16(buffer + 5);
+    if (decoder->in_width == 0 || decoder->in_height == 0) {
+        ok_jpg_error(jpg, "Invalid image dimensions");
+        return false;
+    }
+    jpg->width = decoder->rotate ? decoder->in_height : decoder->in_width;
+    jpg->height = decoder->rotate ? decoder->in_width : decoder->in_height;
+    decoder->num_components = buffer[7];
+    if (decoder->num_components != 1 && decoder->num_components != 3) {
+        ok_jpg_error(jpg, "Invalid component count");
+        return false;
+    }
+
+    if (length < 3 * decoder->num_components) {
+        ok_jpg_error(jpg, "SOF segment too short");
+        return false;
+    }
+    if (!ok_read(decoder, buffer, 3 * (size_t)decoder->num_components)) {
+        return false;
+    }
+
+    int maxH = 1;
+    int maxV = 1;
+    for (int i = 0; i < decoder->num_components; i++) {
+        ok_jpg_component *c = decoder->components + i;
+        c->id = buffer[i * 3 + 0];
+        c->H = buffer[i * 3 + 1] >> 4;
+        c->V = buffer[i * 3 + 1] & 0x0F;
+        c->Tq = buffer[i * 3 + 2];
+
+        if (c->H == 0 || c->V == 0 || c->H > 4 || c->V > 4 || c->Tq > 3) {
+            ok_jpg_error(jpg, "Bad component");
             return false;
         }
 
-        int Pq = buffer[0] >> 4;
-        int Tq = buffer[0] & 0x0f;
+        if (c->H > MAX_SAMPLING_FACTOR || c->V > MAX_SAMPLING_FACTOR) {
+            ok_jpg_error(jpg, "Unsupported sampling factor");
+            return false;
+        }
 
-        if (Pq != 0) {
-            ok_jpg_error(jpg, "Unsupported JPEG (extended)");
-            return false;
-        }
-        if (Tq > 3) {
-            ok_jpg_error(jpg, "Invalid JPEG (Tq)");
-            return false;
-        }
-        if (!ok_read(decoder, decoder->q_table[Tq], 64)) {
-            return false;
-        }
-        length -= 65;
+        maxH = max(maxH, c->H);
+        maxV = max(maxV, c->V);
+        length -= 3;
     }
-    if (length != 0) {
-        ok_jpg_error(jpg, "Invalid DQT segment length");
-        return false;
-    } else {
-        return true;
-    }
-}
+    decoder->data_units_x = intDivCeil(decoder->in_width, maxH * 8);
+    decoder->data_units_y = intDivCeil(decoder->in_height, maxV * 8);
 
-static bool ok_jpg_read_dri(ok_jpg_decoder *decoder) {
-    uint8_t buffer[4];
-    if (!ok_read(decoder, buffer, sizeof(buffer))) {
-        return false;
-    }
-    int length = readBE16(buffer) - 2;
-    if (length != 2) {
-        ok_jpg_error(decoder->jpg, "Invalid DRI segment length");
-        return false;
-    } else {
-        decoder->restart_intervals = readBE16(buffer + 2);
-        return true;
-    }
-}
-
-static bool ok_jpg_read_dht(ok_jpg_decoder *decoder) {
-    ok_jpg *jpg = decoder->jpg;
-    uint8_t buffer[17];
-    if (!ok_read(decoder, buffer, 2)) {
-        return false;
-    }
-    int length = readBE16(buffer) - 2;
-    while (length >= 17) {
-        if (!ok_read(decoder, buffer, 17)) {
+    // Skip remaining length, if any
+    if (length > 0) {
+        if (!ok_seek(decoder, length)) {
             return false;
         }
-        length -= 17;
+    }
 
-        int Tc = buffer[0] >> 4;
-        int Th = buffer[0] & 0x0f;
-        if (Tc > 1 || Th > 3) {
-            ok_jpg_error(jpg, "Invalid JPEG (Bad DHT Tc/Th)");
+    // Setup idct
+    for (int i = 0; i < decoder->num_components; i++) {
+        ok_jpg_component *c = decoder->components + i;
+        if (c->H == maxH && c->V == maxV) {
+            c->idct = ok_jpg_idct_8x8;
+        } else if (c->H * 2 == maxH && c->V * 2 == maxV) {
+            c->idct = ok_jpg_idct_16x16;
+        } else if (c->H == maxH && c->V * 2 == maxV) {
+            c->idct = ok_jpg_idct_8x16;
+        } else if (c->H * 2 == maxH && c->V == maxV) {
+            c->idct = ok_jpg_idct_16x8;
+        } else {
+            ok_jpg_error(jpg, "Unsupported IDCT sampling factor");
             return false;
         }
-        ok_jpg_huffman_table *table = decoder->huffman_tables[Tc] + Th;
-        ok_jpg_generate_huffman_table(table, buffer);
-        if (table->count > 0) {
-            if (table->count > 256 || table->count > length) {
-                ok_jpg_error(jpg, "Invalid DHT segment length");
+    }
+
+    // Allocate data
+    if (!decoder->info_only) {
+        if (decoder->sof_found) {
+            ok_jpg_error(jpg, "Invalid JPEG (Multiple SOF markers)");
+            return false;
+        }
+        decoder->sof_found = true;
+
+        if (!decoder->dst_buffer) {
+            uint64_t dst_stride = decoder->dst_stride ? decoder->dst_stride : jpg->width * 4;
+            uint64_t size = dst_stride * jpg->height;
+            size_t platform_size = (size_t)size;
+            if (platform_size == size) {
+                decoder->dst_buffer = malloc(platform_size);
+            }
+            if (!decoder->dst_buffer) {
+                ok_jpg_error(jpg, "Couldn't allocate memory for image");
                 return false;
             }
-            if (!ok_read(decoder, table->val, (size_t)table->count)) {
-                return false;
-            }
-            length -= table->count;
+            jpg->data = decoder->dst_buffer;
         }
-        ok_jpg_generate_huffman_table_lookups(table);
     }
-    if (length != 0) {
-        ok_jpg_error(jpg, "Invalid DHT segment length");
-        return false;
-    } else {
-        return true;
-    }
+    return true;
 }
 
 static bool ok_jpg_read_sos(ok_jpg_decoder *decoder) {
+    // JPEG spec: Table B.3
     ok_jpg *jpg = decoder->jpg;
     const size_t expected_size = 6 + (size_t)decoder->num_components * 2;
     uint8_t buffer[16];
@@ -1295,6 +1207,101 @@ static bool ok_jpg_read_sos(ok_jpg_decoder *decoder) {
     return ok_jpg_decode_scan(decoder);
 }
 
+static bool ok_jpg_read_dqt(ok_jpg_decoder *decoder) {
+    // JPEG spec: Table B.4
+    ok_jpg *jpg = decoder->jpg;
+    uint8_t buffer[2];
+    if (!ok_read(decoder, buffer, sizeof(buffer))) {
+        return false;
+    }
+    int length = readBE16(buffer) - 2;
+    while (length >= 65) {
+        if (!ok_read(decoder, buffer, 1)) {
+            return false;
+        }
+
+        int Pq = buffer[0] >> 4;
+        int Tq = buffer[0] & 0x0f;
+
+        if (Pq == 1) {
+            ok_jpg_error(jpg, "Unsupported JPEG (16-bit q_table)");
+            return false;
+        }
+        if (Pq != 0 || Tq > 3) {
+            ok_jpg_error(jpg, "Invalid JPEG (Pq/Tq)");
+            return false;
+        }
+        if (!ok_read(decoder, decoder->q_table[Tq], 64)) {
+            return false;
+        }
+        length -= 65;
+    }
+    if (length != 0) {
+        ok_jpg_error(jpg, "Invalid DQT segment length");
+        return false;
+    } else {
+        return true;
+    }
+}
+
+static bool ok_jpg_read_dht(ok_jpg_decoder *decoder) {
+    // JPEG spec: Table B.5
+    ok_jpg *jpg = decoder->jpg;
+    uint8_t buffer[17];
+    if (!ok_read(decoder, buffer, 2)) {
+        return false;
+    }
+    int length = readBE16(buffer) - 2;
+    while (length >= 17) {
+        if (!ok_read(decoder, buffer, 17)) {
+            return false;
+        }
+        length -= 17;
+
+        int Tc = buffer[0] >> 4;
+        int Th = buffer[0] & 0x0f;
+        if (Tc > 1 || Th > 3) {
+            ok_jpg_error(jpg, "Invalid JPEG (Bad DHT Tc/Th)");
+            return false;
+        }
+        ok_jpg_huffman_table *table = decoder->huffman_tables[Tc] + Th;
+        ok_jpg_generate_huffman_table(table, buffer);
+        if (table->count > 0) {
+            if (table->count > 256 || table->count > length) {
+                ok_jpg_error(jpg, "Invalid DHT segment length");
+                return false;
+            }
+            if (!ok_read(decoder, table->val, (size_t)table->count)) {
+                return false;
+            }
+            length -= table->count;
+        }
+        ok_jpg_generate_huffman_table_lookups(table);
+    }
+    if (length != 0) {
+        ok_jpg_error(jpg, "Invalid DHT segment length");
+        return false;
+    } else {
+        return true;
+    }
+}
+
+static bool ok_jpg_read_dri(ok_jpg_decoder *decoder) {
+    // JPEG spec: Table B.7
+    uint8_t buffer[4];
+    if (!ok_read(decoder, buffer, sizeof(buffer))) {
+        return false;
+    }
+    int length = readBE16(buffer) - 2;
+    if (length != 2) {
+        ok_jpg_error(decoder->jpg, "Invalid DRI segment length");
+        return false;
+    } else {
+        decoder->restart_intervals = readBE16(buffer + 2);
+        return true;
+    }
+}
+
 static bool ok_jpg_skip_segment(ok_jpg_decoder *decoder) {
     uint8_t buffer[2];
     if (!ok_read(decoder, buffer, sizeof(buffer))) {
@@ -1338,7 +1345,7 @@ static void ok_jpg_decode2(ok_jpg_decoder *decoder) {
         }
 
         bool success = true;
-        if (marker == 0xC0) {
+        if (marker == 0xC0 || marker == 0xC1) {
             // SOF
             success = ok_jpg_read_sof(decoder);
             if (success && decoder->info_only) {
@@ -1386,8 +1393,8 @@ static void ok_jpg_decode2(ok_jpg_decoder *decoder) {
         } else if ((marker >= 0xE0 && marker <= 0xEF) || marker == 0xFE) {
             // APP or Comment
             success = ok_jpg_skip_segment(decoder);
-        } else if ((marker & 0xF0) == 0xC0) {
-            ok_jpg_error(jpg, "Unsupported JPEG: progressive, extended, or lossless");
+        } else if (marker == 0xC2) {
+            ok_jpg_error(jpg, "Unsupported JPEG: progressive");
             success = false;
         } else {
             ok_jpg_error(jpg, "Unsupported or corrupt JPEG");
