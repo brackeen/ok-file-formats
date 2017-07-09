@@ -28,6 +28,32 @@
     csv_test(path, verbose);
     gettext_test(path, verbose);
 
+#if 0
+    char *in_filename = get_full_path(path, "2001-stargate", "jpg");
+    FILE *file = fopen(in_filename, "rb");
+    if (file) {
+        ok_jpg *jpg = ok_jpg_read(file, OK_JPG_COLOR_FORMAT_BGRA);
+        if (jpg->data) {
+            CGDataProviderRef dataProvider = CGDataProviderCreateWithData(NULL, jpg->data, jpg->width * jpg->height * 4, NULL);
+
+            NSUInteger bytesPerRow = 4 * jpg->width;
+            CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+            CGBitmapInfo bitmapInfo = (CGBitmapInfo)(kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst);
+            CGImageRef imageRef = CGImageCreate(jpg->width, jpg->height, 8, 32, bytesPerRow, colorSpace, bitmapInfo, dataProvider, NULL, NO, kCGRenderingIntentDefault);
+            UIImage *image = [UIImage imageWithCGImage:imageRef scale:2.0 orientation:UIImageOrientationUp];
+            CGColorSpaceRelease(colorSpace);
+            CGDataProviderRelease(dataProvider);
+
+            UIImageView *imageView = [[UIImageView alloc] initWithImage:image];
+            imageView.backgroundColor = [UIColor grayColor];
+            [self.window.rootViewController.view addSubview:imageView];
+        }
+        ok_jpg_free(jpg);
+        fclose(file);
+    }
+    free(in_filename);
+#endif
+
     return YES;
 }
 
