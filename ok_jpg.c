@@ -43,6 +43,7 @@
 // support up to 2.
 #define MAX_SAMPLING_FACTOR 2
 #define C_WIDTH (MAX_SAMPLING_FACTOR * 8)
+#define MAX_COMPONENTS 3
 
 typedef void (*ok_jpg_idct_func)(const int *const input, uint8_t *output);
 
@@ -85,6 +86,8 @@ typedef struct {
     void *input_data;
     ok_jpg_read_func input_read_func;
     ok_jpg_seek_func input_seek_func;
+    uint32_t input_buffer;
+    int input_buffer_bits;
 
     // Output
     uint8_t *dst_buffer;
@@ -97,8 +100,6 @@ typedef struct {
     int next_marker;
     int restart_intervals;
     int restart_intervals_remaining;
-    uint32_t input_buffer;
-    int input_buffer_bits;
 
     // JPEG data
     uint16_t in_width;
@@ -106,7 +107,7 @@ typedef struct {
     int data_units_x;
     int data_units_y;
     int num_components;
-    ok_jpg_component components[3];
+    ok_jpg_component components[MAX_COMPONENTS];
     uint8_t q_table[4][8 * 8];
 
     // 0 = DC table, 1 = AC table
@@ -1072,6 +1073,10 @@ static bool ok_jpg_read_sof(ok_jpg_decoder *decoder) {
     jpg->width = decoder->rotate ? decoder->in_height : decoder->in_width;
     jpg->height = decoder->rotate ? decoder->in_width : decoder->in_height;
     decoder->num_components = buffer[7];
+    if (decoder->num_components == 4) {
+        ok_jpg_error(jpg, "Unsupported format (CMYK)");
+        return false;
+    }
     if (decoder->num_components != 1 && decoder->num_components != 3) {
         ok_jpg_error(jpg, "Invalid component count");
         return false;
