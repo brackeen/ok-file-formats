@@ -1401,6 +1401,8 @@ static void ok_jpg_decode2(ok_jpg_decoder *decoder) {
         } else if (marker == 0xC2) {
             ok_jpg_error(jpg, "Unsupported JPEG: progressive");
             success = false;
+        } else if (marker == 0xFF) {
+            // Ignore
         } else {
             ok_jpg_error(jpg, "Unsupported or corrupt JPEG");
             success = false;

@@ -36,6 +36,9 @@ static const char *filenames[] = {
     "tomatoes",
     "zam",
 
+    // Extra 0xFF
+    "applesauce",
+
     // Various sizes (2x2 upsampling)
     "jpg-size-1x1",
     "jpg-size-2x2",
