@@ -1378,7 +1378,7 @@ static void ok_jpg_decode2(ok_jpg_decoder *decoder) {
                             if (!ok_read(decoder, buffer, 1)) {
                                 return;
                             }
-                            if (buffer[0] != 0) {
+                            if (buffer[0] != 0 && !(buffer[0] >= 0xD0 && buffer[0] <= 0xD7)) {
                                 decoder->next_marker = buffer[0];
                                 break;
                             }
