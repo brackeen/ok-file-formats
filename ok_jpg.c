@@ -45,7 +45,7 @@
 #define C_WIDTH (MAX_SAMPLING_FACTOR * 8)
 #define MAX_COMPONENTS 3
 
-typedef void (*ok_jpg_idct_func)(const int *const input, uint8_t *output);
+typedef void (*ok_jpg_idct_func)(const int16_t *const input, uint8_t *output);
 
 typedef struct {
     uint8_t id;
@@ -55,7 +55,7 @@ typedef struct {
     uint8_t Td;
     uint8_t Ta;
     uint8_t output[C_WIDTH * C_WIDTH];
-    int pred;
+    int16_t pred;
     ok_jpg_idct_func idct;
 } ok_jpg_component;
 
@@ -695,10 +695,10 @@ static inline void ok_jpg_idct_1d_16(int *out, const int out_shift,
 // Once loops were unrolled, redundant computations were obvious, and they could be eliminated.
 // 1. Converted to integer (fixed-point)
 // 2. Scaled output by sqrt(2).
-static void ok_jpg_idct_wxh(const int *const input, uint8_t *output, const int w, const int h) {
+static void ok_jpg_idct_wxh(const int16_t *input, uint8_t *output, const int w, const int h) {
     int temp[16 * 16];
     int temp_row[16];
-    const int *in = input;
+    const int16_t *in = input;
     int *out = temp;
 
     // idct_1d scales output by ((1 << 12) * sqrt(2)).
@@ -725,49 +725,49 @@ static void ok_jpg_idct_wxh(const int *const input, uint8_t *output, const int w
     // idct_1d scales output by ((1 << 12) * sqrt(2)), for a total output scale of (1 << 17).
     // Shift by 19 to get rid of the scale and to divide by 4 at the same time.
     // (Divide by 4 per the IDCT formula, JPEG spec section A.3.3)
-    in = temp;
+    const int *in2 = temp;
     if (w == 8) {
         for (int y = 0; y < h; y++) {
             ok_jpg_idct_1d_8(temp_row, 19,
-                             in[0 * 16], in[1 * 16], in[2 * 16], in[3 * 16],
-                             in[4 * 16], in[5 * 16], in[6 * 16], in[7 * 16]);
+                             in2[0 * 16], in2[1 * 16], in2[2 * 16], in2[3 * 16],
+                             in2[4 * 16], in2[5 * 16], in2[6 * 16], in2[7 * 16]);
             for (int x = 0; x < 8; x++) {
                 output[x] = ok_jpg_clip_uint8(temp_row[x] + 128);
             }
-            in++;
+            in2++;
             output += C_WIDTH;
         }
     } else { // w == 16
         for (int y = 0; y < h; y++) {
             ok_jpg_idct_1d_16(temp_row, 19,
-                              in[0 * 16], in[1 * 16], in[2 * 16], in[3 * 16],
-                              in[4 * 16], in[5 * 16], in[6 * 16], in[7 * 16]);
+                              in2[0 * 16], in2[1 * 16], in2[2 * 16], in2[3 * 16],
+                              in2[4 * 16], in2[5 * 16], in2[6 * 16], in2[7 * 16]);
             for (int x = 0; x < 16; x++) {
                 output[x] = ok_jpg_clip_uint8(temp_row[x] + 128);
             }
-            in++;
+            in2++;
             output += C_WIDTH;
         }
     }
 }
 
 // IDCT a 8x8 input block to 8x8 in an output of size (C_WIDTH x C_WIDTH)
-static void ok_jpg_idct_8x8(const int * const input, uint8_t *output) {
+static void ok_jpg_idct_8x8(const int16_t * const input, uint8_t *output) {
     ok_jpg_idct_wxh(input, output, 8, 8);
 }
 
 // IDCT a 8x8 block to 8x16 in an output of size (C_WIDTH x C_WIDTH)
-static void ok_jpg_idct_8x16(const int * const input, uint8_t *output) {
+static void ok_jpg_idct_8x16(const int16_t * const input, uint8_t *output) {
     ok_jpg_idct_wxh(input, output, 8, 16);
 }
 
 // IDCT a 8x8 block to 16x8 in an output of size (C_WIDTH x C_WIDTH)
-static void ok_jpg_idct_16x8(const int * const input, uint8_t *output) {
+static void ok_jpg_idct_16x8(const int16_t * const input, uint8_t *output) {
     ok_jpg_idct_wxh(input, output, 16, 8);
 }
 
 // IDCT a 8x8 block to 16x16 in an output of size (C_WIDTH x C_WIDTH)
-static void ok_jpg_idct_16x16(const int * const input, uint8_t *output) {
+static void ok_jpg_idct_16x16(const int16_t * const input, uint8_t *output) {
     ok_jpg_idct_wxh(input, output, 16, 16);
 }
 
@@ -794,7 +794,7 @@ static inline int ok_jpg_extend(const int v, const int t) {
 }
 
 static bool ok_jpg_decode_data_unit(ok_jpg_decoder *decoder, ok_jpg_component *c, uint8_t *out) {
-    int block[8 * 8];
+    int16_t block[8 * 8];
     memset(block, 0, sizeof(block));
 
     // Decode DC coefficients - F.2.2.1
@@ -840,7 +840,7 @@ static bool ok_jpg_decode_data_unit(ok_jpg_decoder *decoder, ok_jpg_component *c
             if (zzk < 0) {
                 return false;
             }
-            block[ok_jpg_zig_zag[k]] = ok_jpg_extend(zzk, s) * q_table[k];
+            block[ok_jpg_zig_zag[k]] = (int16_t)(ok_jpg_extend(zzk, s) * q_table[k]);
             k++;
         }
     }
