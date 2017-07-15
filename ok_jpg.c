@@ -56,6 +56,11 @@ typedef struct {
     uint8_t Ta;
     uint8_t output[C_WIDTH * C_WIDTH];
     int16_t pred;
+    int16_t *blocks;
+    size_t next_block;
+    int blocks_v;
+    int blocks_h;
+    int eob_run;
     ok_jpg_idct_func idct;
 } ok_jpg_component;
 
@@ -94,12 +99,14 @@ typedef struct {
     uint32_t dst_stride;
 
     // State
+    bool progressive;
     bool eoi_found;
     bool sof_found;
     bool complete;
     int next_marker;
     int restart_intervals;
     int restart_intervals_remaining;
+    int next_restart;
 
     // JPEG data
     uint16_t in_width;
@@ -109,6 +116,14 @@ typedef struct {
     int num_components;
     ok_jpg_component components[MAX_COMPONENTS];
     uint8_t q_table[4][8 * 8];
+
+    // Scan
+    int num_scan_components;
+    int scan_components[MAX_COMPONENTS];
+    int scan_selection_start;
+    int scan_selection_end;
+    int scan_selection_bit_high;
+    int scan_selection_bit_low;
 
     // 0 = DC table, 1 = AC table
     ok_jpg_huffman_table huffman_tables[2][4];
@@ -346,7 +361,7 @@ static inline int ok_jpg_huffman_decode(ok_jpg_decoder *decoder,
                                         const ok_jpg_huffman_table *table) {
     // JPEG spec: "Decode" (Figure F.16)
 
-    // First, try 8-bit lookup tables (most codes wil be 8-bit or less)
+    // First, try 8-bit lookup tables (most codes will be 8-bit or less)
     if (!ok_jpg_load_bits(decoder, 8)) {
         return -1;
     }
@@ -793,32 +808,43 @@ static inline int ok_jpg_extend(const int v, const int t) {
     }
 }
 
-static bool ok_jpg_decode_data_unit(ok_jpg_decoder *decoder, ok_jpg_component *c, uint8_t *out) {
-    int16_t block[8 * 8];
-    memset(block, 0, sizeof(block));
+static bool ok_jpg_decode_block(ok_jpg_decoder *decoder, ok_jpg_component *c, size_t block_index) {
+    int16_t *block = c->blocks + (block_index * 8 * 8);
+    if (!decoder->progressive) {
+        memset(block, 0, 8 * 8 * sizeof(*block));
+    }
+
+    const uint8_t *q_table = decoder->q_table[c->Tq];
+    int k = decoder->scan_selection_start;
+    const int k_end = decoder->scan_selection_end;
 
     // Decode DC coefficients - F.2.2.1
-    const uint8_t *q_table = decoder->q_table[c->Tq];
-    ok_jpg_huffman_table *dc = decoder->huffman_tables[0] + c->Td;
-    int t = ok_jpg_huffman_decode(decoder, dc);
-    if (t < 0) {
-        return false;
-    }
-    if (t > 0) {
-        int diff = ok_jpg_load_next_bits(decoder, t);
-        if (diff < 0) {
+    if (k == 0) {
+        ok_jpg_huffman_table *dc = decoder->huffman_tables[0] + c->Td;
+        int t = ok_jpg_huffman_decode(decoder, dc);
+        if (t < 0) {
             return false;
         }
-        diff = ok_jpg_extend(diff, t);
-        c->pred += diff;
+        if (t > 0) {
+            int diff = ok_jpg_load_next_bits(decoder, t);
+            if (diff < 0) {
+                return false;
+            }
+            diff = ok_jpg_extend(diff, t);
+            c->pred += diff;
+        }
+
+        block[0] = c->pred * q_table[0];
+        k++;
     }
 
-    block[0] = c->pred * q_table[0];
-
-    // Decode AC coefficients - Figure F.13 and F.14
+    // Decode AC coefficients - Figures F.13, F.14, and G.2
+    if (c->eob_run > 0) {
+        c->eob_run--;
+        return true;
+    }
     ok_jpg_huffman_table *ac = decoder->huffman_tables[1] + c->Ta;
-    int k = 1;
-    while (k < 64) {
+    while (k <= k_end) {
         int rs = ok_jpg_huffman_decode(decoder, ac);
         if (rs < 0) {
             return false;
@@ -827,12 +853,19 @@ static bool ok_jpg_decode_data_unit(ok_jpg_decoder *decoder, ok_jpg_component *c
         int r = rs >> 4;
         if (s == 0) {
             if (r != 0x0f) {
+                if (r > 0) {
+                    int next_bits = ok_jpg_load_next_bits(decoder, r);
+                    if (next_bits < 0) {
+                        return false;
+                    }
+                    c->eob_run = (1 << r) + next_bits - 1;
+                }
                 break;
             }
             k += 16;
         } else {
             k += r;
-            if (k > 63) {
+            if (k > k_end) {
                 ok_jpg_error(decoder->jpg, "Invalid block index");
                 return false;
             }
@@ -844,78 +877,159 @@ static bool ok_jpg_decode_data_unit(ok_jpg_decoder *decoder, ok_jpg_component *c
             k++;
         }
     }
-
-    c->idct(block, out);
     return true;
 }
 
 static void ok_jpg_decode_restart(ok_jpg_decoder *decoder) {
     decoder->restart_intervals_remaining = decoder->restart_intervals;
-    for (int i = 0; i < decoder->num_components; i++) {
-        decoder->components[i].pred = 0;
+    for (int i = 0; i < decoder->num_scan_components; i++) {
+        ok_jpg_component *c = decoder->components + decoder->scan_components[i];
+        c->pred = 0;
+        c->eob_run = 0;
     }
 }
 
-static bool ok_jpg_decode_scan(ok_jpg_decoder *decoder) {
-    ok_jpg *jpg = decoder->jpg;
-    int next_restart = 0;
-    ok_jpg_decode_restart(decoder);
-    for (int data_unit_y = 0; data_unit_y < decoder->data_units_y; data_unit_y++) {
-        for (int data_unit_x = 0; data_unit_x < decoder->data_units_x; data_unit_x++) {
-            for (int i = 0; i < decoder->num_components; i++) {
-                ok_jpg_component *c = decoder->components + i;
-                int offset_y = 0;
-                for (int y = 0; y < c->V; y++) {
-                    int offset_x = 0;
-                    for (int x = 0; x < c->H; x++) {
-                        if (!ok_jpg_decode_data_unit(decoder, c, c->output + offset_x + offset_y)) {
-                            return false;
-                        }
-                        offset_x += 8;
-                    }
-                    offset_y += C_WIDTH * 8;
+static bool ok_jpg_decode_restart_if_needed(ok_jpg_decoder *decoder) {
+    if (decoder->restart_intervals_remaining > 0) {
+        decoder->restart_intervals_remaining--;
+
+        if (decoder->restart_intervals_remaining == 0) {
+            ok_jpg_dump_bits(decoder);
+            if (decoder->next_marker != 0) {
+                if (decoder->next_marker == 0xD0 + decoder->next_restart) {
+                    decoder->next_marker = 0;
+                } else {
+                    ok_jpg_error(decoder->jpg, "Invalid restart marker (1)");
+                    return false;
+                }
+            } else {
+                uint8_t buffer[2];
+                if (!ok_read(decoder, buffer, 2)) {
+                    return false;
+                }
+                if (!(buffer[0] == 0xff && buffer[1] == 0xD0 + decoder->next_restart)) {
+                    ok_jpg_error(decoder->jpg, "Invalid restart marker (2)");
+                    return false;
                 }
             }
+            decoder->next_restart = (decoder->next_restart + 1) & 7;
 
-            ok_jpg_convert_data_unit(decoder, data_unit_x, data_unit_y);
+            ok_jpg_decode_restart(decoder);
+        }
+    }
+    return true;
+}
 
-            if (decoder->restart_intervals_remaining > 0) {
-                decoder->restart_intervals_remaining--;
-
-                // Read the restart marker (if we're not at the end)
-                if (decoder->restart_intervals_remaining == 0) {
-                    const bool at_end = (data_unit_x == decoder->data_units_x - 1 &&
-                                         data_unit_y == decoder->data_units_y - 1);
-                    if (!at_end) {
-                        ok_jpg_dump_bits(decoder);
-                        if (decoder->next_marker != 0) {
-                            if (decoder->next_marker == 0xD0 + next_restart) {
-                                decoder->next_marker = 0;
-                            } else {
-                                ok_jpg_error(jpg, "Invalid restart marker (1)");
+static bool ok_jpg_decode_scan(ok_jpg_decoder *decoder) {
+    decoder->next_restart = 0;
+    ok_jpg_decode_restart(decoder);
+    if (decoder->restart_intervals_remaining > 0) {
+        // Increment because the restart is checked before each data unit instead of after.
+        decoder->restart_intervals_remaining++;
+    }
+    if (decoder->progressive && decoder->num_scan_components == 1) {
+        ok_jpg_component *c = decoder->components + decoder->scan_components[0];
+        c->next_block = 0;
+        for (int data_unit_y = 0; data_unit_y < c->blocks_v; data_unit_y++) {
+            size_t block_index = c->next_block;
+            for (int data_unit_x = 0; data_unit_x < c->blocks_h; data_unit_x++) {
+                ok_jpg_decode_restart_if_needed(decoder);
+                if (!ok_jpg_decode_block(decoder, c, block_index)) {
+                    return false;
+                }
+                block_index++;
+            }
+            c->next_block += (size_t)(c->H * decoder->data_units_x);
+        }
+    } else if (decoder->progressive) {
+        for (int i = 0; i < decoder->num_scan_components; i++) {
+            ok_jpg_component *c = decoder->components + decoder->scan_components[i];
+            c->next_block = 0;
+        }
+        for (int data_unit_y = 0; data_unit_y < decoder->data_units_y; data_unit_y++) {
+            for (int data_unit_x = 0; data_unit_x < decoder->data_units_x; data_unit_x++) {
+                ok_jpg_decode_restart_if_needed(decoder);
+                for (int i = 0; i < decoder->num_scan_components; i++) {
+                    ok_jpg_component *c = decoder->components + decoder->scan_components[i];
+                    size_t block_index = c->next_block;
+                    for (int y = 0; y < c->V; y++) {
+                        for (int x = 0; x < c->H; x++) {
+                            if (!ok_jpg_decode_block(decoder, c, block_index)) {
                                 return false;
                             }
-                        } else {
-                            uint8_t buffer[2];
-                            if (!ok_read(decoder, buffer, 2)) {
-                                return false;
-                            }
-                            if (!(buffer[0] == 0xff && buffer[1] == 0xD0 + next_restart)) {
-                                ok_jpg_error(jpg, "Invalid restart marker (2)");
-                                return false;
-                            }
+                            block_index++;
                         }
-                        next_restart = (next_restart + 1) & 7;
-
-                        ok_jpg_decode_restart(decoder);
+                        block_index += (size_t)(c->H * (decoder->data_units_x - 1));
+                    }
+                    c->next_block += c->H;
+                }
+            }
+            for (int i = 0; i < decoder->num_scan_components; i++) {
+                ok_jpg_component *c = decoder->components + decoder->scan_components[i];
+                c->next_block += (size_t)((c->V - 1) * c->H * decoder->data_units_x);
+            }
+        }
+    } else {
+        for (int data_unit_y = 0; data_unit_y < decoder->data_units_y; data_unit_y++) {
+            for (int data_unit_x = 0; data_unit_x < decoder->data_units_x; data_unit_x++) {
+                ok_jpg_decode_restart_if_needed(decoder);
+                for (int i = 0; i < decoder->num_scan_components; i++) {
+                    ok_jpg_component *c = decoder->components + decoder->scan_components[i];
+                    int offset_y = 0;
+                    for (int y = 0; y < c->V; y++) {
+                        int offset_x = 0;
+                        for (int x = 0; x < c->H; x++) {
+                            if (!ok_jpg_decode_block(decoder, c, 0)) {
+                                return false;
+                            }
+                            c->idct(c->blocks, c->output + offset_x + offset_y);
+                            offset_x += 8;
+                        }
+                        offset_y += C_WIDTH * 8;
                     }
                 }
+                ok_jpg_convert_data_unit(decoder, data_unit_x, data_unit_y);
             }
         }
     }
     decoder->complete = true;
     ok_jpg_dump_bits(decoder);
+
     return true;
+}
+
+static void ok_jpg_progressive_finish(ok_jpg_decoder *decoder) {
+    for (int i = 0; i < decoder->num_components; i++) {
+        ok_jpg_component *c = decoder->components + i;
+        c->next_block = 0;
+    }
+    for (int data_unit_y = 0; data_unit_y < decoder->data_units_y; data_unit_y++) {
+        for (int data_unit_x = 0; data_unit_x < decoder->data_units_x; data_unit_x++) {
+            for (int i = 0; i < decoder->num_components; i++) {
+                ok_jpg_component *c = decoder->components + i;
+                size_t block_index = c->next_block;
+                int offset_y = 0;
+                for (int y = 0; y < c->V; y++) {
+                    int offset_x = 0;
+                    for (int x = 0; x < c->H; x++) {
+                        int16_t *block = c->blocks + (block_index * 8 * 8);
+                        c->idct(block, c->output + offset_x + offset_y);
+                        block_index++;
+                        offset_x += 8;
+                    }
+                    offset_y += C_WIDTH * 8;
+                    block_index += (size_t)(c->H * (decoder->data_units_x - 1));
+                }
+                c->next_block += c->H;
+            }
+
+            ok_jpg_convert_data_unit(decoder, data_unit_x, data_unit_y);
+        }
+        for (int i = 0; i < decoder->num_components; i++) {
+            ok_jpg_component *c = decoder->components + i;
+            c->next_block += (size_t)((c->V - 1) * c->H * decoder->data_units_x);
+        }
+    }
 }
 
 // MARK: EXIF
@@ -1126,6 +1240,8 @@ static bool ok_jpg_read_sof(ok_jpg_decoder *decoder) {
     // Setup idct
     for (int i = 0; i < decoder->num_components; i++) {
         ok_jpg_component *c = decoder->components + i;
+        c->blocks_h = intDivCeil(decoder->in_width, (maxH / c->H) * 8);
+        c->blocks_v = intDivCeil(decoder->in_height, (maxV / c->V) * 8);
         if (c->H == maxH && c->V == maxV) {
             c->idct = ok_jpg_idct_8x8;
         } else if (c->H * 2 == maxH && c->V * 2 == maxV) {
@@ -1148,6 +1264,21 @@ static bool ok_jpg_read_sof(ok_jpg_decoder *decoder) {
         }
         decoder->sof_found = true;
 
+        for (int i = 0; i < decoder->num_components; i++) {
+            ok_jpg_component *c = decoder->components + i;
+            size_t num_blocks;
+            if (decoder->progressive) {
+                num_blocks = (size_t)(decoder->data_units_x * c->H * decoder->data_units_y * c->V);
+            } else {
+                num_blocks = 1;
+            }
+            c->blocks = calloc(num_blocks * 8 * 8, sizeof(*c->blocks));
+            if (!c->blocks) {
+                ok_jpg_error(jpg, "Couldn't allocate internal block memory for image");
+                return false;
+            }
+        }
+
         if (!decoder->dst_buffer) {
             uint64_t dst_stride = decoder->dst_stride ? decoder->dst_stride : jpg->width * 4;
             uint64_t size = dst_stride * jpg->height;
@@ -1168,34 +1299,47 @@ static bool ok_jpg_read_sof(ok_jpg_decoder *decoder) {
 static bool ok_jpg_read_sos(ok_jpg_decoder *decoder) {
     // JPEG spec: Table B.3
     ok_jpg *jpg = decoder->jpg;
-    const size_t expected_size = 6 + (size_t)decoder->num_components * 2;
     uint8_t buffer[16];
-    if ((int)sizeof(buffer) < expected_size) {
+    const size_t header_size = 3;
+    if (!ok_read(decoder, buffer, header_size)) {
+        return false;
+    }
+    uint16_t length = readBE16(buffer);
+    decoder->num_scan_components = buffer[2];
+    if (decoder->num_scan_components > decoder->num_components) {
+        ok_jpg_error(jpg, "Invalid SOS segment (Ns)");
+        return false;
+    }
+    const size_t expected_size = 3 + (size_t)decoder->num_scan_components * 2;
+    if (length != expected_size + header_size) {
+        ok_jpg_error(jpg, "Invalid SOS segment (L)");
+        return false;
+    }
+    if (sizeof(buffer) < expected_size) {
         ok_jpg_error(jpg, "Too many components for buffer");
         return false;
     }
     if (!ok_read(decoder, buffer, expected_size)) {
         return false;
     }
-    uint16_t length = readBE16(buffer);
-    if (length != expected_size) {
-        ok_jpg_error(jpg, "Invalid SOS segment (L)");
-        return false;
-    }
-    if (buffer[2] != decoder->num_components) {
-        ok_jpg_error(jpg, "Invalid SOS segment (Ns)");
-        return false;
-    }
 
-    uint8_t *src = buffer + 3;
-    for (int i = 0; i < decoder->num_components; i++, src += 2) {
-        ok_jpg_component *comp = decoder->components + i;
+    uint8_t *src = buffer;
+    for (int i = 0; i < decoder->num_scan_components; i++, src += 2) {
         int C = src[0];
-        if (C != comp->id) {
+        bool component_found = false;
+        for (int j = 0; j < decoder->num_components; j++) {
+            ok_jpg_component *c = decoder->components + j;
+            if (c->id == C) {
+                decoder->scan_components[i] = j;
+                component_found = true;
+            }
+        }
+        if (!component_found) {
             ok_jpg_error(jpg, "Invalid SOS segment (C)");
             return false;
         }
 
+        ok_jpg_component *comp = decoder->components + decoder->scan_components[i];
         comp->Td = src[1] >> 4;
         comp->Ta = src[1] & 0x0f;
         if (comp->Td > 3 || comp->Ta > 3) {
@@ -1204,9 +1348,29 @@ static bool ok_jpg_read_sos(ok_jpg_decoder *decoder) {
         }
     }
 
-    if (src[0] != 0 || src[1] != 63 || src[2] != 0) {
-        ok_jpg_error(jpg, "Invalid SOS segment (Ss/Se/Ah/Al)");
-        return false;
+    decoder->scan_selection_start = src[0];
+    decoder->scan_selection_end = src[1];
+    decoder->scan_selection_bit_high = src[2] >> 4;
+    decoder->scan_selection_bit_low = src[2] & 0x0f;
+
+    if (decoder->progressive) {
+        if (decoder->scan_selection_start < 0 || decoder->scan_selection_start > 63 ||
+            decoder->scan_selection_end < decoder->scan_selection_start ||
+            decoder->scan_selection_end > 63 ||
+            decoder->scan_selection_bit_high < 0 ||
+            decoder->scan_selection_bit_high > 13 ||
+            decoder->scan_selection_bit_low < 0 ||
+            decoder->scan_selection_bit_low > 13) {
+            ok_jpg_error(jpg, "Invalid progressive SOS segment (Ss/Se/Ah/Al)");
+            return false;
+        }
+    } else {
+        if (decoder->scan_selection_start != 0 || decoder->scan_selection_end != 63 ||
+            decoder->scan_selection_bit_high != 0 ||
+            decoder->scan_selection_bit_low != 0) {
+            ok_jpg_error(jpg, "Invalid SOS segment (Ss/Se/Ah/Al)");
+            return false;
+        }
     }
 
     return ok_jpg_decode_scan(decoder);
@@ -1350,8 +1514,9 @@ static void ok_jpg_decode2(ok_jpg_decoder *decoder) {
         }
 
         bool success = true;
-        if (marker == 0xC0 || marker == 0xC1) {
+        if (marker == 0xC0 || marker == 0xC1 || marker == 0xC2) {
             // SOF
+            decoder->progressive = (marker == 0xC2);
             success = ok_jpg_read_sof(decoder);
             if (success && decoder->info_only) {
                 return;
@@ -1362,6 +1527,9 @@ static void ok_jpg_decode2(ok_jpg_decoder *decoder) {
         } else if (marker == 0xD9) {
             // EOI
             decoder->eoi_found = true;
+            if (!decoder->info_only && decoder->progressive) {
+                ok_jpg_progressive_finish(decoder);
+            }
         } else if (marker == 0xDA) {
             // SOS
             if (!decoder->info_only) {
@@ -1398,9 +1566,6 @@ static void ok_jpg_decode2(ok_jpg_decoder *decoder) {
         } else if ((marker >= 0xE0 && marker <= 0xEF) || marker == 0xFE) {
             // APP or Comment
             success = ok_jpg_skip_segment(decoder);
-        } else if (marker == 0xC2) {
-            ok_jpg_error(jpg, "Unsupported JPEG: progressive");
-            success = false;
         } else if (marker == 0xFF) {
             // Ignore
         } else {
@@ -1453,6 +1618,10 @@ static ok_jpg *ok_jpg_decode(void *user_data, ok_jpg_read_func input_read_func,
 
     ok_jpg_decode2(decoder);
 
+    for (int i = 0; i < MAX_COMPONENTS; i++) {
+        free(decoder->components[i].blocks);
+    }
     free(decoder);
+
     return jpg;
 }
