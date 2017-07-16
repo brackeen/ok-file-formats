@@ -215,6 +215,16 @@
 		E35A66F01948F5D600CEBD42 /* z06n2c08.png in Resources */ = {isa = PBXBuildFile; fileRef = E35A64DB1948F5D600CEBD42 /* z06n2c08.png */; };
 		E35A66F11948F5D600CEBD42 /* z09n2c08.png in Resources */ = {isa = PBXBuildFile; fileRef = E35A64DC1948F5D600CEBD42 /* z09n2c08.png */; };
 		E35A6A69194A7EB700CEBD42 /* ok_jpg.c in Sources */ = {isa = PBXBuildFile; fileRef = E35A6A67194A7EB700CEBD42 /* ok_jpg.c */; };
+		E360E2FF1F19AE3400C6BB9B /* einstein.jpg in Resources */ = {isa = PBXBuildFile; fileRef = E360E2FD1F19AE3400C6BB9B /* einstein.jpg */; };
+		E360E3001F19AE3400C6BB9B /* gort.jpg in Resources */ = {isa = PBXBuildFile; fileRef = E360E2FE1F19AE3400C6BB9B /* gort.jpg */; };
+		E360E3031F19AE4D00C6BB9B /* 2004.jpg in Resources */ = {isa = PBXBuildFile; fileRef = E360E3011F19AE4D00C6BB9B /* 2004.jpg */; };
+		E360E3041F19AE4D00C6BB9B /* robot.jpg in Resources */ = {isa = PBXBuildFile; fileRef = E360E3021F19AE4D00C6BB9B /* robot.jpg */; };
+		E360E3061F19AE6B00C6BB9B /* pumpkins.jpg in Resources */ = {isa = PBXBuildFile; fileRef = E360E3051F19AE6B00C6BB9B /* pumpkins.jpg */; };
+		E360E3081F19AE8D00C6BB9B /* 2004.rgba in Resources */ = {isa = PBXBuildFile; fileRef = E360E3071F19AE8D00C6BB9B /* 2004.rgba */; };
+		E360E30B1F19AF2600C6BB9B /* einstein.rgba in Resources */ = {isa = PBXBuildFile; fileRef = E360E30A1F19AF2600C6BB9B /* einstein.rgba */; };
+		E360E30D1F19AF3500C6BB9B /* gort.rgba in Resources */ = {isa = PBXBuildFile; fileRef = E360E30C1F19AF3500C6BB9B /* gort.rgba */; };
+		E360E30F1F19AF5100C6BB9B /* robot.rgba in Resources */ = {isa = PBXBuildFile; fileRef = E360E30E1F19AF5100C6BB9B /* robot.rgba */; };
+		E360E3111F19AF9D00C6BB9B /* pumpkins.rgba in Resources */ = {isa = PBXBuildFile; fileRef = E360E3101F19AF5600C6BB9B /* pumpkins.rgba */; };
 		E388A35819917097003BC626 /* ok_mo.c in Sources */ = {isa = PBXBuildFile; fileRef = E388A35619917097003BC626 /* ok_mo.c */; };
 		E388A35B1991ACB2003BC626 /* mo_test.c in Sources */ = {isa = PBXBuildFile; fileRef = E388A3591991ACB2003BC626 /* mo_test.c */; };
 		E388A3611991AD1F003BC626 /* en.mo in Resources */ = {isa = PBXBuildFile; fileRef = E388A35D1991AD1F003BC626 /* en.mo */; };
@@ -761,6 +771,16 @@
 		E35A64DC1948F5D600CEBD42 /* z09n2c08.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = z09n2c08.png; sourceTree = "<group>"; };
 		E35A6A67194A7EB700CEBD42 /* ok_jpg.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = ok_jpg.c; path = ../../ok_jpg.c; sourceTree = "<group>"; };
 		E35A6A68194A7EB700CEBD42 /* ok_jpg.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ok_jpg.h; path = ../../ok_jpg.h; sourceTree = "<group>"; };
+		E360E2FD1F19AE3400C6BB9B /* einstein.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = einstein.jpg; sourceTree = "<group>"; };
+		E360E2FE1F19AE3400C6BB9B /* gort.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = gort.jpg; sourceTree = "<group>"; };
+		E360E3011F19AE4D00C6BB9B /* 2004.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = 2004.jpg; sourceTree = "<group>"; };
+		E360E3021F19AE4D00C6BB9B /* robot.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = robot.jpg; sourceTree = "<group>"; };
+		E360E3051F19AE6B00C6BB9B /* pumpkins.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = pumpkins.jpg; sourceTree = "<group>"; };
+		E360E3071F19AE8D00C6BB9B /* 2004.rgba */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = 2004.rgba; sourceTree = "<group>"; };
+		E360E30A1F19AF2600C6BB9B /* einstein.rgba */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = einstein.rgba; sourceTree = "<group>"; };
+		E360E30C1F19AF3500C6BB9B /* gort.rgba */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = gort.rgba; sourceTree = "<group>"; };
+		E360E30E1F19AF5100C6BB9B /* robot.rgba */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = robot.rgba; sourceTree = "<group>"; };
+		E360E3101F19AF5600C6BB9B /* pumpkins.rgba */ = {isa = PBXFileReference; lastKnownFileType = file; path = pumpkins.rgba; sourceTree = "<group>"; };
 		E388A35619917097003BC626 /* ok_mo.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = ok_mo.c; path = ../../ok_mo.c; sourceTree = "<group>"; };
 		E388A35719917097003BC626 /* ok_mo.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ok_mo.h; path = ../../ok_mo.h; sourceTree = "<group>"; };
 		E388A3591991ACB2003BC626 /* mo_test.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = mo_test.c; sourceTree = "<group>"; };
@@ -1113,6 +1133,7 @@
 			isa = PBXGroup;
 			children = (
 				E3CADE191E1564DE00D983E3 /* 2001-stargate.rgba */,
+				E360E3071F19AE8D00C6BB9B /* 2004.rgba */,
 				E392DFBE1F12DF2400F329EA /* applesauce.rgba */,
 				E3CADE1A1E1564DE00D983E3 /* baby-camel.rgba */,
 				E3CADE1B1E1564DE00D983E3 /* basi0g01.rgba */,
@@ -1179,6 +1200,7 @@
 				E3CADE581E1564DE00D983E3 /* cthn0g04.rgba */,
 				E3CADE591E1564DE00D983E3 /* ctjn0g04.rgba */,
 				E3CADE5A1E1564DE00D983E3 /* ctzn0g04.rgba */,
+				E360E30A1F19AF2600C6BB9B /* einstein.rgba */,
 				E3CADE5B1E1564DE00D983E3 /* f00n0g08.rgba */,
 				E3CADE5C1E1564DE00D983E3 /* f00n2c08.rgba */,
 				E3CADE5D1E1564DE00D983E3 /* f01n0g08.rgba */,
@@ -1208,6 +1230,7 @@
 				E3CADE751E1564DE00D983E3 /* g25n0g16.rgba */,
 				E3CADE761E1564DE00D983E3 /* g25n2c08.rgba */,
 				E3CADE771E1564DE00D983E3 /* g25n3p04.rgba */,
+				E360E30C1F19AF3500C6BB9B /* gort.rgba */,
 				E3CADE781E1564DE00D983E3 /* jpeg400jfif.rgba */,
 				E3CADE791E1564DE00D983E3 /* jpeg444.rgba */,
 				E3CADE7A1E1564DE00D983E3 /* jpg-gray.rgba */,
@@ -1255,6 +1278,8 @@
 				E3CADEA41E1564DE00D983E3 /* ps1n2c16.rgba */,
 				E3CADEA51E1564DE00D983E3 /* ps2n0g08.rgba */,
 				E3CADEA61E1564DE00D983E3 /* ps2n2c16.rgba */,
+				E360E3101F19AF5600C6BB9B /* pumpkins.rgba */,
+				E360E30E1F19AF5100C6BB9B /* robot.rgba */,
 				E3CADEA71E1564DE00D983E3 /* s01i3p01.rgba */,
 				E3CADEA81E1564DE00D983E3 /* s01n3p01.rgba */,
 				E3CADEA91E1564DE00D983E3 /* s02i3p01.rgba */,
@@ -1695,12 +1720,17 @@
 		E3F35E4119511DFF004E7952 /* jpg */ = {
 			isa = PBXGroup;
 			children = (
+				E360E3011F19AE4D00C6BB9B /* 2004.jpg */,
 				E392DFBC1F12DEF600F329EA /* applesauce.jpg */,
 				E33C00A7195A11650003201B /* creek-after.jpg */,
+				E360E2FD1F19AE3400C6BB9B /* einstein.jpg */,
+				E360E2FE1F19AE3400C6BB9B /* gort.jpg */,
 				E33C00A8195A11650003201B /* mandril_color.jpg */,
 				E33C00A9195A11650003201B /* magritte.jpg */,
 				E33C00AA195A11650003201B /* baby-camel.jpg */,
 				E33C00AB195A11650003201B /* jpeg400jfif.jpg */,
+				E360E3051F19AE6B00C6BB9B /* pumpkins.jpg */,
+				E360E3021F19AE4D00C6BB9B /* robot.jpg */,
 				E33C00AC195A11650003201B /* tomatoes.jpg */,
 				E33C00AD195A11650003201B /* zam.jpg */,
 				E33C00AE195A11650003201B /* peppers_color.jpg */,
@@ -1886,6 +1916,7 @@
 				E3CADF9C1E1564DF00D983E3 /* g10n3p04.rgba in Resources */,
 				E3CAE0311E1564DF00D983E3 /* sound-LEI24-1ch.wav in Resources */,
 				E3CADF671E1564DF00D983E3 /* bgwn6a08.rgba in Resources */,
+				E360E2FF1F19AE3400C6BB9B /* einstein.jpg in Resources */,
 				E35A66C21948F5D600CEBD42 /* s33i3p04.png in Resources */,
 				E3CAE0421E1564DF00D983E3 /* sound-ulaw-2ch.raw in Resources */,
 				E3CADFC11E1564DF00D983E3 /* orientation_4.rgba in Resources */,
@@ -1895,6 +1926,7 @@
 				E3CADFE81E1564DF00D983E3 /* s35n3p04.rgba in Resources */,
 				E35A66421948F5D600CEBD42 /* basi0g02.png in Resources */,
 				E3CADFC31E1564DF00D983E3 /* orientation_6.rgba in Resources */,
+				E360E3081F19AE8D00C6BB9B /* 2004.rgba in Resources */,
 				E3CADF691E1564DF00D983E3 /* ccwn2c08.rgba in Resources */,
 				E3CAE0201E1564DF00D983E3 /* sound-LEF32-2ch.caf in Resources */,
 				E35A66A71948F5D600CEBD42 /* PngSuite.README in Resources */,
@@ -1902,6 +1934,7 @@
 				E3CAE00C1E1564DF00D983E3 /* sound-BEI16-2ch.wav in Resources */,
 				E35A669D1948F5D600CEBD42 /* oi1n0g16.png in Resources */,
 				E35A667D1948F5D600CEBD42 /* cthn0g04.png in Resources */,
+				E360E30F1F19AF5100C6BB9B /* robot.rgba in Resources */,
 				E3CAE03B1E1564DF00D983E3 /* sound-UI8-1ch.raw in Resources */,
 				E33F9C9C1E18AB1700FAF73A /* sound-ima-adpcm-1ch.raw in Resources */,
 				E3CADF541E1564DF00D983E3 /* basn0g04.rgba in Resources */,
@@ -1922,6 +1955,7 @@
 				E35A66891948F5D600CEBD42 /* f04n2c08.png in Resources */,
 				E3CAE0081E1564DF00D983E3 /* sound-BEI16-1ch.raw in Resources */,
 				E35A66591948F5D600CEBD42 /* basn3p04.png in Resources */,
+				E360E30D1F19AF3500C6BB9B /* gort.rgba in Resources */,
 				E3CAE02E1E1564DF00D983E3 /* sound-LEI16-2ch.wav in Resources */,
 				E3CAE02A1E1564DF00D983E3 /* sound-LEI16-1ch.raw in Resources */,
 				E35A66971948F5D600CEBD42 /* g10n0g16.png in Resources */,
@@ -2004,11 +2038,13 @@
 				E3CADFB31E1564DF00D983E3 /* magritte.rgba in Resources */,
 				E3E663F71A244F1C00105FF6 /* orientation_4.jpg in Resources */,
 				E3CAE04D1E1564DF00D983E3 /* tbwn0g16.rgba in Resources */,
+				E360E30B1F19AF2600C6BB9B /* einstein.rgba in Resources */,
 				E3CAE0281E1564DF00D983E3 /* sound-LEF64-2ch.wav in Resources */,
 				E3CADFA31E1564DF00D983E3 /* jpg-size-1x1.rgba in Resources */,
 				E3CAE00D1E1564DF00D983E3 /* sound-BEI24-1ch.caf in Resources */,
 				E35A66691948F5D600CEBD42 /* cdfn2c08.png in Resources */,
 				E35A666B1948F5D600CEBD42 /* cdsn2c08.png in Resources */,
+				E360E3061F19AE6B00C6BB9B /* pumpkins.jpg in Resources */,
 				E3CADF791E1564DF00D983E3 /* cs8n2c08.rgba in Resources */,
 				E3CADF411E1564DF00D983E3 /* 2001-stargate.rgba in Resources */,
 				E33C00D8195A11650003201B /* jpg-size-5x5.jpg in Resources */,
@@ -2021,6 +2057,8 @@
 				E35A66C71948F5D600CEBD42 /* s35n3p04.png in Resources */,
 				E35A66F11948F5D600CEBD42 /* z09n2c08.png in Resources */,
 				E3CAE0031E1564DF00D983E3 /* sound-BEF64-1ch.wav in Resources */,
+				E360E3001F19AE3400C6BB9B /* gort.jpg in Resources */,
+				E360E3041F19AE4D00C6BB9B /* robot.jpg in Resources */,
 				E33F9C9D1E18AB1700FAF73A /* sound-ima-adpcm-1ch.wav in Resources */,
 				E3CAE05E1E1564DF00D983E3 /* xhdn0g08.rgba in Resources */,
 				E3CAE0301E1564DF00D983E3 /* sound-LEI24-1ch.raw in Resources */,
@@ -2039,6 +2077,7 @@
 				E35A66DE1948F5D600CEBD42 /* tp0n3p08.png in Resources */,
 				E3CADFE71E1564DF00D983E3 /* s35i3p04.rgba in Resources */,
 				E35A669E1948F5D600CEBD42 /* oi1n2c16.png in Resources */,
+				E360E3031F19AE4D00C6BB9B /* 2004.jpg in Resources */,
 				E3CADF711E1564DF00D983E3 /* cm0n0g04.rgba in Resources */,
 				E3CADF4B1E1564DF00D983E3 /* basi3p02.rgba in Resources */,
 				E35A66A41948F5D600CEBD42 /* oi9n2c16.png in Resources */,
@@ -2262,6 +2301,7 @@
 				E33C00D2195A11650003201B /* jpg-size-17x17.jpg in Resources */,
 				E3CADF861E1564DF00D983E3 /* f01n2c08.rgba in Resources */,
 				E33C00D1195A11650003201B /* jpg-size-32x32.jpg in Resources */,
+				E360E3111F19AF9D00C6BB9B /* pumpkins.rgba in Resources */,
 				E3CADFCB1E1564DF00D983E3 /* ps1n0g08.rgba in Resources */,
 				E35A66601948F5D600CEBD42 /* bgai4a16.png in Resources */,
 				E35A66BE1948F5D600CEBD42 /* s09i3p02.png in Resources */,

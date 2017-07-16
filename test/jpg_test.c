@@ -13,11 +13,11 @@ enum jpg_test_type {
 
 static const char *filenames[] = {
 
-    // grayscale
+    // Grayscale
     "jpg-gray",
-    "jpeg400jfif", // has restart markers
+    "jpeg400jfif", // With restart markers
 
-    // no upsampling
+    // No upsampling
     "creek-after",
     "jpeg444",
     "magritte",
@@ -38,6 +38,14 @@ static const char *filenames[] = {
 
     // Extra 0xFF
     "applesauce",
+
+    // Progressive
+    "pumpkins", // Color, 2x2 upsampling, no successive approximation
+    "robot", // Color, 2x2 upsampling, successive approximation
+    "2004", // Color, no upsampling, successive approximation
+    "einstein", // Color, no upsampling, no successive approximation
+    "gort", // Grayscale, no upsampling, no successive approximation
+    // TODO: Find progressive, color, upsampled image with restart markers
 
     // Various sizes (2x2 upsampling)
     "jpg-size-1x1",
