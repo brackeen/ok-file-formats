@@ -5,7 +5,7 @@ C functions for reading a few different file formats. No external dependencies.
 | Library            | Description
 |--------------------|---------------------------------------------------------------------------------------------------
 | [ok_png](ok_png.h) | Reads any PNG file, including Apple's proprietary extensions. Tested against the PngSuite.
-| [ok_jpg](ok_jpg.h) | Reads most JPEG files. Interprets EXIF orientation tags. Baseline only, no progressive support.
+| [ok_jpg](ok_jpg.h) | Reads most JPEG files (baseline and progressive). Interprets EXIF orientation tags.
 | [ok_wav](ok_wav.h) | Reads WAV and CAF files. PCM, u-law, a-law, and ADPCM formats.
 | [ok_fnt](ok_fnt.h) | Reads AngelCode BMFont files. Binary format from AngelCode Bitmap Font Generator v1.10 or newer.
 | [ok_csv](ok_csv.h) | Reads Comma-Separated Values files.
