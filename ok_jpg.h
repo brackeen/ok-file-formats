@@ -26,15 +26,14 @@
  * Functions to read JPEG files.
  *
  * This JPEG decoder:
- * - Reads most JPEG files.
- * - Baseline only (no progressive JPEGs)
+ * - Reads most JPEG files (baseline and progressive).
  * - Interprets EXIF orientation tags.
  * - Option to get the image dimensions without decoding.
  * - Option to flip the image vertically.
  * - Returns data in RGBA or BGRA format.
  *
  * Caveats:
- * - No progressive, lossless, or CMYK support.
+ * - No CMYK or YCCK support.
  *
  * Example:
  *
