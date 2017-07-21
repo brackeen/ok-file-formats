@@ -62,6 +62,7 @@ typedef struct {
     int blocks_h;
     int eob_run;
     ok_jpg_idct_func idct;
+    bool complete;
 } ok_jpg_component;
 
 typedef struct {
@@ -102,7 +103,6 @@ typedef struct {
     bool progressive;
     bool eoi_found;
     bool sof_found;
-    bool complete;
     int next_marker;
     int restart_intervals;
     int restart_intervals_remaining;
@@ -1081,8 +1081,15 @@ static bool ok_jpg_decode_scan(ok_jpg_decoder *decoder) {
             }
         }
     }
-    decoder->complete = true;
+
     ok_jpg_dump_bits(decoder);
+
+    for (int i = 0; i < decoder->num_scan_components; i++) {
+        ok_jpg_component *c = decoder->components + decoder->scan_components[i];
+        if (!c->complete) {
+            c->complete = decoder->scan_end == 63 && decoder->scan_scale == 0;
+        }
+    }
 
     return true;
 }
@@ -1696,8 +1703,15 @@ static void ok_jpg_decode2(ok_jpg_decoder *decoder) {
         }
     }
 
-    if (!decoder->complete) {
-        ok_jpg_error(jpg, "Incomplete JPEG image data");
+    if (decoder->num_components == 0) {
+        ok_jpg_error(jpg, "SOF not found");
+    } else {
+        for (int i = 0; i < decoder->num_components; i++) {
+            if (!decoder->components[i].complete) {
+                ok_jpg_error(jpg, "Missing JPEG image data");
+                break;
+            }
+        }
     }
 }
 
