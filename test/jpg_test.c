@@ -39,6 +39,10 @@ static const char *filenames[] = {
     // Extra 0xFF
     "applesauce",
 
+    // Large images (max size handled by ImageMagick)
+    "65500w",
+    "65500h",
+
     // Progressive
     "pumpkins", // Color, 2x2 upsampling, no successive approximation
     "robot", // Color, 2x2 upsampling, successive approximation
