@@ -1303,6 +1303,8 @@ static bool ok_jpg_read_sof(ok_jpg_decoder *decoder) {
 
     int maxH = 1;
     int maxV = 1;
+    int minH = 4;
+    int minV = 4;
     for (int i = 0; i < decoder->num_components; i++) {
         ok_jpg_component *c = decoder->components + i;
         c->id = buffer[i * 3 + 0];
@@ -1322,7 +1324,20 @@ static bool ok_jpg_read_sof(ok_jpg_decoder *decoder) {
 
         maxH = max(maxH, c->H);
         maxV = max(maxV, c->V);
+        minH = min(minH, c->H);
+        minV = min(minV, c->V);
         length -= 3;
+    }
+    if (minH > 1 || minV > 1) {
+        maxH = 1;
+        maxV = 1;
+        for (int i = 0; i < decoder->num_components; i++) {
+            ok_jpg_component *c = decoder->components + i;
+            c->H /= minH;
+            c->V /= minV;
+            maxH = max(maxH, c->H);
+            maxV = max(maxV, c->V);
+        }
     }
     decoder->data_units_x = intDivCeil(decoder->in_width, maxH * 8);
     decoder->data_units_y = intDivCeil(decoder->in_height, maxV * 8);
