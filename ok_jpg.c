@@ -1646,11 +1646,17 @@ static void ok_jpg_decode2(ok_jpg_decoder *decoder) {
             if (!ok_read(decoder, buffer, 2)) {
                 return;
             }
-            if (buffer[0] != 0xFF) {
+            if (buffer[0] == 0xFF) {
+                marker = buffer[1];
+            } else if (buffer[0] == 0x00 && buffer[1] == 0xFF) {
+                if (!ok_read(decoder, buffer, 1)) {
+                    return;
+                }
+                marker = buffer[0];
+            } else {
                 ok_jpg_error(jpg, "Invalid JPEG marker");
                 return;
             }
-            marker = buffer[1];
         }
 
         bool success = true;
