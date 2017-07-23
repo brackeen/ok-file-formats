@@ -16,6 +16,7 @@ static const char *filenames[] = {
     // Grayscale
     "jpg-gray",
     "jpeg400jfif", // With restart markers
+    "peace",
 
     // No upsampling
     "creek-after",
@@ -36,8 +37,9 @@ static const char *filenames[] = {
     "tomatoes",
     "zam",
 
-    // Extra 0xFF
-    "applesauce",
+    // Strange markers
+    "applesauce", // Extra 0xFF
+    "park", // Extra 0x00 before 0xFF
 
     // Large images (max size handled by ImageMagick)
     "65500w",
