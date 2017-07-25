@@ -35,6 +35,3 @@ int main() {
     return 0;
 }
 ```
-
-## License
-[ZLIB](http://en.wikipedia.org/wiki/Zlib_License)
