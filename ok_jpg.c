@@ -93,8 +93,11 @@ typedef struct {
     void *input_data;
     ok_jpg_read_func input_read_func;
     ok_jpg_seek_func input_seek_func;
-    uint32_t input_buffer;
-    int input_buffer_bits;
+    uint8_t input_buffer[256];
+    uint8_t *input_buffer_start;
+    uint8_t *input_buffer_end;
+    uint32_t input_buffer_bits;
+    int input_buffer_bit_count;
 
     // Output
     uint8_t *dst_buffer;
@@ -146,7 +149,32 @@ static void ok_jpg_set_error(ok_jpg *jpg, const char *message) {
     }
 }
 
+static inline uint8_t ok_read_uint8(ok_jpg_decoder *decoder) {
+    if (decoder->input_buffer_start == decoder->input_buffer_end) {
+        size_t len = decoder->input_read_func(decoder->input_data, decoder->input_buffer,
+                                              sizeof(decoder->input_buffer));
+        decoder->input_buffer_start = decoder->input_buffer;
+        decoder->input_buffer_end = decoder->input_buffer + len;
+
+        if (len == 0) {
+            return 0;
+        }
+    }
+    return *decoder->input_buffer_start++;
+}
+
 static bool ok_read(ok_jpg_decoder *decoder, uint8_t *buffer, size_t length) {
+    size_t available = (size_t)(decoder->input_buffer_end - decoder->input_buffer_start);
+    if (available) {
+        size_t len = min(length, available);
+        memcpy(buffer, decoder->input_buffer_start, len);
+        decoder->input_buffer_start += len;
+        length -= len;
+        if (length == 0) {
+            return true;
+        }
+        buffer += len;
+    }
     if (decoder->input_read_func(decoder->input_data, buffer, length) == length) {
         return true;
     } else {
@@ -156,11 +184,26 @@ static bool ok_read(ok_jpg_decoder *decoder, uint8_t *buffer, size_t length) {
 }
 
 static bool ok_seek(ok_jpg_decoder *decoder, long length) {
-    if (decoder->input_seek_func(decoder->input_data, length)) {
+    if (length == 0) {
         return true;
-    } else {
-        ok_jpg_error(decoder->jpg, "Seek error: error calling input function.");
+    } else if (length < 0) {
+        ok_jpg_error(decoder->jpg, "Seek error: negative seek unsupported.");
         return false;
+    }
+    size_t available = (size_t)(decoder->input_buffer_end - decoder->input_buffer_start);
+
+    size_t len = min((size_t)length, available);
+    decoder->input_buffer_start += len;
+    length -= len;
+    if (length > 0) {
+        if (decoder->input_seek_func(decoder->input_data, length)) {
+            return true;
+        } else {
+            ok_jpg_error(decoder->jpg, "Seek error: error calling input function.");
+            return false;
+        }
+    } else {
+        return true;
     }
 }
 
@@ -237,61 +280,52 @@ static inline uint32_t readLE32(const uint8_t *data) {
 }
 
 // Load bits without reading them
-static inline bool ok_jpg_load_bits(ok_jpg_decoder *decoder, int num_bits) {
-    // Needs optimization? Buffer the data instead of calling ok_read for every byte
-    while (decoder->input_buffer_bits < num_bits) {
+static inline void ok_jpg_load_bits(ok_jpg_decoder *decoder, int num_bits) {
+    while (decoder->input_buffer_bit_count < num_bits) {
         if (decoder->next_marker != 0) {
-            decoder->input_buffer <<= 8;
-            decoder->input_buffer_bits += 8;
+            decoder->input_buffer_bits <<= 8;
+            decoder->input_buffer_bit_count += 8;
         } else {
-            uint8_t b;
-            if (!ok_read(decoder, &b, 1)) {
-                return false;
-            }
+            uint8_t b = ok_read_uint8(decoder);
             if (b == 0xff) {
-                uint8_t marker;
-                if (!ok_read(decoder, &marker, 1)) {
-                    return false;
-                }
+                uint8_t marker = ok_read_uint8(decoder);
                 if (marker != 0) {
                     decoder->next_marker = marker;
                     b = 0;
                 }
             }
-            decoder->input_buffer = (decoder->input_buffer << 8) | b;
-            decoder->input_buffer_bits += 8;
+            decoder->input_buffer_bits = (decoder->input_buffer_bits << 8) | b;
+            decoder->input_buffer_bit_count += 8;
         }
     }
-    return true;
 }
 
 // Assumes at least 1 bit of data was previously loaded in load_bits
 static inline int ok_jpg_next_bit(ok_jpg_decoder *decoder) {
-    decoder->input_buffer_bits--;
-    return (decoder->input_buffer >> decoder->input_buffer_bits) & 1;
+    decoder->input_buffer_bit_count--;
+    return (decoder->input_buffer_bits >> decoder->input_buffer_bit_count) & 1;
 }
 
 // Assumes at least 8 bits of data was previously loaded in load_bits
 static inline int ok_jpg_peek_byte(ok_jpg_decoder *decoder) {
-    return (decoder->input_buffer >> (decoder->input_buffer_bits - 8)) & 0xff;
+    return (decoder->input_buffer_bits >> (decoder->input_buffer_bit_count - 8)) & 0xff;
 }
 
 // Assumes at least num_bits of data was previously loaded in load_bits
 static inline void ok_jpg_consume_bits(ok_jpg_decoder *decoder, int num_bits) {
-    decoder->input_buffer_bits -= num_bits;
+    decoder->input_buffer_bit_count -= num_bits;
 }
 
 static inline void ok_jpg_dump_bits(ok_jpg_decoder *decoder) {
-    decoder->input_buffer = 0;
     decoder->input_buffer_bits = 0;
+    decoder->input_buffer_bit_count = 0;
 }
 
 static inline int ok_jpg_load_next_bits(ok_jpg_decoder *decoder, int num_bits) {
-    if (!ok_jpg_load_bits(decoder, num_bits)) {
-        return -1;
-    }
-    decoder->input_buffer_bits -= num_bits;
-    return (int)(decoder->input_buffer >> decoder->input_buffer_bits) & ((1 << num_bits) - 1);
+    ok_jpg_load_bits(decoder, num_bits);
+    int mask = (1 << num_bits) - 1;
+    decoder->input_buffer_bit_count -= num_bits;
+    return (int)(decoder->input_buffer_bits >> decoder->input_buffer_bit_count) & mask;
 }
 
 // MARK: Huffman decoding
@@ -358,14 +392,12 @@ static void ok_jpg_generate_huffman_table_lookups(ok_jpg_huffman_table *huff) {
     }
 }
 
-static inline int ok_jpg_huffman_decode(ok_jpg_decoder *decoder,
-                                        const ok_jpg_huffman_table *table) {
+static inline uint8_t ok_jpg_huffman_decode(ok_jpg_decoder *decoder,
+                                            const ok_jpg_huffman_table *table) {
     // JPEG spec: "Decode" (Figure F.16)
 
     // First, try 8-bit lookup tables (most codes will be 8-bit or less)
-    if (!ok_jpg_load_bits(decoder, 8)) {
-        return -1;
-    }
+    ok_jpg_load_bits(decoder, 8);
     int code = ok_jpg_peek_byte(decoder);
     int num_bits = table->lookup_num_bits[code];
     if (num_bits != 0) {
@@ -376,9 +408,7 @@ static inline int ok_jpg_huffman_decode(ok_jpg_decoder *decoder,
     // Next, try a code up to 16-bits
     // Needs optimization for codes > 8 bits?
     ok_jpg_consume_bits(decoder, 8);
-    if (!ok_jpg_load_bits(decoder, 8)) {
-        return -1;
-    }
+    ok_jpg_load_bits(decoder, 8);
     for (int i = 8; i < 16; i++) {
         code = (code << 1) | ok_jpg_next_bit(decoder);
         if (code <= table->maxcode[i]) {
@@ -389,7 +419,7 @@ static inline int ok_jpg_huffman_decode(ok_jpg_decoder *decoder,
     }
     // Shouldn't happen
     ok_jpg_error(decoder->jpg, "Invalid huffman code");
-    return -1;
+    return 0;
 }
 
 // MARK: JPEG color conversion
@@ -795,15 +825,10 @@ static inline bool ok_jpg_decode_block(ok_jpg_decoder *decoder, ok_jpg_component
                                        int16_t *block) {
     // Decode DC coefficients - F.2.2.1
     ok_jpg_huffman_table *dc = decoder->huffman_tables[0] + c->Td;
-    int t = ok_jpg_huffman_decode(decoder, dc);
+    uint8_t t = ok_jpg_huffman_decode(decoder, dc);
     if (t > 0) {
         int diff = ok_jpg_load_next_bits(decoder, t);
-        if (diff < 0) {
-            return false;
-        }
         c->pred += ok_jpg_extend(diff, t);
-    } else if (t < 0) {
-        return false;
     }
     block[0] = c->pred;
 
@@ -811,27 +836,21 @@ static inline bool ok_jpg_decode_block(ok_jpg_decoder *decoder, ok_jpg_component
     ok_jpg_huffman_table *ac = decoder->huffman_tables[1] + c->Ta;
     int k = 1;
     while (k <= 63) {
-        int rs = ok_jpg_huffman_decode(decoder, ac);
+        uint8_t rs = ok_jpg_huffman_decode(decoder, ac);
         if (rs == 0) {
             break;
-        } else if (rs < 0) {
-            return false;
+        }
+        int s = rs & 0x0f;
+        if (s == 0) {
+            k += 16;
         } else {
-            int s = rs & 0x0f;
-            if (s == 0) {
-                k += 16;
-            } else {
-                int r = rs >> 4;
-                k += r;
-                // k could be greater than 63 for corrupt jpegs, but the block will have
-                // OK_JPG_BLOCK_EXTRA_SPACE bytes of extra space at the end.
-                int v = ok_jpg_load_next_bits(decoder, s);
-                if (v < 0) {
-                    return false;
-                }
-                block[k] = (int16_t)ok_jpg_extend(v, s);
-                k++;
-            }
+            int r = rs >> 4;
+            k += r;
+            // k could be greater than 63 for corrupt jpegs, but the block will have
+            // OK_JPG_BLOCK_EXTRA_SPACE bytes of extra space at the end.
+            int v = ok_jpg_load_next_bits(decoder, s);
+            block[k] = (int16_t)ok_jpg_extend(v, s);
+            k++;
         }
     }
     return true;
@@ -846,15 +865,10 @@ static bool ok_jpg_decode_block_progressive(ok_jpg_decoder *decoder, ok_jpg_comp
     // Decode DC coefficients - F.2.2.1
     if (k == 0) {
         ok_jpg_huffman_table *dc = decoder->huffman_tables[0] + c->Td;
-        int t = ok_jpg_huffman_decode(decoder, dc);
+        uint8_t t = ok_jpg_huffman_decode(decoder, dc);
         if (t > 0) {
             int diff = ok_jpg_load_next_bits(decoder, t);
-            if (diff < 0) {
-                return false;
-            }
             c->pred += ok_jpg_extend(diff, t) << scale;
-        } else if (t < 0) {
-            return false;
         }
         block[0] = c->pred;
         k++;
@@ -867,19 +881,13 @@ static bool ok_jpg_decode_block_progressive(ok_jpg_decoder *decoder, ok_jpg_comp
     }
     ok_jpg_huffman_table *ac = decoder->huffman_tables[1] + c->Ta;
     while (k <= k_end) {
-        int rs = ok_jpg_huffman_decode(decoder, ac);
-        if (rs < 0) {
-            return false;
-        }
+        uint8_t rs = ok_jpg_huffman_decode(decoder, ac);
         int s = rs & 0x0f;
         int r = rs >> 4;
         if (s == 0) {
             if (r != 0x0f) {
                 if (r > 0) {
                     int next_bits = ok_jpg_load_next_bits(decoder, r);
-                    if (next_bits < 0) {
-                        return false;
-                    }
                     c->eob_run = (1 << r) + next_bits - 1;
                 }
                 break;
@@ -888,9 +896,6 @@ static bool ok_jpg_decode_block_progressive(ok_jpg_decoder *decoder, ok_jpg_comp
         } else {
             k += r;
             int v = ok_jpg_load_next_bits(decoder, s);
-            if (v < 0) {
-                return false;
-            }
             block[k] = (int16_t)(ok_jpg_extend(v, s) << scale);
             k++;
         }
@@ -908,9 +913,6 @@ static bool ok_jpg_decode_block_subsequent_scan(ok_jpg_decoder *decoder, ok_jpg_
     if (k == 0) {
         int correction = ok_jpg_load_next_bits(decoder, 1);
         if (correction) {
-            if (correction < 0) {
-                return false;
-            }
             block[0] |= lsb;
         }
         k++;
@@ -926,28 +928,19 @@ static bool ok_jpg_decode_block_subsequent_scan(ok_jpg_decoder *decoder, ok_jpg_
     }
     while (k <= k_end) {
         if (r < 0) {
-            int rs = ok_jpg_huffman_decode(decoder, ac);
-            if (rs < 0) {
-                return false;
-            }
+            uint8_t rs = ok_jpg_huffman_decode(decoder, ac);
             int s = rs & 0x0f;
             r = rs >> 4;
             if (s == 0) {
                 if (r != 0x0f) {
                     if (r > 0) {
                         int next_bits = ok_jpg_load_next_bits(decoder, r);
-                        if (next_bits < 0) {
-                            return false;
-                        }
                         c->eob_run = (1 << r) + next_bits - 1;
                     }
                     r = 64;
                 }
             } else {
                 int sign = ok_jpg_load_next_bits(decoder, 1);
-                if (sign < 0) {
-                    return false;
-                }
                 v = sign ? lsb : -lsb;
             }
         }
@@ -956,9 +949,6 @@ static bool ok_jpg_decode_block_subsequent_scan(ok_jpg_decoder *decoder, ok_jpg_
         if (*coeff != 0) {
             int correction = ok_jpg_load_next_bits(decoder, 1);
             if (correction) {
-                if (correction < 0) {
-                    return false;
-                }
                 if (*coeff < 0) {
                     *coeff -= lsb;
                 } else {
@@ -1549,12 +1539,9 @@ static bool ok_jpg_read_dqt(ok_jpg_decoder *decoder) {
     }
     int length = readBE16(buffer) - 2;
     while (length >= 65) {
-        if (!ok_read(decoder, buffer, 1)) {
-            return false;
-        }
-
-        int Pq = buffer[0] >> 4;
-        int Tq = buffer[0] & 0x0f;
+        uint8_t pt = ok_read_uint8(decoder);
+        int Pq = pt >> 4;
+        int Tq = pt & 0x0f;
 
         if (Pq == 1) {
             ok_jpg_error(jpg, "Unsupported JPEG (16-bit q_table)");
