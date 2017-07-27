@@ -45,6 +45,8 @@
 #define MAX_SAMPLING_FACTOR 2
 #define C_WIDTH (MAX_SAMPLING_FACTOR * 8)
 #define MAX_COMPONENTS 3
+#define HUFFMAN_LOOKUP_SIZE_BITS 10
+#define HUFFMAN_LOOKUP_SIZE (1 << HUFFMAN_LOOKUP_SIZE_BITS)
 
 typedef void (*ok_jpg_idct_func)(const int16_t *const input, uint8_t *output);
 
@@ -70,8 +72,10 @@ typedef struct {
     uint16_t code[256];
     uint8_t val[256];
     uint8_t size[257];
-    uint8_t lookup_num_bits[256];
-    uint8_t lookup_val[256];
+    uint8_t lookup_num_bits[HUFFMAN_LOOKUP_SIZE];
+    uint8_t lookup_val[HUFFMAN_LOOKUP_SIZE];
+    uint8_t lookup_ac_num_bits[HUFFMAN_LOOKUP_SIZE];
+    int16_t lookup_ac_val[HUFFMAN_LOOKUP_SIZE];
     int maxcode[16];
     int mincode[16];
     int valptr[16];
@@ -300,18 +304,13 @@ static inline void ok_jpg_load_bits(ok_jpg_decoder *decoder, int num_bits) {
     }
 }
 
-// Assumes at least 1 bit of data was previously loaded in load_bits
-static inline int ok_jpg_next_bit(ok_jpg_decoder *decoder) {
-    decoder->input_buffer_bit_count--;
-    return (decoder->input_buffer_bits >> decoder->input_buffer_bit_count) & 1;
+// Assumes at least num_bits of data was previously loaded in ok_jpg_load_bits
+static inline int ok_jpg_peek_bits(ok_jpg_decoder *decoder, int num_bits) {
+    return (int)((decoder->input_buffer_bits >> (decoder->input_buffer_bit_count - num_bits)) &
+                 ((1 << num_bits) - 1));
 }
 
-// Assumes at least 8 bits of data was previously loaded in load_bits
-static inline int ok_jpg_peek_byte(ok_jpg_decoder *decoder) {
-    return (decoder->input_buffer_bits >> (decoder->input_buffer_bit_count - 8)) & 0xff;
-}
-
-// Assumes at least num_bits of data was previously loaded in load_bits
+// Assumes at least num_bits of data was previously loaded in ok_jpg_load_bits
 static inline void ok_jpg_consume_bits(ok_jpg_decoder *decoder, int num_bits) {
     decoder->input_buffer_bit_count -= num_bits;
 }
@@ -326,6 +325,15 @@ static inline int ok_jpg_load_next_bits(ok_jpg_decoder *decoder, int num_bits) {
     int mask = (1 << num_bits) - 1;
     decoder->input_buffer_bit_count -= num_bits;
     return (int)(decoder->input_buffer_bits >> decoder->input_buffer_bit_count) & mask;
+}
+
+static inline int ok_jpg_extend(const int v, const int t) {
+    // Figure F.12
+    if (v < (1 << (t - 1))) {
+        return v + ((-1) << t) + 1;
+    } else {
+        return v;
+    }
 }
 
 // MARK: Huffman decoding
@@ -369,17 +377,20 @@ static void ok_jpg_generate_huffman_table(ok_jpg_huffman_table *huff, const uint
             huff->mincode[i] = huff->code[j];
             j += bits[i + 1];
             huff->maxcode[i] = huff->code[j - 1];
+            if (i >= HUFFMAN_LOOKUP_SIZE_BITS) {
+                huff->maxcode[i] = (huff->maxcode[i] << (15 - i)) | ((1 << (15 - i)) - 1);
+            }
         }
     }
 }
 
-static void ok_jpg_generate_huffman_table_lookups(ok_jpg_huffman_table *huff) {
-    // Look up table for codes that use 8 bits or less (most of them)
-    for (int q = 0; q < 256; q++) {
+static void ok_jpg_generate_huffman_table_lookups(ok_jpg_huffman_table *huff, bool is_ac_table) {
+    // Look up table for codes that use N bits or less (most of them)
+    for (int q = 0; q < HUFFMAN_LOOKUP_SIZE; q++) {
         huff->lookup_num_bits[q] = 0;
-        for (uint8_t i = 0; i < 8; i++) {
+        for (uint8_t i = 0; i < HUFFMAN_LOOKUP_SIZE_BITS; i++) {
             uint8_t num_bits = i + 1;
-            int code = q >> (8 - num_bits);
+            int code = q >> (HUFFMAN_LOOKUP_SIZE_BITS - num_bits);
             if (code <= huff->maxcode[i]) {
                 huff->lookup_num_bits[q] = num_bits;
 
@@ -390,15 +401,34 @@ static void ok_jpg_generate_huffman_table_lookups(ok_jpg_huffman_table *huff) {
             }
         }
     }
+
+    if (is_ac_table) {
+        // Additional lookup table to get both RS and extended value
+        for (int q = 0; q < HUFFMAN_LOOKUP_SIZE; q++) {
+            int num_bits = huff->lookup_num_bits[q];
+            if (num_bits > 0) {
+                int rs = huff->lookup_val[q];
+                int s = rs & 0x0f;
+                int total_bits = num_bits + s;
+                if (total_bits <= HUFFMAN_LOOKUP_SIZE_BITS) {
+                    huff->lookup_ac_num_bits[q] = (uint8_t)total_bits;
+                    if (s > 0) {
+                        int v = (q >> (HUFFMAN_LOOKUP_SIZE_BITS - total_bits)) & ((1 << s) - 1);
+                        huff->lookup_ac_val[q] = (int16_t)ok_jpg_extend(v, s);
+                    }
+                }
+            }
+        }
+    }
 }
 
 static inline uint8_t ok_jpg_huffman_decode(ok_jpg_decoder *decoder,
                                             const ok_jpg_huffman_table *table) {
     // JPEG spec: "Decode" (Figure F.16)
 
-    // First, try 8-bit lookup tables (most codes will be 8-bit or less)
-    ok_jpg_load_bits(decoder, 8);
-    int code = ok_jpg_peek_byte(decoder);
+    // First, try lookup tables
+    ok_jpg_load_bits(decoder, 16);
+    int code = ok_jpg_peek_bits(decoder, HUFFMAN_LOOKUP_SIZE_BITS);
     int num_bits = table->lookup_num_bits[code];
     if (num_bits != 0) {
         ok_jpg_consume_bits(decoder, num_bits);
@@ -406,12 +436,11 @@ static inline uint8_t ok_jpg_huffman_decode(ok_jpg_decoder *decoder,
     }
 
     // Next, try a code up to 16-bits
-    // Needs optimization for codes > 8 bits?
-    ok_jpg_consume_bits(decoder, 8);
-    ok_jpg_load_bits(decoder, 8);
-    for (int i = 8; i < 16; i++) {
-        code = (code << 1) | ok_jpg_next_bit(decoder);
+    code = ok_jpg_peek_bits(decoder, 16);
+    for (int i = HUFFMAN_LOOKUP_SIZE_BITS; i < 16; i++) {
         if (code <= table->maxcode[i]) {
+            ok_jpg_consume_bits(decoder, i + 1);
+            code >>= (15 - i);
             int j = table->valptr[i];
             j += code - table->mincode[i];
             return table->val[j];
@@ -810,15 +839,6 @@ static void ok_jpg_idct_16x16(const int16_t * const input, uint8_t *output) {
 
 // MARK: Entropy decoding
 
-static inline int ok_jpg_extend(const int v, const int t) {
-    // Figure F.12
-    if (v < (1 << (t - 1))) {
-        return v + ((-1) << t) + 1;
-    } else {
-        return v;
-    }
-}
-
 #define OK_JPG_BLOCK_EXTRA_SPACE 15
 
 static inline bool ok_jpg_decode_block(ok_jpg_decoder *decoder, ok_jpg_component *c,
@@ -836,21 +856,39 @@ static inline bool ok_jpg_decode_block(ok_jpg_decoder *decoder, ok_jpg_component
     ok_jpg_huffman_table *ac = decoder->huffman_tables[1] + c->Ta;
     int k = 1;
     while (k <= 63) {
-        uint8_t rs = ok_jpg_huffman_decode(decoder, ac);
-        if (rs == 0) {
-            break;
-        }
-        int s = rs & 0x0f;
-        if (s == 0) {
-            k += 16;
+        ok_jpg_load_bits(decoder, 16);
+        int code = ok_jpg_peek_bits(decoder, HUFFMAN_LOOKUP_SIZE_BITS);
+        uint8_t num_bits = ac->lookup_ac_num_bits[code];
+        if (num_bits > 0) {
+            ok_jpg_consume_bits(decoder, num_bits);
+            uint8_t rs = ac->lookup_val[code];
+            int s = rs & 0x0f;
+            if (s > 0) {
+                int r = rs >> 4;
+                k += r;
+                block[k] = ac->lookup_ac_val[code];
+                k++;
+            } else {
+                if (rs == 0) {
+                    break;
+                }
+                k += 16;
+            }
         } else {
-            int r = rs >> 4;
-            k += r;
-            // k could be greater than 63 for corrupt jpegs, but the block will have
-            // OK_JPG_BLOCK_EXTRA_SPACE bytes of extra space at the end.
-            int v = ok_jpg_load_next_bits(decoder, s);
-            block[k] = (int16_t)ok_jpg_extend(v, s);
-            k++;
+            uint8_t rs = ok_jpg_huffman_decode(decoder, ac);
+            int s = rs & 0x0f;
+            if (s > 0) {
+                int r = rs >> 4;
+                k += r;
+                int v = ok_jpg_load_next_bits(decoder, s);
+                block[k] = (int16_t)ok_jpg_extend(v, s);
+                k++;
+            } else {
+                if (rs == 0) {
+                    break;
+                }
+                k += 16;
+            }
         }
     }
     return true;
@@ -1596,7 +1634,8 @@ static bool ok_jpg_read_dht(ok_jpg_decoder *decoder) {
             }
             length -= table->count;
         }
-        ok_jpg_generate_huffman_table_lookups(table);
+        bool is_ac_table = Tc == 1;
+        ok_jpg_generate_huffman_table_lookups(table, is_ac_table);
     }
     if (length != 0) {
         ok_jpg_error(jpg, "Invalid DHT segment length");
