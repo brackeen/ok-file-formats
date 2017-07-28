@@ -855,6 +855,8 @@ static void ok_jpg_idct_16x16(const int16_t * const input, uint8_t *output) {
 
 static inline bool ok_jpg_decode_block(ok_jpg_decoder *decoder, ok_jpg_component *c,
                                        int16_t *block) {
+    memset(block, 0, 8 * 8 * sizeof(*block));
+
     // Decode DC coefficients - F.2.2.1
     ok_jpg_huffman_table *dc = decoder->dc_huffman_tables + c->Td;
     uint8_t t = ok_jpg_huffman_decode(decoder, dc);
@@ -911,6 +913,8 @@ static bool ok_jpg_decode_block_progressive(ok_jpg_decoder *decoder, ok_jpg_comp
     int k = decoder->scan_start;
     const int k_end = decoder->scan_end;
     const int scale = decoder->scan_scale;
+
+    memset(block + k, 0, (size_t)(k_end - k + 1) * sizeof(*block));
 
     // Decode DC coefficients - F.2.2.1
     if (k == 0) {
@@ -1153,7 +1157,6 @@ static bool ok_jpg_decode_scan(ok_jpg_decoder *decoder) {
                     for (int y = 0; y < c->V; y++) {
                         int offset_x = 0;
                         for (int x = 0; x < c->H; x++) {
-                            memset(block, 0, 8 * 8 * sizeof(*block));
                             if (!ok_jpg_decode_block(decoder, c, block)) {
                                 return false;
                             }
@@ -1468,7 +1471,7 @@ static bool ok_jpg_read_sof(ok_jpg_decoder *decoder) {
                 ok_jpg_component *c = decoder->components + i;
                 size_t num_blocks = (size_t)(decoder->data_units_x * c->H *
                                              decoder->data_units_y * c->V);
-                c->blocks = calloc(num_blocks * 64, sizeof(*c->blocks) + OK_JPG_BLOCK_EXTRA_SPACE);
+                c->blocks = malloc(num_blocks * 64 * sizeof(*c->blocks) + OK_JPG_BLOCK_EXTRA_SPACE);
                 if (!c->blocks) {
                     ok_jpg_error(jpg, "Couldn't allocate internal block memory for image");
                     return false;
