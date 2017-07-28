@@ -133,8 +133,8 @@ typedef struct {
     int scan_prev_scale; // "Ah"
     int scan_scale;      // "Al"
 
-    // 0 = DC table, 1 = AC table
-    ok_jpg_huffman_table huffman_tables[2][4];
+    ok_jpg_huffman_table dc_huffman_tables[4];
+    ok_jpg_huffman_table ac_huffman_tables[4];
 } ok_jpg_decoder;
 
 #ifdef NDEBUG
@@ -405,16 +405,28 @@ static void ok_jpg_generate_huffman_table_lookups(ok_jpg_huffman_table *huff, bo
     if (is_ac_table) {
         // Additional lookup table to get both RS and extended value
         for (int q = 0; q < HUFFMAN_LOOKUP_SIZE; q++) {
+            huff->lookup_ac_num_bits[q] = 0;
             int num_bits = huff->lookup_num_bits[q];
             if (num_bits > 0) {
                 int rs = huff->lookup_val[q];
+                int r = rs >> 4;
                 int s = rs & 0x0f;
-                int total_bits = num_bits + s;
+                int total_bits = num_bits;
+                if (s > 0) {
+                    total_bits += s;
+                } else if (r > 0 && r < 0x0f) {
+                    total_bits += r;
+                }
                 if (total_bits <= HUFFMAN_LOOKUP_SIZE_BITS) {
                     huff->lookup_ac_num_bits[q] = (uint8_t)total_bits;
                     if (s > 0) {
                         int v = (q >> (HUFFMAN_LOOKUP_SIZE_BITS - total_bits)) & ((1 << s) - 1);
                         huff->lookup_ac_val[q] = (int16_t)ok_jpg_extend(v, s);
+                    } else if (r > 0 && r < 0x0f) {
+                        int v = (q >> (HUFFMAN_LOOKUP_SIZE_BITS - total_bits)) & ((1 << r) - 1);
+                        huff->lookup_ac_val[q] = (int16_t)((1 << r) + v - 1);
+                    } else {
+                        huff->lookup_ac_val[q] = 0;
                     }
                 }
             }
@@ -844,7 +856,7 @@ static void ok_jpg_idct_16x16(const int16_t * const input, uint8_t *output) {
 static inline bool ok_jpg_decode_block(ok_jpg_decoder *decoder, ok_jpg_component *c,
                                        int16_t *block) {
     // Decode DC coefficients - F.2.2.1
-    ok_jpg_huffman_table *dc = decoder->huffman_tables[0] + c->Td;
+    ok_jpg_huffman_table *dc = decoder->dc_huffman_tables + c->Td;
     uint8_t t = ok_jpg_huffman_decode(decoder, dc);
     if (t > 0) {
         int diff = ok_jpg_load_next_bits(decoder, t);
@@ -853,7 +865,7 @@ static inline bool ok_jpg_decode_block(ok_jpg_decoder *decoder, ok_jpg_component
     block[0] = c->pred;
 
     // Decode AC coefficients - Figures F.13 and F.14
-    ok_jpg_huffman_table *ac = decoder->huffman_tables[1] + c->Ta;
+    ok_jpg_huffman_table *ac = decoder->ac_huffman_tables + c->Ta;
     int k = 1;
     while (k <= 63) {
         ok_jpg_load_bits(decoder, 16);
@@ -902,7 +914,7 @@ static bool ok_jpg_decode_block_progressive(ok_jpg_decoder *decoder, ok_jpg_comp
 
     // Decode DC coefficients - F.2.2.1
     if (k == 0) {
-        ok_jpg_huffman_table *dc = decoder->huffman_tables[0] + c->Td;
+        ok_jpg_huffman_table *dc = decoder->dc_huffman_tables + c->Td;
         uint8_t t = ok_jpg_huffman_decode(decoder, dc);
         if (t > 0) {
             int diff = ok_jpg_load_next_bits(decoder, t);
@@ -917,25 +929,46 @@ static bool ok_jpg_decode_block_progressive(ok_jpg_decoder *decoder, ok_jpg_comp
         c->eob_run--;
         return true;
     }
-    ok_jpg_huffman_table *ac = decoder->huffman_tables[1] + c->Ta;
+    ok_jpg_huffman_table *ac = decoder->ac_huffman_tables + c->Ta;
     while (k <= k_end) {
-        uint8_t rs = ok_jpg_huffman_decode(decoder, ac);
-        int s = rs & 0x0f;
-        int r = rs >> 4;
-        if (s == 0) {
-            if (r != 0x0f) {
-                if (r > 0) {
-                    int next_bits = ok_jpg_load_next_bits(decoder, r);
-                    c->eob_run = (1 << r) + next_bits - 1;
+        ok_jpg_load_bits(decoder, 16);
+        int code = ok_jpg_peek_bits(decoder, HUFFMAN_LOOKUP_SIZE_BITS);
+        uint8_t num_bits = ac->lookup_ac_num_bits[code];
+        if (num_bits > 0) {
+            ok_jpg_consume_bits(decoder, num_bits);
+            uint8_t rs = ac->lookup_val[code];
+            int s = rs & 0x0f;
+            int r = rs >> 4;
+            if (s > 0) {
+                k += r;
+                block[k] = (int16_t)(ac->lookup_ac_val[code] << scale);
+                k++;
+            } else {
+                if (r != 0x0f) {
+                    c->eob_run = ac->lookup_ac_val[code];
+                    break;
                 }
-                break;
+                k += 16;
             }
-            k += 16;
         } else {
-            k += r;
-            int v = ok_jpg_load_next_bits(decoder, s);
-            block[k] = (int16_t)(ok_jpg_extend(v, s) << scale);
-            k++;
+            uint8_t rs = ok_jpg_huffman_decode(decoder, ac);
+            int s = rs & 0x0f;
+            int r = rs >> 4;
+            if (s > 0) {
+                k += r;
+                int v = ok_jpg_load_next_bits(decoder, s);
+                block[k] = (int16_t)(ok_jpg_extend(v, s) << scale);
+                k++;
+            } else {
+                if (r != 0x0f) {
+                    if (r > 0) {
+                        int next_bits = ok_jpg_load_next_bits(decoder, r);
+                        c->eob_run = (1 << r) + next_bits - 1;
+                    }
+                    break;
+                }
+                k += 16;
+            }
         }
     }
     return true;
@@ -957,7 +990,7 @@ static bool ok_jpg_decode_block_subsequent_scan(ok_jpg_decoder *decoder, ok_jpg_
     }
 
     // Decode AC coefficients - Section G.1.2.3
-    ok_jpg_huffman_table *ac = decoder->huffman_tables[1] + c->Ta;
+    ok_jpg_huffman_table *ac = decoder->ac_huffman_tables + c->Ta;
     int r = -1;
     int16_t v = 0;
     if (c->eob_run > 0) {
@@ -1070,13 +1103,13 @@ static bool ok_jpg_decode_scan(ok_jpg_decoder *decoder) {
             ok_jpg_component *c = decoder->components + decoder->scan_components[0];
             c->next_block = 0;
             for (int data_unit_y = 0; data_unit_y < c->blocks_v; data_unit_y++) {
-                size_t block_index = c->next_block;
+                int16_t *block = c->blocks + (c->next_block * 64);
                 for (int data_unit_x = 0; data_unit_x < c->blocks_h; data_unit_x++) {
                     ok_jpg_decode_restart_if_needed(decoder);
-                    if (!decode_function(decoder, c, c->blocks + (block_index * 64))) {
+                    if (!decode_function(decoder, c, block)) {
                         return false;
                     }
-                    block_index++;
+                    block += 64;
                 }
                 c->next_block += (size_t)(c->H * decoder->data_units_x);
             }
@@ -1622,7 +1655,9 @@ static bool ok_jpg_read_dht(ok_jpg_decoder *decoder) {
             ok_jpg_error(jpg, "Invalid JPEG (Bad DHT Tc/Th)");
             return false;
         }
-        ok_jpg_huffman_table *table = decoder->huffman_tables[Tc] + Th;
+        ok_jpg_huffman_table *tables = (Tc == 0 ? decoder->dc_huffman_tables :
+                                        decoder->ac_huffman_tables);
+        ok_jpg_huffman_table *table = tables + Th;
         ok_jpg_generate_huffman_table(table, buffer);
         if (table->count > 0) {
             if (table->count > 256 || table->count > length) {
