@@ -111,6 +111,7 @@ typedef struct {
     bool progressive;
     bool eoi_found;
     bool sof_found;
+    bool eof_found;
     int next_marker;
     int restart_intervals;
     int restart_intervals_remaining;
@@ -182,6 +183,7 @@ static bool ok_read(ok_jpg_decoder *decoder, uint8_t *buffer, size_t length) {
     if (decoder->input_read_func(decoder->input_data, buffer, length) == length) {
         return true;
     } else {
+        decoder->eof_found = true;
         ok_jpg_error(decoder->jpg, "Read error: error calling input function.");
         return false;
     }
@@ -203,6 +205,7 @@ static bool ok_seek(ok_jpg_decoder *decoder, long length) {
         if (decoder->input_seek_func(decoder->input_data, length)) {
             return true;
         } else {
+            decoder->eof_found = true;
             ok_jpg_error(decoder->jpg, "Seek error: error calling input function.");
             return false;
         }
@@ -853,7 +856,7 @@ static void ok_jpg_idct_16x16(const int16_t * const input, uint8_t *output) {
 
 #define OK_JPG_BLOCK_EXTRA_SPACE 15
 
-static inline bool ok_jpg_decode_block(ok_jpg_decoder *decoder, ok_jpg_component *c,
+static inline void ok_jpg_decode_block(ok_jpg_decoder *decoder, ok_jpg_component *c,
                                        int16_t *block) {
     memset(block, 0, 8 * 8 * sizeof(*block));
 
@@ -905,10 +908,9 @@ static inline bool ok_jpg_decode_block(ok_jpg_decoder *decoder, ok_jpg_component
             }
         }
     }
-    return true;
 }
 
-static bool ok_jpg_decode_block_progressive(ok_jpg_decoder *decoder, ok_jpg_component *c,
+static void ok_jpg_decode_block_progressive(ok_jpg_decoder *decoder, ok_jpg_component *c,
                                             int16_t *block) {
     int k = decoder->scan_start;
     const int k_end = decoder->scan_end;
@@ -931,7 +933,7 @@ static bool ok_jpg_decode_block_progressive(ok_jpg_decoder *decoder, ok_jpg_comp
     // Decode AC coefficients - Figures F.13, F.14, and G.2
     if (c->eob_run > 0) {
         c->eob_run--;
-        return true;
+        return;
     }
     ok_jpg_huffman_table *ac = decoder->ac_huffman_tables + c->Ta;
     while (k <= k_end) {
@@ -975,7 +977,6 @@ static bool ok_jpg_decode_block_progressive(ok_jpg_decoder *decoder, ok_jpg_comp
             }
         }
     }
-    return true;
 }
 
 static inline void ok_jpg_decode_block_subsequent_scan_rv(ok_jpg_decoder *decoder,
@@ -1000,7 +1001,7 @@ static inline void ok_jpg_decode_block_subsequent_scan_rv(ok_jpg_decoder *decode
     }
 }
 
-static bool ok_jpg_decode_block_subsequent_scan(ok_jpg_decoder *decoder, ok_jpg_component *c,
+static void ok_jpg_decode_block_subsequent_scan(ok_jpg_decoder *decoder, ok_jpg_component *c,
                                                 int16_t *block) {
     int k = decoder->scan_start;
     const int k_end = decoder->scan_end;
@@ -1013,7 +1014,7 @@ static bool ok_jpg_decode_block_subsequent_scan(ok_jpg_decoder *decoder, ok_jpg_
             block[0] |= lsb;
         }
         if (k_end == 0) {
-            return true;
+            return;
         } else {
             k = 1;
         }
@@ -1053,7 +1054,6 @@ static bool ok_jpg_decode_block_subsequent_scan(ok_jpg_decoder *decoder, ok_jpg_
         }
         k++;
     }
-    return true;
 }
 
 static inline void ok_jpg_dequantize(ok_jpg_decoder *decoder, ok_jpg_component *c, int16_t *block) {
@@ -1111,7 +1111,7 @@ static bool ok_jpg_decode_scan(ok_jpg_decoder *decoder) {
         decoder->restart_intervals_remaining++;
     }
     if (decoder->progressive) {
-        bool (*decode_function)(ok_jpg_decoder *decoder, ok_jpg_component *c, int16_t *block);
+        void (*decode_function)(ok_jpg_decoder *decoder, ok_jpg_component *c, int16_t *block);
         if (decoder->scan_prev_scale > 0) {
             decode_function = ok_jpg_decode_block_subsequent_scan;
         } else {
@@ -1124,10 +1124,11 @@ static bool ok_jpg_decode_scan(ok_jpg_decoder *decoder) {
                 int16_t *block = c->blocks + (c->next_block * 64);
                 for (int data_unit_x = 0; data_unit_x < c->blocks_h; data_unit_x++) {
                     ok_jpg_decode_restart_if_needed(decoder);
-                    if (!decode_function(decoder, c, block)) {
-                        return false;
-                    }
+                    decode_function(decoder, c, block);
                     block += 64;
+                }
+                if (decoder->eof_found) {
+                    return false;
                 }
                 c->next_block += (size_t)(c->H * decoder->data_units_x);
             }
@@ -1144,15 +1145,16 @@ static bool ok_jpg_decode_scan(ok_jpg_decoder *decoder) {
                         size_t block_index = c->next_block;
                         for (int y = 0; y < c->V; y++) {
                             for (int x = 0; x < c->H; x++) {
-                                if (!decode_function(decoder, c, c->blocks + (block_index * 64))) {
-                                    return false;
-                                }
+                                decode_function(decoder, c, c->blocks + (block_index * 64));
                                 block_index++;
                             }
                             block_index += (size_t)(c->H * (decoder->data_units_x - 1));
                         }
                         c->next_block += c->H;
                     }
+                }
+                if (decoder->eof_found) {
+                    return false;
                 }
                 for (int i = 0; i < decoder->num_scan_components; i++) {
                     ok_jpg_component *c = decoder->components + decoder->scan_components[i];
@@ -1171,9 +1173,7 @@ static bool ok_jpg_decode_scan(ok_jpg_decoder *decoder) {
                     for (int y = 0; y < c->V; y++) {
                         int offset_x = 0;
                         for (int x = 0; x < c->H; x++) {
-                            if (!ok_jpg_decode_block(decoder, c, block)) {
-                                return false;
-                            }
+                            ok_jpg_decode_block(decoder, c, block);
                             ok_jpg_dequantize(decoder, c, block);
                             c->idct(block, c->output + offset_x + offset_y);
                             offset_x += 8;
@@ -1182,6 +1182,9 @@ static bool ok_jpg_decode_scan(ok_jpg_decoder *decoder) {
                     }
                 }
                 ok_jpg_convert_data_unit(decoder, data_unit_x, data_unit_y);
+            }
+            if (decoder->eof_found) {
+                return false;
             }
         }
     }
