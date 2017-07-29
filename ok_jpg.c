@@ -978,6 +978,28 @@ static bool ok_jpg_decode_block_progressive(ok_jpg_decoder *decoder, ok_jpg_comp
     return true;
 }
 
+static inline void ok_jpg_decode_block_subsequent_scan_rv(ok_jpg_decoder *decoder,
+                                                          ok_jpg_component *c,
+                                                          ok_jpg_huffman_table *ac,
+                                                          int *r, int16_t *v) {
+    const int16_t lsb = (int16_t)(1 << decoder->scan_scale);
+    uint8_t rs = ok_jpg_huffman_decode(decoder, ac);
+    int s = rs & 0x0f;
+    *r = rs >> 4;
+    if (s == 0) {
+        if (*r != 0x0f) {
+            if (*r > 0) {
+                int next_bits = ok_jpg_load_next_bits(decoder, *r);
+                c->eob_run = (1 << *r) + next_bits - 1;
+            }
+            *r = 64;
+        }
+    } else {
+        int sign = ok_jpg_load_next_bits(decoder, 1);
+        *v = sign ? lsb : -lsb;
+    }
+}
+
 static bool ok_jpg_decode_block_subsequent_scan(ok_jpg_decoder *decoder, ok_jpg_component *c,
                                                 int16_t *block) {
     int k = decoder->scan_start;
@@ -990,36 +1012,24 @@ static bool ok_jpg_decode_block_subsequent_scan(ok_jpg_decoder *decoder, ok_jpg_
         if (correction) {
             block[0] |= lsb;
         }
-        k++;
+        if (k_end == 0) {
+            return true;
+        } else {
+            k = 1;
+        }
     }
 
     // Decode AC coefficients - Section G.1.2.3
     ok_jpg_huffman_table *ac = decoder->ac_huffman_tables + c->Ta;
-    int r = -1;
+    int r;
     int16_t v = 0;
     if (c->eob_run > 0) {
         c->eob_run--;
         r = 64;
+    } else {
+        ok_jpg_decode_block_subsequent_scan_rv(decoder, c, ac, &r, &v);
     }
     while (k <= k_end) {
-        if (r < 0) {
-            uint8_t rs = ok_jpg_huffman_decode(decoder, ac);
-            int s = rs & 0x0f;
-            r = rs >> 4;
-            if (s == 0) {
-                if (r != 0x0f) {
-                    if (r > 0) {
-                        int next_bits = ok_jpg_load_next_bits(decoder, r);
-                        c->eob_run = (1 << r) + next_bits - 1;
-                    }
-                    r = 64;
-                }
-            } else {
-                int sign = ok_jpg_load_next_bits(decoder, 1);
-                v = sign ? lsb : -lsb;
-            }
-        }
-
         int16_t *coeff = block + k;
         if (*coeff != 0) {
             int correction = ok_jpg_load_next_bits(decoder, 1);
@@ -1030,11 +1040,15 @@ static bool ok_jpg_decode_block_subsequent_scan(ok_jpg_decoder *decoder, ok_jpg_
                     *coeff += lsb;
                 }
             }
-        } else {
-            if (r == 0 && v != 0) {
+        } else if (r == 0) {
+            if (v != 0) {
                 *coeff = v;
                 v = 0;
             }
+            if (k < k_end) {
+                ok_jpg_decode_block_subsequent_scan_rv(decoder, c, ac, &r, &v);
+            }
+        } else {
             r--;
         }
         k++;
