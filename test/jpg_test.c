@@ -51,7 +51,7 @@ static const char *filenames[] = {
     "2004", // Color, no upsampling, successive approximation
     "einstein", // Color, no upsampling, no successive approximation
     "gort", // Grayscale, no upsampling, no successive approximation
-    // TODO: Find progressive, color, upsampled image with restart markers
+    "ghost", // Color, 2x2 upsampling, successive approximation, with restart markers
 
     // Various sizes (2x2 upsampling)
     "jpg-size-1x1",
