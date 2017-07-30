@@ -494,60 +494,55 @@ static inline void ok_jpg_convert_YCbCr_to_RGB(uint8_t Y, uint8_t Cb, uint8_t Cr
 }
 
 // Convert from grayscale to RGBA
-static void ok_jpg_convert_data_unit_grayscale(const uint8_t *y,
-                                               uint8_t *r, uint8_t *g, uint8_t *b, uint8_t *a,
+static void ok_jpg_convert_data_unit_grayscale(const uint8_t *y, uint8_t *output,
                                                const int x_inc, const int y_inc,
                                                const int max_width, const int max_height) {
-    const int in_row_offfset = C_WIDTH - max_width;
-    const int out_row_offset = y_inc - x_inc * max_width;
-
     for (int v = 0; v < max_height; v++) {
-        const uint8_t *y_end = y + max_width;
-        while (y < y_end) {
-            *r = *g = *b = *y;
-            *a = 0xff;
-            r += x_inc;
-            g += x_inc;
-            b += x_inc;
-            a += x_inc;
-            y++;
+        uint8_t *out = output;
+        for (int x = 0; x < max_width; x++) {
+            out[0] = y[x];
+            out[1] = y[x];
+            out[2] = y[x];
+            out[3] = 0xff;
+            out += x_inc;
         }
-        y += in_row_offfset;
-        r += out_row_offset;
-        g += out_row_offset;
-        b += out_row_offset;
-        a += out_row_offset;
+        y += C_WIDTH;
+        output += y_inc;
     }
 }
 
 // Convert from YCbCr to RGBA
 static void ok_jpg_convert_data_unit_color(const uint8_t *y, const uint8_t *cb, const uint8_t *cr,
-                                           uint8_t *r, uint8_t *g, uint8_t *b, uint8_t *a,
+                                           uint8_t *output, bool rgba,
                                            const int x_inc, const int y_inc,
                                            const int max_width, const int max_height) {
-    const int in_row_offfset = C_WIDTH - max_width;
-    const int out_row_offset = y_inc - x_inc * max_width;
-
-    for (int v = 0; v < max_height; v++) {
-        const uint8_t *y_end = y + max_width;
-        while (y < y_end) {
-            ok_jpg_convert_YCbCr_to_RGB(*y, *cb, *cr, r, g, b);
-            *a = 0xff;
-            r += x_inc;
-            g += x_inc;
-            b += x_inc;
-            a += x_inc;
-            y++;
-            cb++;
-            cr++;
+    if (rgba) {
+        for (int v = 0; v < max_height; v++) {
+            uint8_t *out = output;
+            for (int x = 0; x < max_width; x++) {
+                ok_jpg_convert_YCbCr_to_RGB(y[x], cb[x], cr[x], out, out + 1, out + 2);
+                out[3] = 0xff;
+                out += x_inc;
+            }
+            y += C_WIDTH;
+            cb += C_WIDTH;
+            cr += C_WIDTH;
+            output += y_inc;
         }
-        y += in_row_offfset;
-        cb += in_row_offfset;
-        cr += in_row_offfset;
-        r += out_row_offset;
-        g += out_row_offset;
-        b += out_row_offset;
-        a += out_row_offset;
+    }
+    else { // bgra
+        for (int v = 0; v < max_height; v++) {
+            uint8_t *out = output;
+            for (int x = 0; x < max_width; x++) {
+                ok_jpg_convert_YCbCr_to_RGB(y[x], cb[x], cr[x], out + 2, out + 1, out);
+                out[3] = 0xff;
+                out += x_inc;
+            }
+            y += C_WIDTH;
+            cb += C_WIDTH;
+            cr += C_WIDTH;
+            output += y_inc;
+        }
     }
 }
 
@@ -585,15 +580,10 @@ static void ok_jpg_convert_data_unit(ok_jpg_decoder *decoder, int data_unit_x, i
     }
 
     if (decoder->num_components == 1) {
-        ok_jpg_convert_data_unit_grayscale(c->output, data, data + 1, data + 2, data + 3,
-                                           x_inc, y_inc, width, height);
-    } else if (decoder->color_rgba) {
-        ok_jpg_convert_data_unit_color(c->output, (c + 1)->output, (c + 2)->output,
-                                       data, data + 1, data + 2, data + 3,
-                                       x_inc, y_inc, width, height);
+        ok_jpg_convert_data_unit_grayscale(c->output, data, x_inc, y_inc, width, height);
     } else {
         ok_jpg_convert_data_unit_color(c->output, (c + 1)->output, (c + 2)->output,
-                                       data + 2, data + 1, data, data + 3,
+                                       data, decoder->color_rgba,
                                        x_inc, y_inc, width, height);
     }
 }
