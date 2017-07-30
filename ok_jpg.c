@@ -600,17 +600,115 @@ static void ok_jpg_convert_data_unit(ok_jpg_decoder *decoder, int data_unit_x, i
 
 // MARK: IDCT
 
+#define ok_jpg_idct_1d_8() do { \
+    /* Constants scaled by (1 << 12). */ \
+    static const int c1 = 5681; /* cos(1*pi/16) * sqrt(2) */ \
+    static const int c2 = 5352; /* cos(2*pi/16) * sqrt(2) */ \
+    static const int c3 = 4816; /* cos(3*pi/16) * sqrt(2) */ \
+    static const int c5 = 3218; /* cos(5*pi/16) * sqrt(2) */ \
+    static const int c6 = 2217; /* cos(6*pi/16) * sqrt(2) */ \
+    static const int c7 = 1130; /* cos(7*pi/16) * sqrt(2) */ \
+    \
+    /* Even part: 3 mults */ \
+    t0 = (v0 << 12) + (1 << (out_shift - 1)); \
+    t1 = (v4 << 12); \
+    p0 = p3 = t0 + t1; \
+    p1 = p2 = t0 - t1; \
+    \
+    t0 = (v2 + v6) * c6; \
+    t1 = t0 + v2 * (c2 - c6); \
+    p0 += t1; \
+    p3 -= t1; \
+    \
+    t1 = t0 - v6 * (c2 + c6); \
+    p1 += t1; \
+    p2 -= t1; \
+    \
+    /* Odd part: 9 mults */ \
+    t1 = (v1 + v3 + v5 + v7) * c3; \
+    t0 = t1 + (v1 + v5) * (-c3 + c5); \
+    t1 = t1 + (v3 + v7) * (-c3 - c5); \
+    \
+    t2 = (v1 + v7) * (-c3 + c7); \
+    q0 = t0 + t2 + v1 * (c1 + c3 - c5 - c7); \
+    q3 = t1 + t2 + v7 * (-c1 + c3 + c5 - c7); \
+    \
+    t2 = (v3 + v5) * (-c3 - c1); \
+    q1 = t1 + t2 + v3 * (c1 + c3 + c5 - c7); \
+    q2 = t0 + t2 + v5 * (c1 + c3 - c5 + c7); \
+} while (0)
+
+#define ok_jpg_idct_1d_16() do { \
+    /* Constants scaled by (1 << 12). */ \
+    static const int c1 = 5765;  /* cos( 1*pi/32) * sqrt(2) */ \
+    static const int c2 = 5681;  /* cos( 2*pi/32) * sqrt(2) */ \
+    static const int c3 = 5543;  /* cos( 3*pi/32) * sqrt(2) */ \
+    static const int c4 = 5352;  /* cos( 4*pi/32) * sqrt(2) */ \
+    static const int c5 = 5109;  /* cos( 5*pi/32) * sqrt(2) */ \
+    static const int c6 = 4816;  /* cos( 6*pi/32) * sqrt(2) */ \
+    static const int c7 = 4478;  /* cos( 7*pi/32) * sqrt(2) */ \
+    static const int c9 = 3675;  /* cos( 9*pi/32) * sqrt(2) */ \
+    static const int c10 = 3218; /* cos(10*pi/32) * sqrt(2) */ \
+    static const int c11 = 2731; /* cos(11*pi/32) * sqrt(2) */ \
+    static const int c12 = 2217; /* cos(12*pi/32) * sqrt(2) */ \
+    static const int c13 = 1682; /* cos(13*pi/32) * sqrt(2) */ \
+    static const int c14 = 1130; /* cos(14*pi/32) * sqrt(2) */ \
+    static const int c15 = 568;  /* cos(15*pi/32) * sqrt(2) */ \
+    \
+    /* Even part: 8 mults */ \
+    t1 = v4 * c4; \
+    p0 = p7 = t0 + t1; \
+    p3 = p4 = t0 - t1; \
+    \
+    t1 = v4 * c12; \
+    p1 = p6 = t0 + t1; \
+    p2 = p5 = t0 - t1; \
+    \
+    t0 = (v2 + v6) * c6; \
+    t1 = t0 + v2 * (c2 - c6); \
+    p0 += t1; \
+    p7 -= t1; \
+    \
+    t1 = t0 + v6 * (-c6 - c14); \
+    p1 += t1; \
+    p6 -= t1; \
+    \
+    t0 = (v2 - v6) * c10; \
+    t1 = t0 + v6 * (c10 - c2); \
+    p2 += t1; \
+    p5 -= t1; \
+    \
+    t1 = t0 + v2 * (c14 - c10); \
+    p3 += t1; \
+    p4 -= t1; \
+    \
+    /* Odd part: 21 mults */ \
+    t1 = (v1 + v3 + v5 - v7) * c9; \
+    t0 = t1 + (v1 + v5) * (c15 - c9); \
+    t1 = t1 + (-v3 + v7) * (c1 + c9); \
+    \
+    t2 = (v1 - v7) * (c11 - c9); \
+    q1 = t0 + t2 + v1 * (c3 + c9 - c11 - c15); \
+    q5 = t1 + t2 + v7 * (-c1 - c9 + c11 + c13); \
+    \
+    t2 = (-v3 - v5) * (c13 + c9); \
+    q4 = t1 + t2 + v3 * (c1 - c5 + c9 + c13); \
+    q7 = t0 + t2 + v5 * (c9 + c11 + c13 - c15); \
+    \
+    t0 = (v1 - v3 - v5 + v7) * c7; \
+    t1 = (v3 - v7) * (c3 + c7); \
+    t2 = (v5 - v7) * (c5 + c7); \
+    q0 = t0 + t1 + t2 + v1 * (c1 - c7) + v7 * (c5 + c7 + c3 + c7); \
+    q2 = t0 + t1 + v1 * (c5 - c7) + v3 * (c15 - c3); \
+    q3 = t0 + v3 * (-c11 + c7) + v5 * (-c3 + c7) + v7 * (c15 - c7); \
+    q6 = t0 + t2 + v1 * (c13 - c7) + v5 * (c1 - c5); \
+} while (0)
+
 // Output is scaled by (1 << 12) * sqrt(2) / (1 << out_shift)
-static inline void ok_jpg_idct_1d_8(int *out, const int out_shift,
-                                    const int v0, const int v1, const int v2, const int v3,
-                                    const int v4, const int v5, const int v6, const int v7) {
-    // Constants scaled by (1 << 12).
-    static const int c1 = 5681; // cos(1*pi/16) * sqrt(2)
-    static const int c2 = 5352; // cos(2*pi/16) * sqrt(2)
-    static const int c3 = 4816; // cos(3*pi/16) * sqrt(2)
-    static const int c5 = 3218; // cos(5*pi/16) * sqrt(2)
-    static const int c6 = 2217; // cos(6*pi/16) * sqrt(2)
-    static const int c7 = 1130; // cos(7*pi/16) * sqrt(2)
+static void ok_jpg_idct_1d_8_h(int *out,
+                               const int v0, const int v1, const int v2, const int v3,
+                               const int v4, const int v5, const int v6, const int v7) {
+    static const int out_shift = 8;
 
     int t0, t1, t2;
     int p0, p1, p2, p3;
@@ -621,8 +719,7 @@ static inline void ok_jpg_idct_1d_8(int *out, const int out_shift,
     p1 = p2 = t0 - t1;
 
     // Quick check to avoid mults
-    if (v1 == 0 && v2 == 0 && v3 == 0 &&
-        v5 == 0 && v6 == 0 && v7 == 0) {
+    if (v1 == 0 && v2 == 0 && v3 == 0 && v5 == 0 && v6 == 0 && v7 == 0) {
         p0 >>= out_shift;
         p1 >>= out_shift;
         out[0] = p0;
@@ -634,35 +731,10 @@ static inline void ok_jpg_idct_1d_8(int *out, const int out_shift,
         out[6] = p1;
         out[7] = p0;
     } else {
-        // Even part: 3 mults
-        t0 = (v0 << 12) + (1 << (out_shift - 1));
-        t1 = (v4 << 12);
-        p0 = p3 = t0 + t1;
-        p1 = p2 = t0 - t1;
+        int q0, q1, q2, q3;
 
-        t0 = (v2 + v6) * c6;
-        t1 = t0 + v2 * (c2 - c6);
-        p0 += t1;
-        p3 -= t1;
+        ok_jpg_idct_1d_8();
 
-        t1 = t0 - v6 * (c2 + c6);
-        p1 += t1;
-        p2 -= t1;
-
-        // Odd part: 9 mults
-        t1 = (v1 + v3 + v5 + v7) * c3;
-        t0 = t1 + (v1 + v5) * (-c3 + c5);
-        t1 = t1 + (v3 + v7) * (-c3 - c5);
-
-        t2 = (v1 + v7) * (-c3 + c7);
-        const int q0 = t0 + t2 + v1 * (c1 + c3 - c5 - c7);
-        const int q3 = t1 + t2 + v7 * (-c1 + c3 + c5 - c7);
-
-        t2 = (v3 + v5) * (-c3 - c1);
-        const int q1 = t1 + t2 + v3 * (c1 + c3 + c5 - c7);
-        const int q2 = t0 + t2 + v5 * (c1 + c3 - c5 + c7);
-
-        // Output
         out[0] = (p0 + q0) >> out_shift;
         out[1] = (p1 + q1) >> out_shift;
         out[2] = (p2 + q2) >> out_shift;
@@ -675,87 +747,69 @@ static inline void ok_jpg_idct_1d_8(int *out, const int out_shift,
 }
 
 // Output is scaled by (1 << 12) * sqrt(2) / (1 << out_shift)
-static inline void ok_jpg_idct_1d_16(int *out, const int out_shift,
-                                     const int v0, const int v1, const int v2, const int v3,
-                                     const int v4, const int v5, const int v6, const int v7) {
-    // Constants scaled by (1 << 12).
-    static const int c1 = 5765;  // cos( 1*pi/32) * sqrt(2)
-    static const int c2 = 5681;  // cos( 2*pi/32) * sqrt(2)
-    static const int c3 = 5543;  // cos( 3*pi/32) * sqrt(2)
-    static const int c4 = 5352;  // cos( 4*pi/32) * sqrt(2)
-    static const int c5 = 5109;  // cos( 5*pi/32) * sqrt(2)
-    static const int c6 = 4816;  // cos( 6*pi/32) * sqrt(2)
-    static const int c7 = 4478;  // cos( 7*pi/32) * sqrt(2)
-    static const int c9 = 3675;  // cos( 9*pi/32) * sqrt(2)
-    static const int c10 = 3218; // cos(10*pi/32) * sqrt(2)
-    static const int c11 = 2731; // cos(11*pi/32) * sqrt(2)
-    static const int c12 = 2217; // cos(12*pi/32) * sqrt(2)
-    static const int c13 = 1682; // cos(13*pi/32) * sqrt(2)
-    static const int c14 = 1130; // cos(14*pi/32) * sqrt(2)
-    static const int c15 = 568;  // cos(15*pi/32) * sqrt(2)
+static inline void ok_jpg_idct_1d_8_w(uint8_t *out,
+                                      const int v0, const int v1, const int v2, const int v3,
+                                      const int v4, const int v5, const int v6, const int v7) {
+    static const int out_shift = 19;
 
     int t0, t1, t2;
-    int p0, p1, p2, p3, p4, p5, p6, p7;
+    int p0, p1, p2, p3;
+
+    t0 = (v0 << 12) + (1 << (out_shift - 1));
+    t1 = (v4 << 12);
+    p0 = p3 = t0 + t1;
+    p1 = p2 = t0 - t1;
+
+    // Quick check to avoid mults
+    if (v1 == 0 && v2 == 0 && v3 == 0 && v5 == 0 && v6 == 0 && v7 == 0) {
+        uint8_t a0 = ok_jpg_clip_uint8((p0 >> out_shift) + 128);
+        uint8_t a1 = ok_jpg_clip_uint8((p1 >> out_shift) + 128);
+        out[0] = a0;
+        out[1] = a1;
+        out[2] = a1;
+        out[3] = a0;
+        out[4] = a0;
+        out[5] = a1;
+        out[6] = a1;
+        out[7] = a0;
+    } else {
+        int q0, q1, q2, q3;
+
+        ok_jpg_idct_1d_8();
+
+        out[0] = ok_jpg_clip_uint8(((p0 + q0) >> out_shift) + 128);
+        out[1] = ok_jpg_clip_uint8(((p1 + q1) >> out_shift) + 128);
+        out[2] = ok_jpg_clip_uint8(((p2 + q2) >> out_shift) + 128);
+        out[3] = ok_jpg_clip_uint8(((p3 + q3) >> out_shift) + 128);
+        out[4] = ok_jpg_clip_uint8(((p3 - q3) >> out_shift) + 128);
+        out[5] = ok_jpg_clip_uint8(((p2 - q2) >> out_shift) + 128);
+        out[6] = ok_jpg_clip_uint8(((p1 - q1) >> out_shift) + 128);
+        out[7] = ok_jpg_clip_uint8(((p0 - q0) >> out_shift) + 128);
+    }
+}
+
+// Output is scaled by (1 << 12) * sqrt(2) / (1 << out_shift)
+static void ok_jpg_idct_1d_16_h(int *out,
+                                const int v0, const int v1, const int v2, const int v3,
+                                const int v4, const int v5, const int v6, const int v7) {
+    static const int out_shift = 8;
+
+    int t0, t1, t2;
 
     t0 = (v0 << 12) + (1 << (out_shift - 1));
 
     // Quick check to avoid mults
-    if (v1 == 0 && v2 == 0 && v3 == 0 && v4 == 0 &&
-        v5 == 0 && v6 == 0 && v7 == 0) {
+    if (v1 == 0 && v2 == 0 && v3 == 0 && v4 == 0 && v5 == 0 && v6 == 0 && v7 == 0) {
         t0 >>= out_shift;
         for (int i = 0; i < 16; i++) {
             *out++ = t0;
         }
     } else {
-        // Even part: 8 mults
-        t1 = v4 * c4;
-        p0 = p7 = t0 + t1;
-        p3 = p4 = t0 - t1;
+        int p0, p1, p2, p3, p4, p5, p6, p7;
+        int q0, q1, q2, q3, q4, q5, q6, q7;
 
-        t1 = v4 * c12;
-        p1 = p6 = t0 + t1;
-        p2 = p5 = t0 - t1;
+        ok_jpg_idct_1d_16();
 
-        t0 = (v2 + v6) * c6;
-        t1 = t0 + v2 * (c2 - c6);
-        p0 += t1;
-        p7 -= t1;
-
-        t1 = t0 + v6 * (-c6 - c14);
-        p1 += t1;
-        p6 -= t1;
-
-        t0 = (v2 - v6) * c10;
-        t1 = t0 + v6 * (c10 - c2);
-        p2 += t1;
-        p5 -= t1;
-
-        t1 = t0 + v2 * (c14 - c10);
-        p3 += t1;
-        p4 -= t1;
-
-        // Odd part: 21 mults
-        t1 = (v1 + v3 + v5 - v7) * c9;
-        t0 = t1 + (v1 + v5) * (c15 - c9);
-        t1 = t1 + (-v3 + v7) * (c1 + c9);
-
-        t2 = (v1 - v7) * (c11 - c9);
-        const int q1 = t0 + t2 + v1 * (c3 + c9 - c11 - c15);
-        const int q5 = t1 + t2 + v7 * (-c1 - c9 + c11 + c13);
-
-        t2 = (-v3 - v5) * (c13 + c9);
-        const int q4 = t1 + t2 + v3 * (c1 - c5 + c9 + c13);
-        const int q7 = t0 + t2 + v5 * (c9 + c11 + c13 - c15);
-
-        t0 = (v1 - v3 - v5 + v7) * c7;
-        t1 = (v3 - v7) * (c3 + c7);
-        t2 = (v5 - v7) * (c5 + c7);
-        const int q0 = t0 + t1 + t2 + v1 * (c1 - c7) + v7 * (c5 + c7 + c3 + c7);
-        const int q2 = t0 + t1 + v1 * (c5 - c7) + v3 * (c15 - c3);
-        const int q3 = t0 + v3 * (-c11 + c7) + v5 * (-c3 + c7) + v7 * (c15 - c7);
-        const int q6 = t0 + t2 + v1 * (c13 - c7) + v5 * (c1 - c5);
-
-        // Output
         out[0]  = (p0 + q0) >> out_shift;
         out[1]  = (p1 + q1) >> out_shift;
         out[2]  = (p2 + q2) >> out_shift;
@@ -775,6 +829,45 @@ static inline void ok_jpg_idct_1d_16(int *out, const int out_shift,
     }
 }
 
+// Output is scaled by (1 << 12) * sqrt(2) / (1 << out_shift)
+static inline void ok_jpg_idct_1d_16_w(uint8_t *out,
+                                       const int v0, const int v1, const int v2, const int v3,
+                                       const int v4, const int v5, const int v6, const int v7) {
+    static const int out_shift = 19;
+
+    int t0, t1, t2;
+
+    t0 = (v0 << 12) + (1 << (out_shift - 1));
+
+    // Quick check to avoid mults
+    if (v1 == 0 && v2 == 0 && v3 == 0 && v4 == 0 && v5 == 0 && v6 == 0 && v7 == 0) {
+        uint8_t a = ok_jpg_clip_uint8((t0 >> out_shift) + 128);
+        memset(out, a, 16);
+    } else {
+        int p0, p1, p2, p3, p4, p5, p6, p7;
+        int q0, q1, q2, q3, q4, q5, q6, q7;
+
+        ok_jpg_idct_1d_16();
+
+        out[0]  = ok_jpg_clip_uint8(((p0 + q0) >> out_shift) + 128);
+        out[1]  = ok_jpg_clip_uint8(((p1 + q1) >> out_shift) + 128);
+        out[2]  = ok_jpg_clip_uint8(((p2 + q2) >> out_shift) + 128);
+        out[3]  = ok_jpg_clip_uint8(((p3 + q3) >> out_shift) + 128);
+        out[4]  = ok_jpg_clip_uint8(((p4 + q4) >> out_shift) + 128);
+        out[5]  = ok_jpg_clip_uint8(((p5 + q5) >> out_shift) + 128);
+        out[6]  = ok_jpg_clip_uint8(((p6 + q6) >> out_shift) + 128);
+        out[7]  = ok_jpg_clip_uint8(((p7 + q7) >> out_shift) + 128);
+        out[8]  = ok_jpg_clip_uint8(((p7 - q7) >> out_shift) + 128);
+        out[9]  = ok_jpg_clip_uint8(((p6 - q6) >> out_shift) + 128);
+        out[10] = ok_jpg_clip_uint8(((p5 - q5) >> out_shift) + 128);
+        out[11] = ok_jpg_clip_uint8(((p4 - q4) >> out_shift) + 128);
+        out[12] = ok_jpg_clip_uint8(((p3 - q3) >> out_shift) + 128);
+        out[13] = ok_jpg_clip_uint8(((p2 - q2) >> out_shift) + 128);
+        out[14] = ok_jpg_clip_uint8(((p1 - q1) >> out_shift) + 128);
+        out[15] = ok_jpg_clip_uint8(((p0 - q0) >> out_shift) + 128);
+    }
+}
+
 // From JPEG spec, "A.3.3"
 // IDCT a 8x8 block in a array of size (C_WIDTH x C_WIDTH)
 // w and h must be either 8 or 16
@@ -790,66 +883,59 @@ static inline void ok_jpg_idct_1d_16(int *out, const int out_shift,
 // Shift-right by 8 so output is scaled ((1 << 4) * sqrt(2)).
 // Input is zig-zagged
 #define ok_jpg_idct_1d_h(idct_func, in, out, s) \
-	do { \
-		idct_func(out + 0 * s, 8, in[0],  in[2] , in[3],  in[9],  in[10], in[20], in[21], in[35]); \
-		idct_func(out + 1 * s, 8, in[1],  in[4] , in[8],  in[11], in[19], in[22], in[34], in[36]); \
-		idct_func(out + 2 * s, 8, in[5],  in[7] , in[12], in[18], in[23], in[33], in[37], in[48]); \
-		idct_func(out + 3 * s, 8, in[6],  in[13], in[17], in[24], in[32], in[38], in[47], in[49]); \
-		idct_func(out + 4 * s, 8, in[14], in[16], in[25], in[31], in[39], in[46], in[50], in[57]); \
-		idct_func(out + 5 * s, 8, in[15], in[26], in[30], in[40], in[45], in[51], in[56], in[58]); \
-		idct_func(out + 6 * s, 8, in[27], in[29], in[41], in[44], in[52], in[55], in[59], in[62]); \
-		idct_func(out + 7 * s, 8, in[28], in[42], in[43], in[53], in[54], in[60], in[61], in[63]); \
-	} while (0)
+    do { \
+        idct_func(out + 0 * s, in[0],  in[2] , in[3],  in[9],  in[10], in[20], in[21], in[35]); \
+        idct_func(out + 1 * s, in[1],  in[4] , in[8],  in[11], in[19], in[22], in[34], in[36]); \
+        idct_func(out + 2 * s, in[5],  in[7] , in[12], in[18], in[23], in[33], in[37], in[48]); \
+        idct_func(out + 3 * s, in[6],  in[13], in[17], in[24], in[32], in[38], in[47], in[49]); \
+        idct_func(out + 4 * s, in[14], in[16], in[25], in[31], in[39], in[46], in[50], in[57]); \
+        idct_func(out + 5 * s, in[15], in[26], in[30], in[40], in[45], in[51], in[56], in[58]); \
+        idct_func(out + 6 * s, in[27], in[29], in[41], in[44], in[52], in[55], in[59], in[62]); \
+        idct_func(out + 7 * s, in[28], in[42], in[43], in[53], in[54], in[60], in[61], in[63]); \
+    } while (0)
 
 // Input is scaled by ((1 << 4) * sqrt(2)).
 // idct_1d scales output by ((1 << 12) * sqrt(2)), for a total output scale of (1 << 17).
 // Shift by 19 to get rid of the scale and to divide by 4 at the same time.
 // (Divide by 4 per the IDCT formula, JPEG spec section A.3.3)
-#define ok_jpg_idct_1d_w(idct_func, in, temp_row, output, s, w, h) \
-	do { \
-		const int *in2 = in; \
-		for (int y = 0; y < h; y++) { \
-			idct_func(temp_row, 19, \
+#define ok_jpg_idct_1d_w(idct_func, in, output, s, w, h) \
+    do { \
+        const int *in2 = in; \
+        for (int y = 0; y < h; y++) { \
+            idct_func(output, \
                       in2[0 * s], in2[1 * s], in2[2 * s], in2[3 * s], \
                       in2[4 * s], in2[5 * s], in2[6 * s], in2[7 * s]); \
-			for (int x = 0; x < w; x++) { \
-				output[x] = ok_jpg_clip_uint8(temp_row[x] + 128); \
-			} \
-			in2++; \
-			output += C_WIDTH; \
-		} \
-	} while (0)
+            in2++; \
+            output += C_WIDTH; \
+        } \
+    } while (0)
 
 // IDCT a 8x8 input block to 8x8 in an output of size (C_WIDTH x C_WIDTH)
 static void ok_jpg_idct_8x8(const int16_t * const input, uint8_t *output) {
-    int out[8 * 8];
-    int temp_row[8];
-    ok_jpg_idct_1d_h(ok_jpg_idct_1d_8, input, out, 8);
-    ok_jpg_idct_1d_w(ok_jpg_idct_1d_8, out, temp_row, output, 8, 8, 8);
+    int temp[8 * 8];
+    ok_jpg_idct_1d_h(ok_jpg_idct_1d_8_h, input, temp, 8);
+    ok_jpg_idct_1d_w(ok_jpg_idct_1d_8_w, temp, output, 8, 8, 8);
 }
 
 // IDCT a 8x8 block to 8x16 in an output of size (C_WIDTH x C_WIDTH)
 static void ok_jpg_idct_8x16(const int16_t * const input, uint8_t *output) {
-    int out[8 * 16];
-    int temp_row[8];
-    ok_jpg_idct_1d_h(ok_jpg_idct_1d_16, input, out, 16);
-    ok_jpg_idct_1d_w(ok_jpg_idct_1d_8, out, temp_row, output, 16, 8, 16);
+    int temp[8 * 16];
+    ok_jpg_idct_1d_h(ok_jpg_idct_1d_16_h, input, temp, 16);
+    ok_jpg_idct_1d_w(ok_jpg_idct_1d_8_w, temp, output, 16, 8, 16);
 }
 
 // IDCT a 8x8 block to 16x8 in an output of size (C_WIDTH x C_WIDTH)
 static void ok_jpg_idct_16x8(const int16_t * const input, uint8_t *output) {
-    int out[16 * 8];
-    int temp_row[16];
-    ok_jpg_idct_1d_h(ok_jpg_idct_1d_8, input, out, 16);
-    ok_jpg_idct_1d_w(ok_jpg_idct_1d_16, out, temp_row, output, 16, 16, 8);
+    int temp[16 * 8];
+    ok_jpg_idct_1d_h(ok_jpg_idct_1d_8_h, input, temp, 16);
+    ok_jpg_idct_1d_w(ok_jpg_idct_1d_16_w, temp, output, 16, 16, 8);
 }
 
 // IDCT a 8x8 block to 16x16 in an output of size (C_WIDTH x C_WIDTH)
 static void ok_jpg_idct_16x16(const int16_t * const input, uint8_t *output) {
-    int out[16 * 16];
-    int temp_row[16];
-    ok_jpg_idct_1d_h(ok_jpg_idct_1d_16, input, out, 16);
-    ok_jpg_idct_1d_w(ok_jpg_idct_1d_16, out, temp_row, output, 16, 16, 16);
+    int temp[16 * 16];
+    ok_jpg_idct_1d_h(ok_jpg_idct_1d_16_h, input, temp, 16);
+    ok_jpg_idct_1d_w(ok_jpg_idct_1d_16_w, temp, output, 16, 16, 16);
 }
 
 // MARK: Entropy decoding
