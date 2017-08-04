@@ -1024,7 +1024,6 @@ typedef enum {
     OK_INFLATER_STATE_READING_FIXED_DISTANCE,
     OK_INFLATER_STATE_DONE,
     OK_INFLATER_STATE_ERROR,
-    OK_INFLATER_NUM_STATES,
 } ok_inflater_state;
 
 #define VALUE_BITS 9
@@ -1749,31 +1748,9 @@ static bool ok_inflater_distance_tree(ok_inflater *inflater) {
     }
 }
 
-static bool ok_inflater_noop(ok_inflater *inflater) {
-    (void)inflater;
-    return false;
-}
-
-static bool (*OK_INFLATER_STATE_FUNCTIONS[OK_INFLATER_NUM_STATES])(ok_inflater *);
-
 // Public Inflater API
 
 ok_inflater *ok_inflater_init(bool nowrap) {
-    OK_INFLATER_STATE_FUNCTIONS[OK_INFLATER_STATE_READY_FOR_HEAD] = ok_inflater_zlib_header;
-    OK_INFLATER_STATE_FUNCTIONS[OK_INFLATER_STATE_READY_FOR_NEXT_BLOCK] = ok_inflater_next_block;
-    OK_INFLATER_STATE_FUNCTIONS[OK_INFLATER_STATE_READING_STORED_BLOCK_HEADER] = ok_inflater_stored_block_header;
-    OK_INFLATER_STATE_FUNCTIONS[OK_INFLATER_STATE_READING_STORED_BLOCK] = ok_inflater_stored_block;
-    OK_INFLATER_STATE_FUNCTIONS[OK_INFLATER_STATE_READING_DYNAMIC_BLOCK_HEADER] = ok_inflater_dynamic_block_header;
-    OK_INFLATER_STATE_FUNCTIONS[OK_INFLATER_STATE_READING_DYNAMIC_CODE_LENGTHS] = ok_inflater_dynamic_block_code_lengths;
-    OK_INFLATER_STATE_FUNCTIONS[OK_INFLATER_STATE_READING_DYNAMIC_LITERAL_TREE] = ok_inflater_literal_tree;
-    OK_INFLATER_STATE_FUNCTIONS[OK_INFLATER_STATE_READING_DYNAMIC_DISTANCE_TREE] = ok_inflater_distance_tree;
-    OK_INFLATER_STATE_FUNCTIONS[OK_INFLATER_STATE_READING_DYNAMIC_COMPRESSED_BLOCK] = ok_inflater_compressed_block;
-    OK_INFLATER_STATE_FUNCTIONS[OK_INFLATER_STATE_READING_FIXED_COMPRESSED_BLOCK] = ok_inflater_compressed_block;
-    OK_INFLATER_STATE_FUNCTIONS[OK_INFLATER_STATE_READING_DYNAMIC_DISTANCE] = ok_inflater_distance;
-    OK_INFLATER_STATE_FUNCTIONS[OK_INFLATER_STATE_READING_FIXED_DISTANCE] = ok_inflater_distance;
-    OK_INFLATER_STATE_FUNCTIONS[OK_INFLATER_STATE_DONE] = ok_inflater_noop;
-    OK_INFLATER_STATE_FUNCTIONS[OK_INFLATER_STATE_ERROR] = ok_inflater_noop;
-
     ok_inflater *inflater = calloc(1, sizeof(ok_inflater));
     if (inflater) {
         inflater->nowrap = nowrap;
@@ -1846,6 +1823,40 @@ void ok_inflater_set_input(ok_inflater *inflater, const uint8_t *buffer, size_t 
     }
 }
 
+static inline bool ok_inflater_process_state(ok_inflater *inflater) {
+    switch (inflater->state) {
+        case OK_INFLATER_STATE_READY_FOR_HEAD:
+            return ok_inflater_zlib_header(inflater);
+        case OK_INFLATER_STATE_READY_FOR_NEXT_BLOCK:
+            return ok_inflater_next_block(inflater);
+        case OK_INFLATER_STATE_READING_STORED_BLOCK_HEADER:
+            return ok_inflater_stored_block_header(inflater);
+        case OK_INFLATER_STATE_READING_STORED_BLOCK:
+            return ok_inflater_stored_block(inflater);
+        case OK_INFLATER_STATE_READING_DYNAMIC_BLOCK_HEADER:
+            return ok_inflater_dynamic_block_header(inflater);
+        case OK_INFLATER_STATE_READING_DYNAMIC_CODE_LENGTHS:
+            return ok_inflater_dynamic_block_code_lengths(inflater);
+        case OK_INFLATER_STATE_READING_DYNAMIC_LITERAL_TREE:
+            return ok_inflater_literal_tree(inflater);
+        case OK_INFLATER_STATE_READING_DYNAMIC_DISTANCE_TREE:
+            return ok_inflater_distance_tree(inflater);
+        case OK_INFLATER_STATE_READING_DYNAMIC_COMPRESSED_BLOCK:
+            return ok_inflater_compressed_block(inflater);
+        case OK_INFLATER_STATE_READING_FIXED_COMPRESSED_BLOCK:
+            return ok_inflater_compressed_block(inflater);
+        case OK_INFLATER_STATE_READING_DYNAMIC_DISTANCE:
+            return ok_inflater_distance(inflater);
+        case OK_INFLATER_STATE_READING_FIXED_DISTANCE:
+            return ok_inflater_distance(inflater);
+        case OK_INFLATER_STATE_DONE:
+            return false;
+        case OK_INFLATER_STATE_ERROR:
+            return false;
+    }
+    return false;
+}
+
 size_t ok_inflater_inflate(ok_inflater *inflater, uint8_t *dst, size_t dst_len) {
     if (!inflater || inflater->state == OK_INFLATER_STATE_ERROR) {
         return OK_SIZE_MAX;
@@ -1859,7 +1870,7 @@ size_t ok_inflater_inflate(ok_inflater *inflater, uint8_t *dst, size_t dst_len) 
     // 4. Done inflating, or
     // 5. An error occured.
     while (ok_inflater_can_flush_total(inflater) < dst_len &&
-           (*OK_INFLATER_STATE_FUNCTIONS[inflater->state])(inflater)) {
+           ok_inflater_process_state(inflater)) {
     }
     return ok_inflater_flush(inflater, dst, dst_len);
 }
