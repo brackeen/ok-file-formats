@@ -281,21 +281,25 @@ static bool ok_png_read_palette(ok_png_decoder *decoder, uint32_t chunk_length) 
     const bool dst_is_bgr = (decoder->decode_flags & OK_PNG_COLOR_FORMAT_BGRA) != 0;
     const bool should_byteswap = src_is_bgr != dst_is_bgr;
     uint8_t *dst = decoder->palette;
-    uint8_t buffer[3];
-    for (uint32_t i = 0; i < decoder->palette_length; i++) {
-        if (!ok_read(decoder, buffer, 3)) {
-            return false;
+    uint8_t buffer[256 * 3];
+    if (!ok_read(decoder, buffer, 3 * decoder->palette_length)) {
+        return false;
+    }
+    uint8_t *in = buffer;
+    if (should_byteswap) {
+        for (uint32_t i = 0; i < decoder->palette_length; i++, in += 3, dst += 4) {
+            dst[0] = in[2];
+            dst[1] = in[1];
+            dst[2] = in[0];
+            dst[3] = 0xff;
         }
-        if (should_byteswap) {
-            *dst++ = buffer[2];
-            *dst++ = buffer[1];
-            *dst++ = buffer[0];
-        } else {
-            *dst++ = buffer[0];
-            *dst++ = buffer[1];
-            *dst++ = buffer[2];
+    } else {
+        for (uint32_t i = 0; i < decoder->palette_length; i++, in += 3, dst += 4) {
+            dst[0] = in[0];
+            dst[1] = in[1];
+            dst[2] = in[2];
+            dst[3] = 0xff;
         }
-        *dst++ = 0xff;
     }
     return true;
 }
@@ -305,17 +309,19 @@ static bool ok_png_read_transparency(ok_png_decoder *decoder, uint32_t chunk_len
     png->has_alpha = true;
 
     if (decoder->color_type == OK_PNG_COLOR_TYPE_PALETTE) {
-        if (chunk_length > decoder->palette_length) {
+        if (chunk_length > decoder->palette_length || chunk_length > 256) {
             ok_png_error(png, "Invalid transparency length for palette color type");
             return false;
         }
 
         const bool should_premultiply = (decoder->decode_flags & OK_PNG_PREMULTIPLIED_ALPHA) != 0;
         uint8_t *dst = decoder->palette;
+        uint8_t buffer[256];
+        if (!ok_read(decoder, buffer, chunk_length)) {
+            return false;
+        }
         for (uint32_t i = 0; i < chunk_length; i++) {
-            if (!ok_read(decoder, (dst + 3), 1)) {
-                return false;
-            }
+            dst[3] = buffer[i];
             if (should_premultiply) {
                 ok_png_premultiply(dst);
             }
