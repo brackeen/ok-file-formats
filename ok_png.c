@@ -77,7 +77,7 @@ typedef struct {
     uint32_t dst_stride;
 
     // Decoding
-    struct ok_inflater *inflater;
+    ok_inflater *inflater;
     size_t inflater_bytes_read;
     uint8_t *inflate_buffer;
     uint8_t *curr_scanline;
@@ -427,7 +427,7 @@ static void ok_png_decode_filter(uint8_t * RESTRICT curr, const uint8_t * RESTRI
     }
 }
 
-static bool ok_png_transform_scanline(ok_png_decoder *decoder, const uint8_t *src, uint32_t width) {
+static void ok_png_transform_scanline(ok_png_decoder *decoder, const uint8_t *src, uint32_t width) {
     ok_png *png = decoder->png;
     const bool dst_flip_y = (decoder->decode_flags & OK_PNG_FLIP_Y) != 0;
     const uint32_t dst_stride = decoder->dst_stride ? decoder->dst_stride : png->width * 4;
@@ -472,30 +472,29 @@ static bool ok_png_transform_scanline(ok_png_decoder *decoder, const uint8_t *sr
         uint8_t *dst = dst_start;
         const uint8_t *palette = decoder->palette;
         while (dst < dst_end) {
-            const uint8_t *psrc = palette + (*src++ * 4);
-            *dst++ = *psrc++;
-            *dst++ = *psrc++;
-            *dst++ = *psrc++;
-            *dst++ = *psrc++;
+            memcpy(dst, palette + *src * 4, 4);
+            dst += 4;
+            src++;
         }
     } else if (c == OK_PNG_COLOR_TYPE_RGB && d == 8 && !t) {
         if (should_byteswap) {
             uint8_t *dst = dst_start;
             while (dst < dst_end) {
-                *dst++ = src[2];
-                *dst++ = src[1];
-                *dst++ = src[0];
-                *dst++ = 0xff;
+                dst[0] = src[2];
+                dst[1] = src[1];
+                dst[2] = src[0];
+                dst[3] = 0xff;
                 src += 3;
+                dst += 4;
             }
             should_byteswap = false;
         } else {
             uint8_t *dst = dst_start;
             while (dst < dst_end) {
-                *dst++ = *src++;
-                *dst++ = *src++;
-                *dst++ = *src++;
-                *dst++ = 0xff;
+                memcpy(dst, src, 3);
+                dst[3] = 0xff;
+                src += 3;
+                dst += 4;
             }
         }
     } else if (c == OK_PNG_COLOR_TYPE_GRAYSCALE_WITH_ALPHA && d == 8) {
@@ -673,7 +672,7 @@ static bool ok_png_transform_scanline(ok_png_decoder *decoder, const uint8_t *sr
 
         uint32_t x = dst_x[i];
         uint32_t y = dst_y[i];
-        uint32_t dx = 4 * (dst_dx[i] - 1);
+        uint32_t dx = 4 * dst_dx[i];
         if (dst_flip_y) {
             y = (png->height - y - 1);
         }
@@ -682,15 +681,11 @@ static bool ok_png_transform_scanline(ok_png_decoder *decoder, const uint8_t *sr
         uint8_t *src_end = dst_end;
         uint8_t *dst = decoder->dst_buffer + (y * dst_stride) + (x * 4);
         while (src < src_end) {
-            *dst++ = *src++;
-            *dst++ = *src++;
-            *dst++ = *src++;
-            *dst++ = *src++;
+            memcpy(dst, src, 4);
             dst += dx;
+            src += 4;
         }
     }
-
-    return true;
 }
 
 static uint32_t ok_png_get_width_for_pass(const ok_png_decoder *decoder) {
@@ -855,9 +850,7 @@ static bool ok_png_read_data(ok_png_decoder *decoder, uint32_t bytes_remaining) 
             }
 
             // Transform
-            if (!ok_png_transform_scanline(decoder, decoder->curr_scanline + 1, curr_width)) {
-                return false;
-            }
+            ok_png_transform_scanline(decoder, decoder->curr_scanline + 1, curr_width);
 
             // Setup for next scanline or pass
             decoder->scanline++;
@@ -1254,7 +1247,7 @@ static int ok_inflater_decode_literal(ok_inflater *inflater, const uint16_t *tre
     return value & VALUE_BIT_MASK;
 }
 
-static bool ok_inflater_make_huffman_tree_from_array(ok_inflater_huffman_tree *tree,
+static void ok_inflater_make_huffman_tree_from_array(ok_inflater_huffman_tree *tree,
                                                      const uint8_t *code_length, int length) {
     tree->bits = 1;
 
@@ -1314,8 +1307,6 @@ static bool ok_inflater_make_huffman_tree_from_array(ok_inflater_huffman_tree *t
             tree->lookup_table[i] = tree->lookup_table[i & mask];
         }
     }
-
-    return true;
 }
 
 static bool ok_inflater_inflate_huffman_tree(ok_inflater *inflater, ok_inflater_huffman_tree *tree,
@@ -1807,7 +1798,7 @@ void ok_inflater_free(ok_inflater *inflater) {
     }
 }
 
-const char *ok_inflater_error_message(const struct ok_inflater *inflater) {
+const char *ok_inflater_error_message(const ok_inflater *inflater) {
     return inflater ? inflater->error_message : NULL;
 }
 
@@ -1864,7 +1855,8 @@ static inline bool ok_inflater_process_state(ok_inflater *inflater) {
 }
 
 size_t ok_inflater_inflate(ok_inflater *inflater, uint8_t *dst, size_t dst_len) {
-    if (!inflater || inflater->state == OK_INFLATER_STATE_ERROR) {
+    if (!inflater || inflater->state == OK_INFLATER_STATE_ERROR ||
+        inflater->state == OK_INFLATER_STATE_DONE) {
         return OK_SIZE_MAX;
     }
 
