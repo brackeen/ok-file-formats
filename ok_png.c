@@ -1051,7 +1051,6 @@ static const int OK_INFLATER_BIT_LENGTH_TABLE_LENGTH = 19;
 typedef struct {
     uint16_t lookup_table[1 << (MAX_CODE_LENGTH - 1)];
     unsigned int bits;
-    unsigned int bit_mask;
 } ok_inflater_huffman_tree;
 
 struct ok_inflater {
@@ -1071,7 +1070,6 @@ struct ok_inflater {
     bool final_block;
     ok_inflater_state state;
     int state_count;
-    int state_literal;
     int state_distance;
 
     // For dynamic blocks
@@ -1275,7 +1273,6 @@ static void ok_inflater_make_huffman_tree_from_array(ok_inflater_huffman_tree *t
 
     // Init lookup table
     const unsigned int max = 1 << tree->bits;
-    tree->bit_mask = max - 1;
     memset(tree->lookup_table, 0, sizeof(tree->lookup_table[0]) * max);
 
     // Assign numerical values to all codes, using consecutive values for all
@@ -1526,32 +1523,44 @@ static bool ok_inflater_stored_block(ok_inflater *inflater) {
     }
 }
 
-static int ok_inflater_decode_distance(ok_inflater *inflater, int value) {
-    if (value < 0 || value >= OK_INFLATER_DISTANCE_TABLE_LENGTH) {
-        ok_inflater_error(inflater, "Invalid distance");
+static int ok_inflater_decode_distance(ok_inflater *inflater, ok_inflater_huffman_tree *tree) {
+    if (!ok_inflater_load_bits(inflater, tree->bits)) {
         return -1;
     }
-    int distance = OK_INFLATER_DISTANCE_TABLE[value];
-    int extra_bits = (value >> 1) - 1;
-    if (extra_bits > 0) {
-        if (!ok_inflater_load_bits(inflater, (unsigned int)extra_bits)) {
+    uint32_t p = ok_inflater_peek_bits(inflater, tree->bits);
+    uint16_t tree_value = tree->lookup_table[p];
+    int value = tree_value & VALUE_BIT_MASK;
+    unsigned int value_bits = tree_value >> VALUE_BITS;
+    if (value < 4) {
+        ok_inflater_read_bits(inflater, value_bits);
+        return value + 1;
+    } else if (value >= OK_INFLATER_DISTANCE_TABLE_LENGTH) {
+        ok_inflater_error(inflater, "Invalid distance");
+        return -1;
+    } else {
+        unsigned int extra_bits = (unsigned int)((value >> 1) - 1);
+        if (!ok_inflater_load_bits(inflater, value_bits + extra_bits)) {
             return -1;
         }
-        distance += ok_inflater_read_bits(inflater, (unsigned int)extra_bits);
+        int d = (int)(ok_inflater_read_bits(inflater, value_bits + extra_bits) >> value_bits);
+        return OK_INFLATER_DISTANCE_TABLE[value] + d;
     }
-    return distance;
 }
 
 static int ok_inflater_decode_length(ok_inflater *inflater, int value) {
-    int len = OK_INFLATER_LENGTH_TABLE[value];
-    int extra_bits = (value >> 2) - 1;
-    if (extra_bits > 0 && extra_bits <= 5) {
-        if (!ok_inflater_load_bits(inflater, (unsigned int)extra_bits)) {
-            return -1;
+    if (value < 8) {
+        return value + 3;
+    } else {
+        int len = OK_INFLATER_LENGTH_TABLE[value];
+        unsigned int extra_bits = (unsigned int)((value >> 2) - 1);
+        if (extra_bits <= 5) {
+            if (!ok_inflater_load_bits(inflater, extra_bits)) {
+                return -1;
+            }
+            len += ok_inflater_read_bits(inflater, extra_bits);
         }
-        len += ok_inflater_read_bits(inflater, (unsigned int)extra_bits);
+        return len;
     }
-    return len;
 }
 
 static bool ok_inflater_distance(ok_inflater *inflater) {
@@ -1563,24 +1572,12 @@ static bool ok_inflater_distance(ok_inflater *inflater) {
             return false;
         }
     }
-    if (inflater->state_literal < 0) {
-        ok_inflater_huffman_tree *curr_distance_huffman =
-            (is_fixed ? inflater->fixed_distance_huffman : inflater->distance_huffman);
-        const uint16_t *tree_lookup_table = curr_distance_huffman->lookup_table;
-        inflater->state_literal = ok_inflater_decode_literal(inflater, tree_lookup_table,
-                                                             curr_distance_huffman->bits);
-        if (inflater->state_literal < 0) {
-            // Needs input
-            return false;
-        }
-    }
     if (inflater->state_distance < 0) {
-        inflater->state_distance = ok_inflater_decode_distance(inflater, inflater->state_literal);
+        ok_inflater_huffman_tree *tree = (is_fixed ? inflater->fixed_distance_huffman :
+                                          inflater->distance_huffman);
+        inflater->state_distance = ok_inflater_decode_distance(inflater, tree);
         if (inflater->state_distance < 0) {
             // Needs input
-            return false;
-        } else if (inflater->state_distance == 0 || inflater->state_distance >= BUFFER_SIZE) {
-            ok_inflater_error(inflater, "Invalid distance");
             return false;
         }
     }
@@ -1708,7 +1705,6 @@ static bool ok_inflater_compressed_block(ok_inflater *inflater) {
             }
             inflater->huffman_code = value - 257;
             inflater->state_count = -1;
-            inflater->state_literal = -1;
             inflater->state_distance = -1;
             return true;
         } else {
