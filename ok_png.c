@@ -1523,7 +1523,8 @@ static bool ok_inflater_stored_block(ok_inflater *inflater) {
     }
 }
 
-static int ok_inflater_decode_distance(ok_inflater *inflater, ok_inflater_huffman_tree *tree) {
+static int ok_inflater_decode_distance(ok_inflater *inflater,
+                                       const ok_inflater_huffman_tree *tree) {
     if (!ok_inflater_load_bits(inflater, tree->bits)) {
         return -1;
     }
@@ -1563,7 +1564,8 @@ static int ok_inflater_decode_length(ok_inflater *inflater, int value) {
     }
 }
 
-static bool ok_inflater_distance_internal(ok_inflater *inflater, bool is_fixed) {
+static bool ok_inflater_distance_with_tree(ok_inflater *inflater,
+                                           const ok_inflater_huffman_tree *tree) {
     if (inflater->state_count < 0) {
         inflater->state_count = ok_inflater_decode_length(inflater, inflater->huffman_code);
         if (inflater->state_count < 0) {
@@ -1573,8 +1575,6 @@ static bool ok_inflater_distance_internal(ok_inflater *inflater, bool is_fixed) 
         inflater->huffman_code = -1;
     }
     if (inflater->state_distance < 0) {
-        ok_inflater_huffman_tree *tree = (is_fixed ? inflater->fixed_distance_huffman :
-                                          inflater->distance_huffman);
         inflater->state_distance = ok_inflater_decode_distance(inflater, tree);
         if (inflater->state_distance < 0) {
             // Needs input
@@ -1625,7 +1625,9 @@ static bool ok_inflater_distance_internal(ok_inflater *inflater, bool is_fixed) 
 
 static bool ok_inflater_distance(ok_inflater *inflater) {
     bool is_fixed = inflater->state == OK_INFLATER_STATE_READING_FIXED_DISTANCE;
-    if (ok_inflater_distance_internal(inflater, is_fixed)) {
+    const ok_inflater_huffman_tree *distance_tree =
+        (is_fixed ? inflater->fixed_distance_huffman : inflater->distance_huffman);
+    if (ok_inflater_distance_with_tree(inflater, distance_tree)) {
         if (is_fixed) {
             inflater->state = OK_INFLATER_STATE_READING_FIXED_COMPRESSED_BLOCK;
         } else {
@@ -1677,14 +1679,16 @@ static bool ok_inflater_dynamic_block_code_lengths(ok_inflater *inflater) {
 
 static bool ok_inflater_compressed_block(ok_inflater *inflater) {
     const bool is_fixed = inflater->state == OK_INFLATER_STATE_READING_FIXED_COMPRESSED_BLOCK;
-    const ok_inflater_huffman_tree *curr_literal_huffman =
+    const ok_inflater_huffman_tree *literal_tree =
         (is_fixed ? inflater->fixed_literal_huffman : inflater->literal_huffman);
+    const ok_inflater_huffman_tree *distance_tree =
+        (is_fixed ? inflater->fixed_distance_huffman : inflater->distance_huffman);
 
     // decode literal/length value from input stream
 
     size_t max_write = ok_inflater_can_write_total(inflater);
-    const uint16_t *tree_lookup_table = curr_literal_huffman->lookup_table;
-    const unsigned int tree_bits = curr_literal_huffman->bits;
+    const uint16_t *tree_lookup_table = literal_tree->lookup_table;
+    const unsigned int tree_bits = literal_tree->bits;
     while (max_write > 0) {
         int value = ok_inflater_decode_literal(inflater, tree_lookup_table, tree_bits);
         if (value < 0) {
@@ -1700,7 +1704,7 @@ static bool ok_inflater_compressed_block(ok_inflater *inflater) {
             inflater->huffman_code = value - 257;
             inflater->state_count = -1;
             inflater->state_distance = -1;
-            if (ok_inflater_distance_internal(inflater, is_fixed)) {
+            if (ok_inflater_distance_with_tree(inflater, distance_tree)) {
                 max_write = ok_inflater_can_write_total(inflater);
             } else {
                 if (is_fixed) {
