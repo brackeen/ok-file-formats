@@ -1563,14 +1563,14 @@ static int ok_inflater_decode_length(ok_inflater *inflater, int value) {
     }
 }
 
-static bool ok_inflater_distance(ok_inflater *inflater) {
-    const bool is_fixed = inflater->state == OK_INFLATER_STATE_READING_FIXED_DISTANCE;
+static bool ok_inflater_distance_internal(ok_inflater *inflater, bool is_fixed) {
     if (inflater->state_count < 0) {
         inflater->state_count = ok_inflater_decode_length(inflater, inflater->huffman_code);
         if (inflater->state_count < 0) {
             // Needs input
             return false;
         }
+        inflater->huffman_code = -1;
     }
     if (inflater->state_distance < 0) {
         ok_inflater_huffman_tree *tree = (is_fixed ? inflater->fixed_distance_huffman :
@@ -1583,53 +1583,58 @@ static bool ok_inflater_distance(ok_inflater *inflater) {
     }
 
     // Copy len bytes from offset to buffer_end_pos
-    if (inflater->state_count > 0) {
-        int buffer_offset = (inflater->buffer_end_pos - inflater->state_distance) & BUFFER_SIZE_MASK;
-        if (inflater->state_distance == 1) {
-            // Optimization: can use memset
-            int n = inflater->state_count;
-            int n2 = ok_inflater_write_byte_n(inflater, inflater->buffer[buffer_offset], n);
+    int buffer_offset = (inflater->buffer_end_pos - inflater->state_distance) & BUFFER_SIZE_MASK;
+    if (inflater->state_distance == 1) {
+        // Optimization: can use memset
+        int n = inflater->state_count;
+        int n2 = ok_inflater_write_byte_n(inflater, inflater->buffer[buffer_offset], n);
+        inflater->state_count -= n2;
+        if (n2 != n) {
+            // Full buffer
+            return false;
+        }
+    } else if (buffer_offset + inflater->state_count < BUFFER_SIZE) {
+        // Optimization: the offset won't wrap
+        int bytes_copyable = inflater->state_distance;
+        while (inflater->state_count > 0) {
+            int n = min(inflater->state_count, bytes_copyable);
+            int n2 = ok_inflater_write_bytes(inflater, inflater->buffer + buffer_offset, n);
             inflater->state_count -= n2;
+            bytes_copyable += n2;
             if (n2 != n) {
                 // Full buffer
                 return false;
             }
-        } else if (buffer_offset + inflater->state_count < BUFFER_SIZE) {
-            // Optimization: the offset won't wrap
-            int bytes_copyable = inflater->state_distance;
-            while (inflater->state_count > 0) {
-                int n = min(inflater->state_count, bytes_copyable);
-                int n2 = ok_inflater_write_bytes(inflater, inflater->buffer + buffer_offset, n);
-                inflater->state_count -= n2;
-                bytes_copyable += n2;
-                if (n2 != n) {
-                    // Full buffer
-                    return false;
-                }
-            }
-        } else {
-            // This could be optimized, but it happens rarely, so it's probably not worth it
-            while (inflater->state_count > 0) {
-                int n = min(inflater->state_count, inflater->state_distance);
-                n = min(n, (BUFFER_SIZE - buffer_offset));
-                int n2 = ok_inflater_write_bytes(inflater, inflater->buffer + buffer_offset, n);
-                inflater->state_count -= n2;
-                buffer_offset = (buffer_offset + n2) & BUFFER_SIZE_MASK;
-                if (n2 != n) {
-                    // Full buffer
-                    return false;
-                }
+        }
+    } else {
+        // This could be optimized, but it happens rarely, so it's probably not worth it
+        while (inflater->state_count > 0) {
+            int n = min(inflater->state_count, inflater->state_distance);
+            n = min(n, (BUFFER_SIZE - buffer_offset));
+            int n2 = ok_inflater_write_bytes(inflater, inflater->buffer + buffer_offset, n);
+            inflater->state_count -= n2;
+            buffer_offset = (buffer_offset + n2) & BUFFER_SIZE_MASK;
+            if (n2 != n) {
+                // Full buffer
+                return false;
             }
         }
     }
-
-    if (is_fixed) {
-        inflater->state = OK_INFLATER_STATE_READING_FIXED_COMPRESSED_BLOCK;
-    } else {
-        inflater->state = OK_INFLATER_STATE_READING_DYNAMIC_COMPRESSED_BLOCK;
-    }
-    inflater->huffman_code = -1;
     return true;
+}
+
+static bool ok_inflater_distance(ok_inflater *inflater) {
+    bool is_fixed = inflater->state == OK_INFLATER_STATE_READING_FIXED_DISTANCE;
+    if (ok_inflater_distance_internal(inflater, is_fixed)) {
+        if (is_fixed) {
+            inflater->state = OK_INFLATER_STATE_READING_FIXED_COMPRESSED_BLOCK;
+        } else {
+            inflater->state = OK_INFLATER_STATE_READING_DYNAMIC_COMPRESSED_BLOCK;
+        }
+        return true;
+    } else {
+        return false;
+    }
 }
 
 static bool ok_inflater_dynamic_block_header(ok_inflater *inflater) {
@@ -1678,12 +1683,9 @@ static bool ok_inflater_compressed_block(ok_inflater *inflater) {
     // decode literal/length value from input stream
 
     size_t max_write = ok_inflater_can_write_total(inflater);
-    if (max_write == 0) {
-        return false;
-    }
     const uint16_t *tree_lookup_table = curr_literal_huffman->lookup_table;
     const unsigned int tree_bits = curr_literal_huffman->bits;
-    while (true) {
+    while (max_write > 0) {
         int value = ok_inflater_decode_literal(inflater, tree_lookup_table, tree_bits);
         if (value < 0) {
             // Needs input
@@ -1691,27 +1693,30 @@ static bool ok_inflater_compressed_block(ok_inflater *inflater) {
         } else if (value < 256) {
             ok_inflater_write_byte(inflater, (uint8_t)value);
             max_write--;
-            if (max_write == 0) {
-                return false;
-            }
         } else if (value == 256) {
             inflater->state = OK_INFLATER_STATE_READY_FOR_NEXT_BLOCK;
             return true;
         } else if (value < 286) {
-            if (is_fixed) {
-                inflater->state = OK_INFLATER_STATE_READING_FIXED_DISTANCE;
-            } else {
-                inflater->state = OK_INFLATER_STATE_READING_DYNAMIC_DISTANCE;
-            }
             inflater->huffman_code = value - 257;
             inflater->state_count = -1;
             inflater->state_distance = -1;
-            return true;
+            if (ok_inflater_distance_internal(inflater, is_fixed)) {
+                max_write = ok_inflater_can_write_total(inflater);
+            } else {
+                if (is_fixed) {
+                    inflater->state = OK_INFLATER_STATE_READING_FIXED_DISTANCE;
+                } else {
+                    inflater->state = OK_INFLATER_STATE_READING_DYNAMIC_DISTANCE;
+                }
+                return false;
+            }
         } else {
             ok_inflater_error(inflater, "Invalid inflater literal");
             return false;
         }
     }
+    // Output buffer full
+    return false;
 }
 
 static bool ok_inflater_literal_tree(ok_inflater *inflater) {
