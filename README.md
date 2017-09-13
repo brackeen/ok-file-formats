@@ -4,8 +4,8 @@ C functions for reading a few different file formats. No external dependencies.
 
 | Library            | Description
 |--------------------|---------------------------------------------------------------------------------------------------
-| [ok_png](ok_png.h) | Reads any PNG file, including Apple's proprietary extensions. Tested against the PngSuite.
-| [ok_jpg](ok_jpg.h) | Reads most JPEG files (baseline and progressive). Interprets EXIF orientation tags.
+| [ok_png](ok_png.h) | Reads PNG files. Supports Apple's proprietary `CgBI` chunk. Tested against the PngSuite.
+| [ok_jpg](ok_jpg.h) | Reads JPEG files. Baseline and progressive formats. Interprets EXIF orientation tags. No CMYK support.
 | [ok_wav](ok_wav.h) | Reads WAV and CAF files. PCM, u-law, a-law, and ADPCM formats.
 | [ok_fnt](ok_fnt.h) | Reads AngelCode BMFont files. Binary format from AngelCode Bitmap Font Generator v1.10 or newer.
 | [ok_csv](ok_csv.h) | Reads Comma-Separated Values files.
@@ -30,7 +30,9 @@ int main() {
     FILE *file = fopen("my_image.png", "rb");
     ok_png *image = ok_png_read(file, OK_PNG_COLOR_FORMAT_RGBA | OK_PNG_PREMULTIPLIED_ALPHA | OK_PNG_FLIP_Y);
     fclose(file);
-    printf("Got image! Size: %li x %li\n", (long)image->width, (long)image->height);
+    if (image->data) {
+        printf("Got image! Size: %li x %li\n", (long)image->width, (long)image->height);
+    }
     ok_png_free(image);
     return 0;
 }
