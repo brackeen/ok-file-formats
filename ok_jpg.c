@@ -275,7 +275,10 @@ static inline uint16_t readBE16(const uint8_t *data) {
 }
 
 static inline uint32_t readBE32(const uint8_t *data) {
-    return (uint32_t)((data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3]);
+    return (((uint32_t)data[0] << 24) |
+            ((uint32_t)data[1] << 16) |
+            ((uint32_t)data[2] << 8) |
+            ((uint32_t)data[3] << 0));
 }
 
 static inline uint16_t readLE16(const uint8_t *data) {
@@ -283,7 +286,10 @@ static inline uint16_t readLE16(const uint8_t *data) {
 }
 
 static inline uint32_t readLE32(const uint8_t *data) {
-    return (uint32_t)((data[3] << 24) | (data[2] << 16) | (data[1] << 8) | data[0]);
+    return (((uint32_t)data[3] << 24) |
+            ((uint32_t)data[2] << 16) |
+            ((uint32_t)data[1] << 8) |
+            ((uint32_t)data[0] << 0));
 }
 
 // Load bits without reading them

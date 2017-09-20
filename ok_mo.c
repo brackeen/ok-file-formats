@@ -171,7 +171,7 @@ void ok_mo_free(ok_mo *mo) {
 
 // MARK: Decoding
 
-static inline uint16_t read16(const uint8_t *data, const bool little_endian) {
+static inline uint16_t read16(const uint8_t *data, bool little_endian) {
     if (little_endian) {
         return (uint16_t)((data[1] << 8) | data[0]);
     } else {
@@ -179,11 +179,17 @@ static inline uint16_t read16(const uint8_t *data, const bool little_endian) {
     }
 }
 
-static inline uint32_t read32(const uint8_t *data, const bool little_endian) {
+static inline uint32_t read32(const uint8_t *data, bool little_endian) {
     if (little_endian) {
-        return (uint32_t)((data[3] << 24) | (data[2] << 16) | (data[1] << 8) | data[0]);
+        return (((uint32_t)data[3] << 24) |
+                ((uint32_t)data[2] << 16) |
+                ((uint32_t)data[1] << 8) |
+                ((uint32_t)data[0] << 0));
     } else {
-        return (uint32_t)((data[0] << 24) | (data[1] << 16) | (data[2] << 8) | data[3]);
+        return (((uint32_t)data[0] << 24) |
+                ((uint32_t)data[1] << 16) |
+                ((uint32_t)data[2] << 8) |
+                ((uint32_t)data[3] << 0));
     }
 }
 
