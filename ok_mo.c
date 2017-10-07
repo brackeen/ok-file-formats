@@ -323,14 +323,15 @@ static struct ok_mo_string *ok_mo_find_value(ok_mo *mo, const char *context, con
     } else {
         // Complete key is (context + EOT + key)
         const size_t context_length = strlen(context);
-        const size_t complete_key_length = context_length + 1 + strlen(key) + 1;
+        const size_t key_length = strlen(key);
+        const size_t complete_key_length = context_length + 1 + key_length + 1;
         char *complete_key = malloc(complete_key_length);
         if (!complete_key) {
             return NULL;
         }
-        strcpy(complete_key, context);
+        memcpy(complete_key, context, context_length);
         complete_key[context_length] = 4; // EOT
-        strcpy(complete_key + context_length + 1, key);
+        memcpy(complete_key + context_length + 1, key, key_length);
         complete_key[complete_key_length - 1] = 0;
         struct ok_mo_string *r = bsearch(complete_key, mo->strings, mo->num_strings,
                                          sizeof(mo->strings[0]), ok_mo_bsearch_strcmp);

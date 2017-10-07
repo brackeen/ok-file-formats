@@ -56,15 +56,16 @@ char *get_full_path(const char *path, const char *name, const char *ext) {
 #endif
     size_t path_len = strlen(path);
     size_t ext_len = strlen(ext);
-    char *file_name = malloc(path_len + 1 + strlen(name) + 1 + ext_len + 1);
-    strcpy(file_name, path);
+    size_t name_len = strlen(name);
+    char *file_name = malloc(path_len + 1 + name_len + 1 + ext_len + 1);
+    memcpy(file_name, path, path_len + 1);
     if (path_len > 0 && path[path_len - 1] != sep[0]) {
-        strcat(file_name, sep);
+        strncat(file_name, sep, 1);
     }
-    strcat(file_name, name);
+    strncat(file_name, name, name_len);
     if (ext_len > 0) {
-        strcat(file_name, ".");
-        strcat(file_name, ext);
+        strncat(file_name, ".", 1);
+        strncat(file_name, ext, ext_len);
     }
     return file_name;
 }
