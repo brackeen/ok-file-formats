@@ -27,6 +27,8 @@
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
+static const int OK_WAV_DECODE_FLAGS_ENDIAN_MASK = 3;
+
 enum ok_wav_encoding {
     OK_WAV_ENCODING_UNKNOWN,
     OK_WAV_ENCODING_PCM,
@@ -47,7 +49,7 @@ typedef struct {
     uint32_t frames_per_block;
 
     // Decode options
-    bool convert_to_system_endian;
+    ok_wav_decode_flags decode_flags;
 
     // Input
     void *input_data;
@@ -100,16 +102,16 @@ static bool ok_file_seek_func(void *user_data, long count) {
 #endif
 
 static void ok_wav_decode(ok_wav *wav, void *input_data, ok_wav_read_func read_func,
-                          ok_wav_seek_func seek_func, bool convert_to_system_endian);
+                          ok_wav_seek_func seek_func, ok_wav_decode_flags decode_flags);
 
 // MARK: Public API
 
 #ifndef OK_NO_STDIO
 
-ok_wav *ok_wav_read(FILE *file, bool convert_to_system_endian) {
+ok_wav *ok_wav_read(FILE *file, ok_wav_decode_flags decode_flags) {
     ok_wav *wav = calloc(1, sizeof(ok_wav));
     if (file) {
-        ok_wav_decode(wav, file, ok_file_read_func, ok_file_seek_func, convert_to_system_endian);
+        ok_wav_decode(wav, file, ok_file_read_func, ok_file_seek_func, decode_flags);
     } else {
         ok_wav_error(wav, "File not found");
     }
@@ -119,10 +121,10 @@ ok_wav *ok_wav_read(FILE *file, bool convert_to_system_endian) {
 #endif
 
 ok_wav *ok_wav_read_from_callbacks(void *user_data, ok_wav_read_func read_func,
-                                   ok_wav_seek_func seek_func, bool convert_to_system_endian) {
+                                   ok_wav_seek_func seek_func, ok_wav_decode_flags decode_flags) {
     ok_wav *wav = calloc(1, sizeof(ok_wav));
     if (read_func && seek_func) {
-        ok_wav_decode(wav, user_data, read_func, seek_func, convert_to_system_endian);
+        ok_wav_decode(wav, user_data, read_func, seek_func, decode_flags);
     } else {
         ok_wav_error(wav, "Invalid argument: read_func and seek_func must not be NULL");
     }
@@ -169,6 +171,95 @@ static inline uint32_t readLE32(const uint8_t *data) {
             ((uint32_t)data[2] << 16) |
             ((uint32_t)data[1] << 8) |
             ((uint32_t)data[0] << 0));
+}
+
+// MARK: Conversion
+
+static void ok_wav_convert_endian(ok_wav_decoder *decoder) {
+    ok_wav *wav = decoder->wav;
+
+    uint64_t input_data_length = wav->num_frames * wav->num_channels;
+    uint64_t output_data_length = input_data_length * sizeof(int16_t);
+    size_t platform_data_length = (size_t)output_data_length;
+
+    const int n = 1;
+    const bool system_is_little_endian = *(const char *)&n == 1;
+    bool should_convert;
+    switch (decoder->decode_flags & OK_WAV_DECODE_FLAGS_ENDIAN_MASK) {
+        case OK_WAV_ENDIAN_NO_CONVERSION: default:
+            should_convert = false;
+            break;
+        case OK_WAV_ENDIAN_NATIVE:
+            should_convert = wav->little_endian != system_is_little_endian;
+            break;
+        case OK_WAV_ENDIAN_BIG:
+            should_convert = wav->little_endian;
+            break;
+        case OK_WAV_ENDIAN_LITTLE:
+            should_convert = !wav->little_endian;
+            break;
+    }
+
+    if (should_convert && wav->bit_depth > 8) {
+        // Swap data
+        uint8_t *data = wav->data;
+        const uint8_t *data_end = (const uint8_t *)wav->data + platform_data_length;
+        if (wav->bit_depth == 16) {
+            while (data < data_end) {
+                const uint8_t t = data[0];
+                data[0] = data[1];
+                data[1] = t;
+                data += 2;
+            }
+        } else if (wav->bit_depth == 24) {
+            while (data < data_end) {
+                const uint8_t t = data[0];
+                data[0] = data[2];
+                data[2] = t;
+                data += 3;
+            }
+        } else if (wav->bit_depth == 32) {
+            while (data < data_end) {
+                const uint8_t t0 = data[0];
+                data[0] = data[3];
+                data[3] = t0;
+                const uint8_t t1 = data[1];
+                data[1] = data[2];
+                data[2] = t1;
+                data += 4;
+            }
+        } else if (wav->bit_depth == 48) {
+            while (data < data_end) {
+                const uint8_t t0 = data[0];
+                data[0] = data[5];
+                data[5] = t0;
+                const uint8_t t1 = data[1];
+                data[1] = data[4];
+                data[4] = t1;
+                const uint8_t t2 = data[2];
+                data[2] = data[3];
+                data[3] = t2;
+                data += 6;
+            }
+        } else if (wav->bit_depth == 64) {
+            while (data < data_end) {
+                const uint8_t t0 = data[0];
+                data[0] = data[7];
+                data[7] = t0;
+                const uint8_t t1 = data[1];
+                data[1] = data[6];
+                data[6] = t1;
+                const uint8_t t2 = data[2];
+                data[2] = data[5];
+                data[5] = t2;
+                const uint8_t t3 = data[3];
+                data[3] = data[4];
+                data[4] = t3;
+                data += 8;
+            }
+        }
+        wav->little_endian = !wav->little_endian;
+    }
 }
 
 // MARK: Decoding
@@ -695,70 +786,6 @@ static void ok_wav_decode_pcm_data(ok_wav_decoder *decoder) {
     if (!ok_read(decoder, wav->data, platform_data_length)) {
         return;
     }
-
-    const int n = 1;
-    const bool system_is_little_endian = *(const char *)&n == 1;
-    if (decoder->convert_to_system_endian && wav->little_endian != system_is_little_endian &&
-        wav->bit_depth > 8) {
-        // Swap data
-        uint8_t *data = wav->data;
-        const uint8_t *data_end = (const uint8_t *)wav->data + platform_data_length;
-        if (wav->bit_depth == 16) {
-            while (data < data_end) {
-                const uint8_t t = data[0];
-                data[0] = data[1];
-                data[1] = t;
-                data += 2;
-            }
-        } else if (wav->bit_depth == 24) {
-            while (data < data_end) {
-                const uint8_t t = data[0];
-                data[0] = data[2];
-                data[2] = t;
-                data += 3;
-            }
-        } else if (wav->bit_depth == 32) {
-            while (data < data_end) {
-                const uint8_t t0 = data[0];
-                data[0] = data[3];
-                data[3] = t0;
-                const uint8_t t1 = data[1];
-                data[1] = data[2];
-                data[2] = t1;
-                data += 4;
-            }
-        } else if (wav->bit_depth == 48) {
-            while (data < data_end) {
-                const uint8_t t0 = data[0];
-                data[0] = data[5];
-                data[5] = t0;
-                const uint8_t t1 = data[1];
-                data[1] = data[4];
-                data[4] = t1;
-                const uint8_t t2 = data[2];
-                data[2] = data[3];
-                data[3] = t2;
-                data += 6;
-            }
-        } else if (wav->bit_depth == 64) {
-            while (data < data_end) {
-                const uint8_t t0 = data[0];
-                data[0] = data[7];
-                data[7] = t0;
-                const uint8_t t1 = data[1];
-                data[1] = data[6];
-                data[6] = t1;
-                const uint8_t t2 = data[2];
-                data[2] = data[5];
-                data[5] = t2;
-                const uint8_t t3 = data[3];
-                data[3] = data[4];
-                data[4] = t3;
-                data += 8;
-            }
-        }
-        wav->little_endian = system_is_little_endian;
-    }
 }
 
 // MARK: Container file formats (WAV, CAF)
@@ -833,6 +860,10 @@ static void ok_wav_decode_data(ok_wav_decoder *decoder, uint64_t data_length) {
         case OK_WAV_ENCODING_MS_ADPCM:
             ok_wav_decode_ms_adpcm_data(decoder);
             break;
+    }
+
+    if (decoder->encoding != OK_WAV_ENCODING_UNKNOWN) {
+        ok_wav_convert_endian(decoder);
     }
 }
 
@@ -1070,7 +1101,7 @@ static void ok_wav_decode_caf_file(ok_wav_decoder *decoder) {
 }
 
 static void ok_wav_decode(ok_wav *wav, void *input_data, ok_wav_read_func read_func,
-                          ok_wav_seek_func seek_func, bool convert_to_system_endian) {
+                          ok_wav_seek_func seek_func, ok_wav_decode_flags decode_flags) {
     if (!wav) {
         return;
     }
@@ -1084,7 +1115,7 @@ static void ok_wav_decode(ok_wav *wav, void *input_data, ok_wav_read_func read_f
     decoder->input_data = input_data;
     decoder->input_read_func = read_func;
     decoder->input_seek_func = seek_func;
-    decoder->convert_to_system_endian = convert_to_system_endian;
+    decoder->decode_flags = decode_flags;
 
     uint8_t header[4];
     if (ok_read(decoder, header, sizeof(header))) {

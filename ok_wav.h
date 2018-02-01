@@ -74,6 +74,22 @@ typedef struct {
     const char *error_message;
 } ok_wav;
 
+/**
+ * Decode flags.
+ */
+typedef enum {
+    // Perform no endian conversion
+    OK_WAV_ENDIAN_NO_CONVERSION = 0,
+    /// Convert to native endian
+    OK_WAV_ENDIAN_NATIVE = 1,
+    /// Convert to little endian
+    OK_WAV_ENDIAN_LITTLE = 2,
+    /// Convert to big endian
+    OK_WAV_ENDIAN_BIG = 3,
+} ok_wav_decode_flags;
+
+static const ok_wav_decode_flags OK_WAV_DEFAULT_DECODE_FLAGS = OK_WAV_ENDIAN_NATIVE;
+
 #ifndef OK_NO_STDIO
 
 /**
@@ -86,12 +102,11 @@ typedef struct {
  * signed integer PCM data.
  *
  * @param file The file to read.
- * @param convert_to_system_endian If true, the data is converted to the endianness of the system
- * (required for playback on most systems). Otherwise, the data is left as is.
+ * @param decode_flags The deocde flags. Use #OK_WAV_DEFAULT_DECODE_FLAGS in most cases.
  * @return a new #ok_wav object. Never returns `NULL`. The object should be freed with
  * #ok_wav_free().
  */
-ok_wav *ok_wav_read(FILE *file, bool convert_to_system_endian);
+ok_wav *ok_wav_read(FILE *file, ok_wav_decode_flags decode_flags);
 
 #endif
 
@@ -137,13 +152,12 @@ typedef bool (*ok_wav_seek_func)(void *user_data, long count);
  * @param user_data The parameter to be passed to `read_func` and `seek_func`.
  * @param read_func The read function.
  * @param seek_func The seek function.
- * @param convert_to_system_endian If true, the data is converted to the endianness of the system
- * (required for playback on most systems). Otherwise, the data is left as is.
+ * @param decode_flags The deocde flags. Use #OK_WAV_DEFAULT_DECODE_FLAGS in most cases.
  * @return a new #ok_wav object. Never returns `NULL`. The object should be freed with
  * #ok_wav_free().
  */
 ok_wav *ok_wav_read_from_callbacks(void *user_data, ok_wav_read_func read_func,
-                                   ok_wav_seek_func seek_func, bool convert_to_system_endian);
+                                   ok_wav_seek_func seek_func, ok_wav_decode_flags decode_flags);
 
 #ifdef __cplusplus
 }

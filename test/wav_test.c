@@ -54,7 +54,7 @@ static bool test_wav(const char *path, const char *container_type, const char *f
         printf("Warning: %24.24s.%s not found.\n", src_filename, container_type);
         return true;
     }
-    ok_wav *wav = ok_wav_read(file, false);
+    ok_wav *wav = ok_wav_read(file, OK_WAV_ENDIAN_NO_CONVERSION);
     fclose(file);
     free(src_path);
 
