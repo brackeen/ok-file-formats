@@ -733,7 +733,7 @@ static bool ok_png_read_data(ok_png_decoder *decoder, uint32_t bytes_remaining) 
     size_t num_passes = decoder->interlace_method == 0 ? 1 : 7;
     uint8_t bits_per_pixel = decoder->bit_depth * OK_PNG_SAMPLES_PER_PIXEL[decoder->color_type];
     uint8_t bytes_per_pixel = (bits_per_pixel + 7) / 8;
-    size_t max_bytes_per_scanline = 1 + (png->width * bits_per_pixel + 7) / 8;
+    size_t max_bytes_per_scanline = (size_t)(1 + ((uint64_t)png->width * bits_per_pixel + 7) / 8);
 
     // Create buffers
     if (!decoder->dst_buffer) {
@@ -788,7 +788,7 @@ static bool ok_png_read_data(ok_png_decoder *decoder, uint32_t bytes_remaining) 
     // Read data
     uint32_t curr_width = ok_png_get_width_for_pass(decoder);
     uint32_t curr_height = ok_png_get_height_for_pass(decoder);
-    size_t curr_bytes_per_scanline = 1 + (curr_width * bits_per_pixel + 7) / 8;
+    size_t curr_bytes_per_scanline = (size_t)(1 + ((uint64_t)curr_width * bits_per_pixel + 7) / 8);
     while (true) {
         // Setup pass
         while (decoder->ready_for_next_interlace_pass) {
@@ -806,7 +806,7 @@ static bool ok_png_read_data(ok_png_decoder *decoder, uint32_t bytes_remaining) 
             }
             curr_width = ok_png_get_width_for_pass(decoder);
             curr_height = ok_png_get_height_for_pass(decoder);
-            curr_bytes_per_scanline = 1 + (curr_width * bits_per_pixel + 7) / 8;
+            curr_bytes_per_scanline = (size_t)(1 + ((uint64_t)curr_width * bits_per_pixel + 7) / 8);
             if (curr_width == 0 || curr_height == 0) {
                 // No data for this pass - happens if width or height <= 4
                 decoder->ready_for_next_interlace_pass = true;
