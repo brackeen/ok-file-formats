@@ -1142,7 +1142,7 @@ static inline int ok_inflater_write_bytes(ok_inflater *inflater, const uint8_t *
         if (n == 0) {
             return len - bytes_remaining;
         }
-        memcpy(inflater->buffer + inflater->buffer_end_pos, src, n);
+        memcpy(inflater->buffer + inflater->buffer_end_pos, src, (size_t)n);
         inflater->buffer_end_pos += n;
         bytes_remaining -= n;
         src += n;
@@ -1157,7 +1157,7 @@ static inline int ok_inflater_write_byte_n(ok_inflater *inflater, const uint8_t 
         if (n == 0) {
             return len - bytes_remaining;
         }
-        memset(inflater->buffer + inflater->buffer_end_pos, b, n);
+        memset(inflater->buffer + inflater->buffer_end_pos, b, (size_t)n);
         inflater->buffer_end_pos += n;
         bytes_remaining -= n;
     }
@@ -1369,7 +1369,7 @@ static bool ok_inflater_inflate_huffman_tree(ok_inflater *inflater, ok_inflater_
                 ok_inflater_error(inflater, "Invalid length");
                 return false;
             }
-            memset(inflater->tree_codes + inflater->state_count, value, len);
+            memset(inflater->tree_codes + inflater->state_count, value, (size_t)len);
             inflater->state_count += len;
         }
         inflater->huffman_code = -1;
