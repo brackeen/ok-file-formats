@@ -4,6 +4,9 @@ project(OK_FILE_FORMATS_TESTS C)
 
 option(TREAT_WARNINGS_AS_ERRORS "Treat warnings as errors" OFF)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
+include(FileInformation)
+
 if (TREAT_WARNINGS_AS_ERRORS)
     if (CMAKE_C_COMPILER_ID MATCHES "MSVC")
         set(TREAT_WARNINGS_AS_ERRORS_FLAG "/WX")
@@ -14,18 +17,38 @@ else()
     set(TREAT_WARNINGS_AS_ERRORS_FLAG "")
 endif()
 
+# Fuzzing (Compiling for American Fuzzy Lop)
+if (CMAKE_C_COMPILER_ID MATCHES "Clang")
+    find_program(FUZZING_COMPILER afl-clang)
+elseif (CMAKE_C_COMPILER_ID MATCHES "GNU")
+    find_program(FUZZING_COMPILER afl-gcc)
+endif()
+
 # ok-file-formats
 include_directories(..)
 file(GLOB src_files "../*.h" "../*.c")
 source_group("" FILES ${src_files})
 
 # Generated files
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 file(GLOB test_png_files "PngSuite/*.png")
 file(GLOB test_jpg_files "jpg/*.jpg")
 
 add_custom_target(create_gen_directory ALL COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/gen)
 set(GEN_FILES create_gen_directory)
+
+# Copy small files for fuzzing
+if (FUZZING_COMPILER)
+    add_custom_target(create_fuzzing_results_directory ALL COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/gen/fuzzing/afl_results)
+    list(APPEND GEN_FILES create_fuzzing_results_directory)
+
+    set(JPG_FUZZING_OUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/gen/fuzzing/input/jpg")
+    set(PNG_FUZZING_OUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/gen/fuzzing/input/png")
+
+    add_custom_target(create_jpg_fuzzing_directory ALL COMMAND ${CMAKE_COMMAND} -E make_directory ${JPG_FUZZING_OUT_DIR})
+    add_custom_target(create_png_fuzzing_directory ALL COMMAND ${CMAKE_COMMAND} -E make_directory ${PNG_FUZZING_OUT_DIR})
+    list(APPEND GEN_FILES create_jpg_fuzzing_directory)
+    list(APPEND GEN_FILES create_png_fuzzing_directory)
+endif()
 
 find_program(IMAGEMAGICK_COMMAND magick)
 if (NOT IMAGEMAGICK_COMMAND)
@@ -45,6 +68,17 @@ foreach(png_file ${test_png_files})
         VERBATIM
     )
     list(APPEND GEN_FILES ${gen_file})
+
+    if (FUZZING_COMPILER)
+        add_custom_command(
+            OUTPUT ${PNG_FUZZING_OUT_DIR}/${file_name}.png
+            DEPENDS ${png_file}
+            COMMAND ${CMAKE_COMMAND} -E copy ${png_file} ${PNG_FUZZING_OUT_DIR}/${file_name}.png
+            COMMENT "Converting ${file_name}.png [for fuzzing]"
+            VERBATIM
+        )
+        list(APPEND GEN_FILES ${PNG_FUZZING_OUT_DIR}/${file_name}.png)
+    endif()
 endforeach()
 
 # Convert jpg files to raw RGBA8888 format, applying exif orientation tags if found.
@@ -60,6 +94,21 @@ foreach(jpg_file ${test_jpg_files})
         VERBATIM
     )
     list(APPEND GEN_FILES ${gen_file})
+
+    if (FUZZING_COMPILER)
+        # Use only small jpg files (<10KB) for fuzzing
+        file(SIZE ${jpg_file} JPG_FILE_SIZE)
+        if (${JPG_FILE_SIZE} LESS 10240)
+            add_custom_command(
+                OUTPUT ${JPG_FUZZING_OUT_DIR}/${file_name}.jpg
+                DEPENDS ${jpg_file}
+                COMMAND ${CMAKE_COMMAND} -E copy ${jpg_file} ${JPG_FUZZING_OUT_DIR}/${file_name}.jpg
+                COMMENT "Converting ${file_name}.jpg [for fuzzing]"
+                VERBATIM
+            )
+            list(APPEND GEN_FILES ${JPG_FUZZING_OUT_DIR}/${file_name}.jpg)
+        endif()
+    endif()
 endforeach()
 
 # Generate WAV files
@@ -95,4 +144,11 @@ else()
         COMMAND ${MEMCHECK_COMMAND} ${MEMCHECK_COMMAND_OPTIONS} ./ok-file-formats-test
         WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}
     )
+endif()
+
+# Fuzzing test
+if (FUZZING_COMPILER)
+    add_executable(ok-file-formats-fuzzing ${src_files} "main_fuzzing.c")
+    add_dependencies(ok-file-formats-fuzzing gen)
+    set_target_properties(ok-file-formats-fuzzing PROPERTIES C_COMPILER_LAUNCHER ${FUZZING_COMPILER})
 endif()

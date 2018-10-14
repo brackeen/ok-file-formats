@@ -21,8 +21,7 @@ The JPEG results will vary based on what version of the IJG library ImageMagick 
 
 ## Test on macOS and Linux
 
-    mkdir build
-    cd build
+    mkdir build && cd build
     cmake .. && cmake --build . && ctest --verbose
 
 ## Test on Windows using PowerShell
@@ -32,3 +31,23 @@ The JPEG results will vary based on what version of the IJG library ImageMagick 
     cmake ..
     cmake --build .
     ctest -C Debug --verbose
+
+## Running a fuzzer (experimental)
+
+American Fuzzy Lop is required. Install on macOS:
+
+    brew install afl-fuzz
+
+Then build the test as usual:
+
+    mkdir build && cd build
+    cmake .. && cmake --build .
+
+Then run *one* of these commands:
+
+    afl-fuzz -i gen/fuzzing/input/png -o gen/fuzzing/afl_results/png ./ok-file-formats-fuzzing --png
+    afl-fuzz -i gen/fuzzing/input/jpg -o gen/fuzzing/afl_results/jpg ./ok-file-formats-fuzzing --jpg
+    afl-fuzz -i gen/fuzzing/input/wav -o gen/fuzzing/afl_results/wav ./ok-file-formats-fuzzing --wav
+    afl-fuzz -i gen/fuzzing/input/caf -o gen/fuzzing/afl_results/caf ./ok-file-formats-fuzzing --caf
+
+Fuzzing will take hours or even a day to complete.
