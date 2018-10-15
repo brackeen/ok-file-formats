@@ -136,6 +136,7 @@ typedef struct {
 
     ok_jpg_huffman_table dc_huffman_tables[4];
     ok_jpg_huffman_table ac_huffman_tables[4];
+    bool huffman_error;
 } ok_jpg_decoder;
 
 #ifdef NDEBUG
@@ -467,7 +468,8 @@ static inline uint8_t ok_jpg_huffman_decode(ok_jpg_decoder *decoder,
             return table->val[j];
         }
     }
-    // Shouldn't happen
+
+    decoder->huffman_error = true;
     ok_jpg_error(decoder->jpg, "Invalid huffman code");
     return 0;
 }
@@ -568,16 +570,16 @@ static void ok_jpg_convert_data_unit(ok_jpg_decoder *decoder, int data_unit_x, i
         y = temp;
     }
     if (decoder->flip_x) {
-        data += ((int)jpg->width * 4) - (x + 1) * x_inc;
+        data += (jpg->width * 4) - ((size_t)x + 1) * (size_t)x_inc;
         x_inc = -x_inc;
     } else {
-        data += x * x_inc;
+        data += (size_t)x * (size_t)x_inc;
     }
     if (decoder->flip_y) {
-        data += (((int)jpg->height - y - 1) * y_inc);
+        data += ((jpg->height - (size_t)y - 1) * (size_t)y_inc);
         y_inc = -y_inc;
     } else {
-        data += y * y_inc;
+        data += (size_t)y * (size_t)y_inc;
     }
     if (decoder->rotate) {
         int temp = x_inc;
@@ -1201,7 +1203,7 @@ static bool ok_jpg_decode_scan(ok_jpg_decoder *decoder) {
                     decode_function(decoder, c, block);
                     block += 64;
                 }
-                if (decoder->eof_found) {
+                if (decoder->eof_found || decoder->huffman_error) {
                     return false;
                 }
                 c->next_block += (size_t)(c->H * decoder->data_units_x);
@@ -1227,7 +1229,7 @@ static bool ok_jpg_decode_scan(ok_jpg_decoder *decoder) {
                         c->next_block += c->H;
                     }
                 }
-                if (decoder->eof_found) {
+                if (decoder->eof_found || decoder->huffman_error) {
                     return false;
                 }
                 for (int i = 0; i < decoder->num_scan_components; i++) {
@@ -1253,6 +1255,9 @@ static bool ok_jpg_decode_scan(ok_jpg_decoder *decoder) {
                         }
                         offset_y += C_WIDTH * 8;
                     }
+                }
+                if (decoder->huffman_error) {
+                    return false;
                 }
                 ok_jpg_convert_data_unit(decoder, data_unit_x, data_unit_y);
             }
