@@ -818,7 +818,7 @@ static void ok_wav_decode_data(ok_wav_decoder *decoder, uint64_t data_length) {
     if (decoder->encoding == OK_WAV_ENCODING_APPLE_IMA_ADPCM ||
         decoder->encoding == OK_WAV_ENCODING_MS_IMA_ADPCM ||
         decoder->encoding == OK_WAV_ENCODING_MS_ADPCM) {
-        if (decoder->block_size  == 0) {
+        if (decoder->block_size == 0 || decoder->frames_per_block == 0) {
             ok_wav_error(wav, "Invalid block size");
             return;
         }
@@ -862,7 +862,7 @@ static void ok_wav_decode_data(ok_wav_decoder *decoder, uint64_t data_length) {
             break;
     }
 
-    if (decoder->encoding != OK_WAV_ENCODING_UNKNOWN) {
+    if (decoder->encoding != OK_WAV_ENCODING_UNKNOWN && wav->data) {
         ok_wav_convert_endian(decoder);
     }
 }
@@ -941,24 +941,38 @@ static void ok_wav_decode_wav_file(ok_wav_decoder *decoder, bool is_little_endia
                                        decoder->encoding == OK_WAV_ENCODING_MS_IMA_ADPCM)) {
                 decoder->frames_per_block = (is_little_endian ? readLE16(chunk_data + 18) :
                                              readBE16(chunk_data + 18));
+                bool valid_frames_per_block = false;
+                if (decoder->frames_per_block > 0) {
+                    if (decoder->encoding == OK_WAV_ENCODING_MS_ADPCM) {
+                        valid_frames_per_block = (((decoder->frames_per_block - 1) / 2 + 7) *
+                                                  wav->num_channels == decoder->block_size);
+                    } else if (decoder->encoding == OK_WAV_ENCODING_MS_IMA_ADPCM) {
+                        valid_frames_per_block = (((decoder->frames_per_block - 1) / 2 + 4) *
+                                                  wav->num_channels == decoder->block_size);
+                    }
+                }
+                if (!valid_frames_per_block) {
+                    ok_wav_error(wav, "Invalid frames per block");
+                    return;
+                }
             }
 
-            bool validFormat = (decoder->encoding != OK_WAV_ENCODING_UNKNOWN &&
-                                ok_wav_valid_bit_depth(wav, decoder->encoding) &&
-                                wav->num_channels > 0);
-            if (!validFormat) {
+            bool valid_format = (decoder->encoding != OK_WAV_ENCODING_UNKNOWN &&
+                                 ok_wav_valid_bit_depth(wav, decoder->encoding) &&
+                                 wav->num_channels > 0);
+            if (!valid_format) {
                 ok_wav_error(wav, "Invalid WAV format. Must be PCM, and a bit depth of "
                                   "8, 16, 32, 48, or 64-bit.");
                 return;
             }
         } else if (memcmp("fact", chunk_header, 4) == 0) {
-            if (chunk_length >= 4) {
-                uint8_t chunk_data[4];
-                if (!ok_read(decoder, chunk_data, chunk_length)) {
+            uint8_t chunk_data[4];
+            if (chunk_length >= sizeof(chunk_data)) {
+                if (!ok_read(decoder, chunk_data, sizeof(chunk_data))) {
                     return;
                 }
                 wav->num_frames = is_little_endian ? readLE32(chunk_data) : readBE32(chunk_data);
-                chunk_length -= 4;
+                chunk_length -= sizeof(chunk_data);
             }
             if (!ok_seek(decoder, (long)chunk_length)) {
                 return;
@@ -1046,8 +1060,8 @@ static void ok_wav_decode_caf_file(ok_wav_decoder *decoder) {
                 if (wav->num_channels > 0) {
                     decoder->frames_per_block = frames_per_packet;
                     decoder->block_size = bytes_per_packet;
-                    valid_bytes_per_packet = ((frames_per_packet / 2 + 2) * wav->num_channels ==
-                                              decoder->block_size);
+                    valid_bytes_per_packet = (((frames_per_packet + 1) / 2 + 2) *
+                                              wav->num_channels == decoder->block_size);
                 } else {
                     valid_bytes_per_packet = false;
                 }
@@ -1093,7 +1107,7 @@ static void ok_wav_decode_caf_file(ok_wav_decoder *decoder) {
         } else {
             // Skip ignored chunk
             //printf("Ignoring chunk '%.4s'\n", chunk_header);
-            if (!ok_seek(decoder, (int)chunk_length)) {
+            if (!ok_seek(decoder, (long)chunk_length)) {
                 return;
             }
         }
