@@ -29,6 +29,22 @@
     gettext_test(path, verbose);
 
 #if 0
+    char *src_path = get_full_path(path, "crash0", "png");
+    FILE *file = fopen(src_path, "rb");
+    if (!file) {
+        printf("Test file not found.\n");
+    } else {
+        ok_png *result = ok_png_read(file, OK_PNG_COLOR_FORMAT_RGBA);
+        fclose(file);
+        if (result->error_message) {
+            printf("%s\n", result->error_message);
+        }
+        ok_png_free(result);
+    }
+    free(src_path);
+#endif
+
+#if 0
     char *in_filename = get_full_path(path, "2001-stargate", "jpg");
     FILE *file = fopen(in_filename, "rb");
     if (file) {
