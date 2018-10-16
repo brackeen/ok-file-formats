@@ -239,6 +239,7 @@ static bool ok_png_read_header(ok_png_decoder *decoder, uint32_t chunk_length) {
     uint8_t compression_method = chunk_data[10];
     uint8_t filter_method = chunk_data[11];
     decoder->interlace_method = chunk_data[12];
+    uint64_t dst_stride = (uint64_t)png->width * 4;
 
     if (compression_method != 0) {
         ok_png_error(png, "Invalid compression method");
@@ -248,6 +249,9 @@ static bool ok_png_read_header(ok_png_decoder *decoder, uint32_t chunk_length) {
         return false;
     } else if (decoder->interlace_method != 0 && decoder->interlace_method != 1) {
         ok_png_error(png, "Invalid interlace method");
+        return false;
+    } else if (dst_stride > UINT32_MAX) {
+        ok_png_error(png, "Width too large");
         return false;
     }
 
@@ -885,6 +889,7 @@ static void ok_png_decode2(ok_png_decoder *decoder) {
     // When info_only is true, we only care about the IHDR chunk and whether or not
     // the tRNS chunk exists.
     bool info_only = (decoder->decode_flags & OK_PNG_INFO_ONLY) != 0;
+    bool hdr_found = false;
     bool end_found = false;
     while (!end_found) {
         uint8_t chunk_header[8];
@@ -895,7 +900,13 @@ static void ok_png_decode2(ok_png_decoder *decoder) {
         const uint32_t chunk_length = readBE32(chunk_header);
         const uint32_t chunk_type = readBE32(chunk_header + 4);
         bool success = false;
+
+        if (!hdr_found && chunk_type != OK_PNG_CHUNK_CGBI && chunk_type != OK_PNG_CHUNK_IHDR) {
+            ok_png_error(png, "IHDR chunk must appear first");
+            return;
+        }
         if (chunk_type == OK_PNG_CHUNK_IHDR) {
+            hdr_found = true;
             success = ok_png_read_header(decoder, chunk_length);
             if (success && info_only) {
                 // If the png has alpha, then we have all the info we need.
