@@ -34,20 +34,23 @@ The JPEG results will vary based on what version of the IJG library ImageMagick 
 
 ## Running a fuzzer (experimental)
 
-American Fuzzy Lop is required. Install on macOS:
+This uses American Fuzzy Lop to test `ok_wav`, `ok_jpg`, and `ok_png`. The input cases are imperfect, but a few crashes were found and fixed using these tests.
+
+Install American Fuzzy Lop on macOS:
 
     brew install afl-fuzz
 
-Then build the test as usual:
+Then build the test as usual, which builds `ok-file-formats-fuzzing` and generates some test input files:
 
     mkdir build && cd build
     cmake .. && cmake --build .
 
 Then run *one* of these commands:
 
-    afl-fuzz -i gen/fuzzing/input/png -o gen/fuzzing/afl_results/png ./ok-file-formats-fuzzing --png
-    afl-fuzz -i gen/fuzzing/input/jpg -o gen/fuzzing/afl_results/jpg ./ok-file-formats-fuzzing --jpg
     afl-fuzz -i gen/fuzzing/input/wav -o gen/fuzzing/afl_results/wav ./ok-file-formats-fuzzing --wav
     afl-fuzz -i gen/fuzzing/input/caf -o gen/fuzzing/afl_results/caf ./ok-file-formats-fuzzing --caf
+    afl-fuzz -t 1000 -i gen/fuzzing/input/png -o gen/fuzzing/afl_results/png ./ok-file-formats-fuzzing --png
+    afl-fuzz -t 1000 -i gen/fuzzing/input/jpg -o gen/fuzzing/afl_results/jpg ./ok-file-formats-fuzzing --jpg
 
-Fuzzing will take hours or even a day to complete.
+
+Fuzzing will take hours or even days to complete. (I've never actually completed one cycle, and instead quit after several hours).
