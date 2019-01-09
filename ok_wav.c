@@ -567,13 +567,14 @@ static void ok_wav_decode_ms_ima_adpcm_data(ok_wav_decoder *decoder) {
 
         // Preamble - 2 bytes for predictor, 1 bytes for index, 1 empty byte
         uint8_t *input = block;
+        int16_t *block_output = output;
         for (int channel = 0; channel < num_channels; channel++) {
             int16_t sample = (int16_t)(wav->little_endian ? readLE16(input) : readBE16(input));
             channel_states[channel].predictor = sample;
             channel_states[channel].step_index = (int8_t)input[2];
             input += 4;
 
-            *output++ = sample;
+            *block_output++ = sample;
         }
         frames--;
 
@@ -581,7 +582,7 @@ static void ok_wav_decode_ms_ima_adpcm_data(ok_wav_decoder *decoder) {
         while (frames > 0) {
             for (int channel = 0; channel < num_channels; channel++) {
                 struct ok_wav_ima_state *channel_state = channel_states + channel;
-                int16_t *channel_output = output + channel; 
+                int16_t *channel_output = block_output + channel;
                 for (int i = 0; i < 4; i++) {
                     *channel_output = ok_wav_decode_ima_adpcm_nibble(channel_state,
                                                                      (*input) & 0x0f);
@@ -592,9 +593,10 @@ static void ok_wav_decode_ms_ima_adpcm_data(ok_wav_decoder *decoder) {
                 }
             }
             frames -= 8;
-            output += 8 * num_channels;
+            block_output += 8 * num_channels;
         }
 
+        output += block_frames * num_channels;
         remaining_frames -= block_frames;
     }
 
@@ -725,11 +727,12 @@ static void ok_wav_decode_ms_adpcm_data(ok_wav_decoder *decoder) {
         }
 
         // Initial output (sample2 first)
+        int16_t *block_output = output;
         for (int channel = 0; channel < num_channels; channel++) {
-            *output++ = channel_states[channel].sample2;
+            *block_output++ = channel_states[channel].sample2;
         }
         for (int channel = 0; channel < num_channels; channel++) {
-            *output++ = channel_states[channel].sample1;
+            *block_output++ = channel_states[channel].sample1;
         }
         frames -= 2;
 
@@ -739,24 +742,26 @@ static void ok_wav_decode_ms_adpcm_data(ok_wav_decoder *decoder) {
             struct ok_wav_ms_adpcm_state *channel_state1 = channel_states;
             struct ok_wav_ms_adpcm_state *channel_state2 = channel_states + (num_channels - 1);
             while (samples > 0) {
-                *output++ = ok_wav_decode_ms_adpcm_nibble(channel_state1, (*input) >> 4);
-                *output++ = ok_wav_decode_ms_adpcm_nibble(channel_state2, (*input) & 0x0f);
+                *block_output++ = ok_wav_decode_ms_adpcm_nibble(channel_state1, (*input) >> 4);
+                *block_output++ = ok_wav_decode_ms_adpcm_nibble(channel_state2, (*input) & 0x0f);
                 input++;
                 samples -= 2;
             }
         } else {
             int channel = 0;
             while (samples > 0) {
-                *output++ = ok_wav_decode_ms_adpcm_nibble(channel_states + channel, (*input) >> 4);
+                *block_output++ = ok_wav_decode_ms_adpcm_nibble(channel_states + channel,
+                                                                (*input) >> 4);
                 channel = (channel + 1) % num_channels;
-                *output++ = ok_wav_decode_ms_adpcm_nibble(channel_states + channel,
-                                                          (*input) & 0x0f);
+                *block_output++ = ok_wav_decode_ms_adpcm_nibble(channel_states + channel,
+                                                                (*input) & 0x0f);
                 channel = (channel + 1) % num_channels;
                 input++;
                 samples -= 2;
             }
         }
 
+        output += block_frames * num_channels;
         remaining_frames -= block_frames;
     }
 
