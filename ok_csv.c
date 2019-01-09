@@ -1,7 +1,7 @@
 /*
  ok-file-formats
  https://github.com/brackeen/ok-file-formats
- Copyright (c) 2014-2017 David Brackeen
+ Copyright (c) 2014-2019 David Brackeen
 
  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
  associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -416,6 +416,10 @@ static void ok_csv_decode2(ok_csv_decoder *decoder) {
             case OK_CSV_ESCAPED_FIELD: {
                 if (is_eof || (prev_char == '\"' && peek > 1 &&
                                (curr_char == ',' || curr_char == '\r' || curr_char == '\n'))) {
+                    if (peek == 0) {
+                        ok_csv_error(csv, "Unexpected end of file");
+                        return;
+                    }
                     if (prev_char == '\"') {
                         peek--;
                     }
@@ -437,7 +441,7 @@ static void ok_csv_decode2(ok_csv_decoder *decoder) {
                                 dquote_escape = true;
                             }
                         } else if (dquote_escape) {
-                            // Shouldn't happen on welformed CSV files
+                            // Shouldn't happen on wellformed CSV files
                             *field_ptr++ = '\"';
                             dquote_escape = false;
                             *field_ptr++ = ch;
@@ -472,7 +476,7 @@ static void ok_csv_decode2(ok_csv_decoder *decoder) {
             }
             case OK_CSV_NONESCAPED_FIELD: {
                 if (curr_char == ',' || curr_char == '\r' || curr_char == '\n' || is_eof) {
-                    char *field = malloc(peek);
+                    char *field = peek == 0 ? NULL : malloc(peek);
                     if (!field) {
                         ok_csv_error(csv, "Couldn't allocate field");
                         return;
