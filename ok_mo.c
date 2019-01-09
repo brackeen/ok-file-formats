@@ -1,7 +1,7 @@
 /*
  ok-file-formats
  https://github.com/brackeen/ok-file-formats
- Copyright (c) 2014-2017 David Brackeen
+ Copyright (c) 2014-2019 David Brackeen
 
  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
  associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -229,9 +229,16 @@ static void ok_mo_decode2(ok_mo_decoder *decoder) {
         return;
     }
 
+    uint64_t bytes_per_string64 = 8 * (uint64_t)mo->num_strings;
+    size_t bytes_per_string = (size_t)bytes_per_string64;
+    if (mo->num_strings == UINT32_MAX || bytes_per_string64 != bytes_per_string) {
+        ok_mo_error(mo, "Unsupported string count");
+        return;
+    }
+
     mo->strings = calloc(mo->num_strings, sizeof(struct ok_mo_string));
-    decoder->key_offset_buffer = malloc(8 * mo->num_strings);
-    decoder->value_offset_buffer = malloc(8 * mo->num_strings);
+    decoder->key_offset_buffer = malloc(bytes_per_string);
+    decoder->value_offset_buffer = malloc(bytes_per_string);
     if (!mo->strings || !decoder->key_offset_buffer || !decoder->value_offset_buffer) {
         ok_mo_error(mo, "Couldn't allocate arrays");
         return;
@@ -243,19 +250,19 @@ static void ok_mo_decode2(ok_mo_decoder *decoder) {
     if (!ok_seek(decoder, (long)(key_offset - tell))) {
         return;
     }
-    if (!ok_read(decoder, decoder->key_offset_buffer, 8 * mo->num_strings)) {
+    if (!ok_read(decoder, decoder->key_offset_buffer, bytes_per_string)) {
         ok_mo_error(mo, "Couldn't get key offsets");
         return;
     }
-    tell = key_offset + 8 * mo->num_strings;
+    tell = key_offset + bytes_per_string;
     if (!ok_seek(decoder, (long)(value_offset - tell))) {
         return;
     }
-    if (!ok_read(decoder, decoder->value_offset_buffer, 8 * mo->num_strings)) {
+    if (!ok_read(decoder, decoder->value_offset_buffer, bytes_per_string)) {
         ok_mo_error(mo, "Couldn't get value offsets");
         return;
     }
-    tell = value_offset + 8 * mo->num_strings;
+    tell = value_offset + bytes_per_string;
 
     // Read keys
     // Assumes keys are sorted, per the spec.
@@ -263,7 +270,7 @@ static void ok_mo_decode2(ok_mo_decoder *decoder) {
         uint32_t length = read32(decoder->key_offset_buffer + 8 * i, little_endian);
         uint32_t offset = read32(decoder->key_offset_buffer + 8 * i + 4, little_endian);
 
-        mo->strings[i].key = malloc(length + 1);
+        mo->strings[i].key = length == UINT32_MAX ? NULL : malloc(length + 1);
         if (!mo->strings[i].key) {
             ok_mo_error(mo, "Couldn't allocate strings");
             return;
@@ -282,7 +289,7 @@ static void ok_mo_decode2(ok_mo_decoder *decoder) {
         uint32_t length = read32(decoder->value_offset_buffer + 8 * i, little_endian);
         uint32_t offset = read32(decoder->value_offset_buffer + 8 * i + 4, little_endian);
 
-        mo->strings[i].value = malloc(length + 1);
+        mo->strings[i].value = length == UINT32_MAX ? NULL : malloc(length + 1);
         if (!mo->strings[i].value) {
             ok_mo_error(mo, "Couldn't allocate strings");
             return;
