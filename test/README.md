@@ -32,9 +32,9 @@ The JPEG results will vary based on what version of the IJG library ImageMagick 
     cmake --build .
     ctest -C Debug --verbose
 
-## Running a fuzzer (experimental)
+## Test with a fuzzer
 
-This uses American Fuzzy Lop to test `ok_wav`, `ok_jpg`, and `ok_png`. The input cases are imperfect, but a few crashes were found and fixed using these tests.
+American Fuzzy Lop can be used for fuzz testing.
 
 Install American Fuzzy Lop on macOS:
 
@@ -45,12 +45,13 @@ Then build the test as usual, which builds `ok-file-formats-fuzzing` and generat
     mkdir build && cd build
     cmake .. && cmake --build .
 
-Then run *one* of these commands:
+Then run one of these commands:
 
     afl-fuzz -i gen/fuzzing/input/wav -o gen/fuzzing/afl_results/wav ./ok-file-formats-fuzzing --wav
     afl-fuzz -i gen/fuzzing/input/caf -o gen/fuzzing/afl_results/caf ./ok-file-formats-fuzzing --caf
     afl-fuzz -t 1000 -i gen/fuzzing/input/png -o gen/fuzzing/afl_results/png ./ok-file-formats-fuzzing --png
     afl-fuzz -t 1000 -i gen/fuzzing/input/jpg -o gen/fuzzing/afl_results/jpg ./ok-file-formats-fuzzing --jpg
 
+Fuzzing will take hours or even days to complete, depending on the input. `afl-fuzz` runs on one core, so if you have a multi-core machine you can run multiple tests at once.
 
-Fuzzing will take hours or even days to complete. (I've never actually completed one cycle, and instead quit after several hours).
+The generated input cases are imperfect. For more input cases, see [Mozilla's Fuzzdata samples](https://github.com/MozillaSecurity/fuzzdata/tree/master/samples) and [input cases provided by moonAgirl](https://github.com/moonAgirl/Bugs/tree/master/ok-file-formats).
