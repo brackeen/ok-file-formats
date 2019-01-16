@@ -1,7 +1,7 @@
 /*
  ok-file-formats
  https://github.com/brackeen/ok-file-formats
- Copyright (c) 2014-2017 David Brackeen
+ Copyright (c) 2014-2019 David Brackeen
 
  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
  associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -737,7 +737,8 @@ static bool ok_png_read_data(ok_png_decoder *decoder, uint32_t bytes_remaining) 
     size_t num_passes = decoder->interlace_method == 0 ? 1 : 7;
     uint8_t bits_per_pixel = decoder->bit_depth * OK_PNG_SAMPLES_PER_PIXEL[decoder->color_type];
     uint8_t bytes_per_pixel = (bits_per_pixel + 7) / 8;
-    size_t max_bytes_per_scanline = (size_t)(1 + ((uint64_t)png->width * bits_per_pixel + 7) / 8);
+    uint64_t max_bytes_per_scanline = 1 + ((uint64_t)png->width * bits_per_pixel + 7) / 8;
+    size_t platform_max_bytes_per_scanline = (size_t)max_bytes_per_scanline;
 
     // Create buffers
     if (!decoder->dst_buffer) {
@@ -754,10 +755,14 @@ static bool ok_png_read_data(ok_png_decoder *decoder, uint32_t bytes_remaining) 
         png->data = decoder->dst_buffer;
     }
     if (!decoder->prev_scanline) {
-        decoder->prev_scanline = malloc(max_bytes_per_scanline);
+        if (max_bytes_per_scanline == platform_max_bytes_per_scanline) {
+            decoder->prev_scanline = malloc(platform_max_bytes_per_scanline);
+        }
     }
     if (!decoder->curr_scanline) {
-        decoder->curr_scanline = malloc(max_bytes_per_scanline);
+        if (max_bytes_per_scanline == platform_max_bytes_per_scanline) {
+            decoder->curr_scanline = malloc(platform_max_bytes_per_scanline);
+        }
     }
     if (!decoder->inflate_buffer) {
         decoder->inflate_buffer = malloc(inflate_buffer_size);
