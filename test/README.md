@@ -11,7 +11,7 @@ On macOS, if you have [Homebrew](http://brew.sh/) installed:
 
 For PNG tests, the [PngSuite](http://www.schaik.com/pngsuite/pngsuite.html) images from Willem van Schaik are used.
 
-At the moment, some of the PNG tests are failing when tested against ImageMagick 7.0.8-12 (2- and 4-bit grayscale PNGs). These are false negatives - `ok_png` is correct, and either ImageMagick or an underlying library ImageMagick uses are incorrect.
+Tested against ImageMagick 7.0.8-23. Earlier versions of ImageMagick 7 may have incorrect output for some PNG files.
 
 To test Apple's proprietary PNG extensions, the tests must run on an actual iOS device, and not the simulator.
 
