@@ -1,6 +1,6 @@
 # ok-file-formats
 
-C functions for reading a few different file formats. No external dependencies.
+C functions for reading a few different file formats. No external dependencies. Written in C99.
 
 | Library            | Description
 |--------------------|---------------------------------------------------------------------------------------------------
@@ -13,6 +13,8 @@ C functions for reading a few different file formats. No external dependencies.
 
 The source files do not depend on one another. If all you need is to read a PNG file, just
 grab `ok_png.h` and `ok_png.c`.
+
+The `CMakeLists.txt` file can be used but is not required.
 
 The image loading functions in `ok_png` and `ok_jpg` include the following options:
 * Get the image dimensions without decoding image data.
