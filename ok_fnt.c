@@ -1,7 +1,7 @@
 /*
  ok-file-formats
  https://github.com/brackeen/ok-file-formats
- Copyright (c) 2014-2017 David Brackeen
+ Copyright (c) 2014-2019 David Brackeen
 
  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
  associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -148,10 +148,12 @@ static void ok_fnt_decode2(ok_fnt_decoder *decoder) {
         uint8_t block_header[5];
         if (decoder->input_read_func(decoder->input_data, block_header,
             sizeof(block_header)) != sizeof(block_header)) {
-            // Don't give an error if all required blocks have been found.
-            const bool all_required_blocks_found = (block_types_found & 0x1E) == 0x1E;
-            if (!all_required_blocks_found) {
-                ok_fnt_error(decoder->fnt, "Read error: error calling input function.");
+            // Probably EOF. Give an error if all required blocks have not been found.
+            const int required_blocks = ((1 << OK_FNT_BLOCK_TYPE_COMMON) |
+                                         (1 << OK_FNT_BLOCK_TYPE_PAGES) |
+                                         (1 << OK_FNT_BLOCK_TYPE_CHARS));
+            if ((block_types_found & required_blocks) != required_blocks) {
+                ok_fnt_error(decoder->fnt, "Missing required blocks or unexpected EOF");
             }
             return;
         }

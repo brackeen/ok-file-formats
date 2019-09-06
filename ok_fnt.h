@@ -1,7 +1,7 @@
 /*
  ok-file-formats
  https://github.com/brackeen/ok-file-formats
- Copyright (c) 2014-2017 David Brackeen
+ Copyright (c) 2014-2019 David Brackeen
 
  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
  associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -76,7 +76,7 @@ typedef struct {
 } ok_fnt_kerning;
 
 /**
- * The data returned from #ok_fnt_read(). For details, see
+ * The data returned from #ok_fnt_read(). The `name` may be `NULL`. For details, see
  * http://www.angelcode.com/products/bmfont/doc/file_format.html
  */
 typedef struct {
