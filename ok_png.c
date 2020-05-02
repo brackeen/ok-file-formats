@@ -1,7 +1,7 @@
 /*
  ok-file-formats
  https://github.com/brackeen/ok-file-formats
- Copyright (c) 2014-2019 David Brackeen
+ Copyright (c) 2014-2020 David Brackeen
 
  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
  associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -100,19 +100,15 @@ typedef struct {
 
 } ok_png_decoder;
 
-#ifdef NDEBUG
-#define ok_png_error(png, message) ok_png_set_error((png), "ok_png_error")
-#else
-#define ok_png_error(png, message) ok_png_set_error((png), (message))
-#endif
+#define ok_png_error(png, error_code, message) ok_png_set_error((png), (error_code))
 
-static void ok_png_set_error(ok_png *png, const char *message) {
+static void ok_png_set_error(ok_png *png, ok_png_error error_code) {
     if (png) {
         free(png->data);
         png->data = NULL;
         png->width = 0;
         png->height = 0;
-        png->error_message = message;
+        png->error_code = error_code;
     }
 }
 
@@ -120,7 +116,7 @@ static bool ok_read(ok_png_decoder *decoder, uint8_t *buffer, size_t length) {
     if (decoder->input_read_func(decoder->input_data, buffer, length) == length) {
         return true;
     } else {
-        ok_png_error(decoder->png, "Read error: error calling input function.");
+        ok_png_error(decoder->png, OK_PNG_ERROR_IO, "Read error: error calling input function.");
         return false;
     }
 }
@@ -129,7 +125,7 @@ static bool ok_seek(ok_png_decoder *decoder, long length) {
     if (decoder->input_seek_func(decoder->input_data, length)) {
         return true;
     } else {
-        ok_png_error(decoder->png, "Seek error: error calling input function.");
+        ok_png_error(decoder->png, OK_PNG_ERROR_IO, "Seek error: error calling input function.");
         return false;
     }
 }
@@ -225,7 +221,7 @@ static inline void ok_png_unpremultiply(uint8_t *dst) {
 static bool ok_png_read_header(ok_png_decoder *decoder, uint32_t chunk_length) {
     ok_png *png = decoder->png;
     if (chunk_length != 13) {
-        ok_png_error(png, "Invalid IHDR chunk length");
+        ok_png_error(png, OK_PNG_ERROR_INVALID, "Invalid IHDR chunk length");
         return false;
     }
     uint8_t chunk_data[13];
@@ -242,16 +238,16 @@ static bool ok_png_read_header(ok_png_decoder *decoder, uint32_t chunk_length) {
     uint64_t dst_stride = (uint64_t)png->width * 4;
 
     if (compression_method != 0) {
-        ok_png_error(png, "Invalid compression method");
+        ok_png_error(png, OK_PNG_ERROR_INVALID, "Invalid compression method");
         return false;
     } else if (filter_method != 0) {
-        ok_png_error(png, "Invalid filter method");
+        ok_png_error(png, OK_PNG_ERROR_INVALID, "Invalid filter method");
         return false;
     } else if (decoder->interlace_method != 0 && decoder->interlace_method != 1) {
-        ok_png_error(png, "Invalid interlace method");
+        ok_png_error(png, OK_PNG_ERROR_INVALID, "Invalid interlace method");
         return false;
     } else if (dst_stride > UINT32_MAX) {
-        ok_png_error(png, "Width too large");
+        ok_png_error(png, OK_PNG_ERROR_UNSUPPORTED, "Width too large");
         return false;
     }
 
@@ -265,7 +261,7 @@ static bool ok_png_read_header(ok_png_decoder *decoder, uint32_t chunk_length) {
         (c == OK_PNG_COLOR_TYPE_RGB_WITH_ALPHA && (b == 8 || b == 16));
 
     if (!valid) {
-        ok_png_error(png, "Invalid combination of color type and bit depth");
+        ok_png_error(png, OK_PNG_ERROR_INVALID, "Invalid combination of color type and bit depth");
         return false;
     }
 
@@ -281,7 +277,7 @@ static bool ok_png_read_palette(ok_png_decoder *decoder, uint32_t chunk_length) 
     decoder->palette_length = chunk_length / 3;
 
     if (decoder->palette_length > 256 || decoder->palette_length * 3 != chunk_length) {
-        ok_png_error(png, "Invalid palette chunk length");
+        ok_png_error(png, OK_PNG_ERROR_INVALID, "Invalid palette chunk length");
         return false;
     }
     const bool src_is_bgr = decoder->is_ios_format;
@@ -317,7 +313,8 @@ static bool ok_png_read_transparency(ok_png_decoder *decoder, uint32_t chunk_len
 
     if (decoder->color_type == OK_PNG_COLOR_TYPE_PALETTE) {
         if (chunk_length > decoder->palette_length || chunk_length > 256) {
-            ok_png_error(png, "Invalid transparency length for palette color type");
+            ok_png_error(png, OK_PNG_ERROR_INVALID,
+                         "Invalid transparency length for palette color type");
             return false;
         }
 
@@ -337,7 +334,8 @@ static bool ok_png_read_transparency(ok_png_decoder *decoder, uint32_t chunk_len
         return true;
     } else if (decoder->color_type == OK_PNG_COLOR_TYPE_GRAYSCALE) {
         if (chunk_length != 2) {
-            ok_png_error(png, "Invalid transparency length for grayscale color type");
+            ok_png_error(png, OK_PNG_ERROR_INVALID,
+                         "Invalid transparency length for grayscale color type");
             return false;
         } else {
             uint8_t buffer[2];
@@ -353,7 +351,8 @@ static bool ok_png_read_transparency(ok_png_decoder *decoder, uint32_t chunk_len
         }
     } else if (decoder->color_type == OK_PNG_COLOR_TYPE_RGB) {
         if (chunk_length != 6) {
-            ok_png_error(png, "Invalid transparency length for truecolor color type");
+            ok_png_error(png, OK_PNG_ERROR_INVALID,
+                         "Invalid transparency length for truecolor color type");
             return false;
         } else {
             uint8_t buffer[6];
@@ -367,7 +366,8 @@ static bool ok_png_read_transparency(ok_png_decoder *decoder, uint32_t chunk_len
             return true;
         }
     } else {
-        ok_png_error(png, "Invalid transparency for color type");
+        ok_png_error(png, OK_PNG_ERROR_INVALID,
+                     "Invalid transparency for color type");
         return false;
     }
 }
@@ -749,7 +749,7 @@ static bool ok_png_read_data(ok_png_decoder *decoder, uint32_t bytes_remaining) 
             decoder->dst_buffer = malloc(platform_size);
         }
         if (!decoder->dst_buffer) {
-            ok_png_error(png, "Couldn't allocate memory for image");
+            ok_png_error(png, OK_PNG_ERROR_ALLOCATION, "Couldn't allocate memory for image");
             return false;
         }
         png->data = decoder->dst_buffer;
@@ -772,7 +772,7 @@ static bool ok_png_read_data(ok_png_decoder *decoder, uint32_t bytes_remaining) 
     }
     if (!decoder->curr_scanline || !decoder->prev_scanline || !decoder->inflate_buffer ||
         (decoder->interlace_method == 1 && !decoder->temp_data_row)) {
-        ok_png_error(png, "Couldn't allocate buffers");
+        ok_png_error(png, OK_PNG_ERROR_ALLOCATION, "Couldn't allocate buffers");
         return false;
     }
 
@@ -780,7 +780,7 @@ static bool ok_png_read_data(ok_png_decoder *decoder, uint32_t bytes_remaining) 
     if (!decoder->inflater) {
         decoder->inflater = ok_inflater_init(decoder->is_ios_format);
         if (!decoder->inflater) {
-            ok_png_error(png, "Couldn't init inflater");
+            ok_png_error(png, OK_PNG_ERROR_ALLOCATION, "Couldn't init inflater");
             return false;
         }
     }
@@ -846,7 +846,7 @@ static bool ok_png_read_data(ok_png_decoder *decoder, uint32_t bytes_remaining) 
                                          decoder->curr_scanline + decoder->inflater_bytes_read,
                                          curr_bytes_per_scanline - decoder->inflater_bytes_read);
         if (len == OK_SIZE_MAX) {
-            ok_png_error(png, ok_inflater_error_message(decoder->inflater));
+            ok_png_error(png, OK_PNG_ERROR_INFLATOR, "Inflator error");
             return false;
         }
         decoder->inflater_bytes_read += len;
@@ -857,7 +857,7 @@ static bool ok_png_read_data(ok_png_decoder *decoder, uint32_t bytes_remaining) 
                 ok_png_decode_filter(decoder->curr_scanline + 1, decoder->prev_scanline + 1,
                                      curr_bytes_per_scanline - 1, filter, bytes_per_pixel);
             } else if (filter != 0) {
-                ok_png_error(png, "Invalid filter type");
+                ok_png_error(png, OK_PNG_ERROR_INVALID, "Invalid filter type");
                 return false;
             }
 
@@ -887,7 +887,7 @@ static void ok_png_decode2(ok_png_decoder *decoder) {
     }
     uint8_t png_signature[8] = {137, 80, 78, 71, 13, 10, 26, 10};
     if (memcmp(png_header, png_signature, 8) != 0) {
-        ok_png_error(decoder->png, "Invalid signature (not a PNG file)");
+        ok_png_error(decoder->png, OK_PNG_ERROR_INVALID, "Invalid signature (not a PNG file)");
         return;
     }
 
@@ -907,7 +907,7 @@ static void ok_png_decode2(ok_png_decoder *decoder) {
         bool success = false;
 
         if (!hdr_found && chunk_type != OK_PNG_CHUNK_CGBI && chunk_type != OK_PNG_CHUNK_IHDR) {
-            ok_png_error(png, "IHDR chunk must appear first");
+            ok_png_error(png, OK_PNG_ERROR_INVALID, "IHDR chunk must appear first");
             return;
         }
         if (chunk_type == OK_PNG_CHUNK_IHDR) {
@@ -959,7 +959,7 @@ static void ok_png_decode2(ok_png_decoder *decoder) {
 
     // Sanity check
     if (!decoder->decoding_completed) {
-        ok_png_error(png, "Missing imaga data");
+        ok_png_error(png, OK_PNG_ERROR_INVALID, "Missing imaga data");
     }
 }
 
@@ -972,17 +972,18 @@ static ok_png *ok_png_decode(void *user_data, ok_png_read_func input_read_func,
         return NULL;
     }
     if (check_user_data && !user_data) {
-        ok_png_error(png, "File not found");
+        ok_png_error(png, OK_PNG_ERROR_API, "File not found");
         return png;
     }
     if (!input_read_func || !input_seek_func) {
-        ok_png_error(png, "Invalid argument: read_func and seek_func must not be NULL");
+        ok_png_error(png, OK_PNG_ERROR_API,
+                     "Invalid argument: read_func and seek_func must not be NULL");
         return png;
     }
 
     ok_png_decoder *decoder = calloc(1, sizeof(ok_png_decoder));
     if (!decoder) {
-        ok_png_error(png, "Couldn't allocate decoder.");
+        ok_png_error(png, OK_PNG_ERROR_ALLOCATION, "Couldn't allocate decoder.");
         return png;
     }
 
@@ -1104,21 +1105,13 @@ struct ok_inflater {
     ok_inflater_huffman_tree *distance_huffman;
     ok_inflater_huffman_tree *fixed_literal_huffman;
     ok_inflater_huffman_tree *fixed_distance_huffman;
-
-    // Error
-    const char *error_message;
 };
 
-#ifdef NDEBUG
-#define ok_inflater_error(inflater, message) ok_inflater_set_error((inflater), "ok_inflater_error")
-#else
-#define ok_inflater_error(inflater, message) ok_inflater_set_error((inflater), (message))
-#endif
+#define ok_inflater_error(inflater, message) ok_inflater_set_error(inflater)
 
-static void ok_inflater_set_error(ok_inflater *inflater, const char *message) {
+static void ok_inflater_set_error(ok_inflater *inflater) {
     if (inflater) {
         inflater->state = OK_INFLATER_STATE_ERROR;
-        inflater->error_message = message;
     }
 }
 
@@ -1827,8 +1820,6 @@ void ok_inflater_reset(ok_inflater *inflater) {
         inflater->final_block = false;
         inflater->state = (inflater->nowrap ? OK_INFLATER_STATE_READY_FOR_NEXT_BLOCK :
                            OK_INFLATER_STATE_READY_FOR_HEAD);
-
-        inflater->error_message = NULL;
     }
 }
 
@@ -1842,10 +1833,6 @@ void ok_inflater_free(ok_inflater *inflater) {
         free(inflater->fixed_distance_huffman);
         free(inflater);
     }
-}
-
-const char *ok_inflater_error_message(const ok_inflater *inflater) {
-    return inflater ? inflater->error_message : NULL;
 }
 
 bool ok_inflater_needs_input(const ok_inflater *inflater) {

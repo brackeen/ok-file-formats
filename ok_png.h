@@ -1,7 +1,7 @@
 /*
  ok-file-formats
  https://github.com/brackeen/ok-file-formats
- Copyright (c) 2014-2019 David Brackeen
+ Copyright (c) 2014-2020 David Brackeen
 
  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
  associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -65,6 +65,16 @@
 extern "C" {
 #endif
 
+typedef enum {
+    OK_PNG_SUCCESS = 0,
+    OK_PNG_ERROR_API, // Invalid argument sent to public API function
+    OK_PNG_ERROR_INVALID, // Not a valid PNG file
+    OK_PNG_ERROR_INFLATOR, // Couldn't inflate data
+    OK_PNG_ERROR_UNSUPPORTED, // Unsupported PNG file (width > 1073741824)
+    OK_PNG_ERROR_ALLOCATION, // Couldn't allocate memory
+    OK_PNG_ERROR_IO, // Couldn't read or seek the file
+} ok_png_error;
+
 /**
  * The data returned from #ok_png_read() or #ok_png_read_info().
  */
@@ -73,7 +83,7 @@ typedef struct {
     uint32_t height;
     bool has_alpha;
     uint8_t *data;
-    const char *error_message;
+    ok_png_error error_code;
 } ok_png;
 
 /**
@@ -98,7 +108,7 @@ typedef enum {
 
 /**
  * Reads a PNG image. On success, #ok_png.data contains the packed image data, with a size of
- * (`width * height * 4`). On failure, #ok_png.data is `NULL` and #ok_png.error_message is set.
+ * (`width * height * 4`). On failure, #ok_png.data is `NULL` and #ok_png.error_code is nonzero.
  *
  * @param file The file to read.
 
@@ -113,7 +123,7 @@ ok_png *ok_png_read(FILE *file, ok_png_decode_flags decode_flags);
  * Reads a PNG image, outputing image data to a preallocated buffer.
  *
  * On success, #ok_png.width and #ok_png.height are set.
- * On failure, #ok_png.error_message is set.
+ * On failure, #ok_png.error_code is nonzero.
  *
  * @param file The file to read.
  * @param dst_buffer The buffer to output data. The buffer must have a minimum size of
@@ -169,7 +179,7 @@ typedef bool (*ok_png_seek_func)(void *user_data, long count);
 
 /**
  * Reads a PNG image. On success, #ok_png.data contains the packed image data, with a size of
- * (`width * height * 4`). On failure, #ok_png.data is `NULL` and #ok_png.error_message is set.
+ * (`width * height * 4`). On failure, #ok_png.data is `NULL` and #ok_png.error_code is nonzero.
  *
  * @param user_data The parameter to be passed to `read_func` and `seek_func`.
  * @param read_func The read function.
@@ -185,7 +195,7 @@ ok_png *ok_png_read_from_callbacks(void *user_data, ok_png_read_func read_func,
  * Reads a PNG image, outputing image data to a preallocated buffer.
  *
  * On success, #ok_png.width and #ok_png.height are set.
- * On failure, #ok_png.error_message is set.
+ * On failure, #ok_png.error_code is nonzero.
  *
  * @param user_data The parameter to be passed to `read_func` and `seek_func`.
  * @param read_func The read function.
@@ -246,12 +256,6 @@ void ok_inflater_set_input(ok_inflater *inflater, const uint8_t *buffer, size_t 
  * @param dst_length The maximum number of bytes to inflate.
  */
 size_t ok_inflater_inflate(ok_inflater *inflater, uint8_t *dst, size_t dst_length);
-
-/**
- * Gets the error message, if any. Returns a zero-length string if no error.
- * The string is owned by the inflater and should not be freed.
- */
-const char *ok_inflater_error_message(const ok_inflater *inflater);
 
 /**
  * Frees the inflater.
