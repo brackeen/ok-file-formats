@@ -64,14 +64,14 @@ int main(int argc, char *argv[]) {
 
     if (test_png) {
         ok_png *png = ok_png_read(stdin, png_flags);
-        if (png->error_message) {
-            fprintf(stderr, "%s\n", png->error_message);
+        if (png->error_code) {
+            fprintf(stderr, "Error code: %i\n", png->error_code);
         }
         ok_png_free(png);
     } else if (test_jpg) {
         ok_jpg *jpg = ok_jpg_read(stdin, jpg_flags);
-        if (jpg->error_message) {
-            fprintf(stderr, "%s\n", jpg->error_message);
+        if (jpg->error_code) {
+            fprintf(stderr, "Error code: %i\n", jpg->error_code);
         }
         ok_jpg_free(jpg);
     } else if (test_wav) {
