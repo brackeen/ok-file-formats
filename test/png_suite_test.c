@@ -271,7 +271,6 @@ static bool test_image(const char *path_to_png_suite,
 
         bool info_only = test_type == test_info_only;
         success = compare(name, "png", png_data, png_data_stride, png->width, png->height,
-                          png->error_message,
                           rgba_data, rgba_data_length, info_only, 0, verbose);
     } else {
         printf("Warning: File not found: %s.png\n", name);

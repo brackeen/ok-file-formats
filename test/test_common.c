@@ -138,7 +138,6 @@ static bool fuzzy_memcmp(const uint8_t *data1, const uint8_t *data2,
 bool compare(const char *name, const char *ext,
              const uint8_t *image_data, uint32_t image_data_stride,
              uint32_t image_width, uint32_t image_height,
-             const char *image_error_message,
              const uint8_t *rgba_data, unsigned long rgba_data_length,
              bool info_only, uint8_t fuzziness, bool verbose) {
     double p_identical;
@@ -165,7 +164,7 @@ bool compare(const char *name, const char *ext,
         }
         success = true;
     } else if (!image_data) {
-        printf("Failure: Couldn't load %s.%s. %s\n", name, ext, image_error_message);
+        printf("Failure: Couldn't load %s.%s.\n", name, ext);
     } else if (!rgba_data) {
         printf("Warning: Couldn't load %s.rgba. Possibly invalid file.\n", name);
         success = true;

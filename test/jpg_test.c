@@ -131,7 +131,6 @@ static bool test_image(const char *path_to_jpgs,
         bool info_only = test_type == test_info_only;
         success = compare(name, "jpg", jpg_data, jpg_data_stride,
                           jpg->width, jpg->height,
-                          jpg->error_message,
                           rgba_data, rgba_data_length, info_only, 4, verbose);
     } else {
         printf("Warning: File not found: %s.jpg\n", name);

@@ -1,7 +1,7 @@
 /*
  ok-file-formats
  https://github.com/brackeen/ok-file-formats
- Copyright (c) 2014-2017 David Brackeen
+ Copyright (c) 2014-2020 David Brackeen
 
  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
  associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -63,6 +63,15 @@
 extern "C" {
 #endif
 
+typedef enum {
+    OK_JPG_SUCCESS = 0,
+    OK_JPG_ERROR_API, // Invalid argument sent to public API function
+    OK_JPG_ERROR_INVALID, // Not a valid JPG file
+    OK_JPG_ERROR_UNSUPPORTED, // Unsupported JPG file (CMYK)
+    OK_JPG_ERROR_ALLOCATION, // Couldn't allocate memory
+    OK_JPG_ERROR_IO, // Couldn't read or seek the file
+} ok_jpg_error;
+
 /**
  * The data returned from #ok_jpg_read() or #ok_jpg_read_info().
  */
@@ -70,7 +79,7 @@ typedef struct {
     uint32_t width;
     uint32_t height;
     uint8_t *data;
-    const char *error_message;
+    ok_jpg_error error_code;
 } ok_jpg;
 
 /**
@@ -93,7 +102,7 @@ typedef enum {
 
 /**
  * Reads a JPEG image. On success, #ok_jpg.data contains the packed image data, with a size of
- * (`width * height * 4`). On failure, #ok_jpg.data is `NULL` and #ok_jpg.error_message is set.
+ * (`width * height * 4`). On failure, #ok_jpg.data is `NULL` and #ok_jpg.error_code is nonzero.
  *
  * @param file The file to read.
  * @param decode_flags The JPG decode flags. Use `OK_JPG_COLOR_FORMAT_RGBA` for the most cases.
@@ -106,7 +115,7 @@ ok_jpg *ok_jpg_read(FILE *file, ok_jpg_decode_flags decode_flags);
  * Reads a JPEG image, outputing image data to a preallocated buffer.
  *
  * On success, #ok_jpg.width and #ok_jpg.height are set.
- * On failure, #ok_jpg.error_message is set.
+ * On failure, #ok_jpg.error_code is nonzero.
  *
  * @param file The file to read.
  * @param dst_buffer The buffer to output data. The buffer must have a minimum size of
@@ -162,7 +171,7 @@ typedef bool (*ok_jpg_seek_func)(void *user_data, long count);
 
 /**
  * Reads a JPEG image. On success, #ok_jpg.data contains the packed image data, with a size of
- * (`width * height * 4`). On failure, #ok_jpg.data is `NULL` and #ok_jpg.error_message is set.
+ * (`width * height * 4`). On failure, #ok_jpg.data is `NULL` and #ok_jpg.error_code is nonzero.
  *
  * @param user_data The parameter to be passed to `read_func` and `seek_func`.
  * @param read_func The read function.
@@ -178,7 +187,7 @@ ok_jpg *ok_jpg_read_from_callbacks(void *user_data, ok_jpg_read_func read_func,
  * Reads a JPEG image, outputing image data to a preallocated buffer.
  *
  * On success, #ok_jpg.width and #ok_jpg.height are set.
- * On failure, #ok_jpg.error_message is set.
+ * On failure, #ok_jpg.error_code is nonzero.
  *
  * @param user_data The parameter to be passed to `read_func` and `seek_func`.
  * @param read_func The read function.

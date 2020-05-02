@@ -16,6 +16,5 @@ static inline uint32_t align_to(uint32_t value, uint32_t alignment) {
 bool compare(const char *name, const char *ext,
              const uint8_t *image_data, uint32_t image_data_stride,
              uint32_t image_width, uint32_t image_height,
-             const char *image_error_message,
              const uint8_t *rgba_data, unsigned long rgba_data_length,
              bool info_only, uint8_t fuzziness, bool verbose);

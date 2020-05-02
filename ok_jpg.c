@@ -1,7 +1,7 @@
 /*
  ok-file-formats
  https://github.com/brackeen/ok-file-formats
- Copyright (c) 2014-2017 David Brackeen
+ Copyright (c) 2014-2020 David Brackeen
 
  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
  associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -139,19 +139,15 @@ typedef struct {
     bool huffman_error;
 } ok_jpg_decoder;
 
-#ifdef NDEBUG
-#define ok_jpg_error(jpg, message) ok_jpg_set_error((jpg), "ok_jpg_error")
-#else
-#define ok_jpg_error(jpg, message) ok_jpg_set_error((jpg), (message))
-#endif
+#define ok_jpg_error(jpg, error_code, message) ok_jpg_set_error((jpg), (error_code))
 
-static void ok_jpg_set_error(ok_jpg *jpg, const char *message) {
+static void ok_jpg_set_error(ok_jpg *jpg, ok_jpg_error error_code) {
     if (jpg) {
         free(jpg->data);
         jpg->data = NULL;
         jpg->width = 0;
         jpg->height = 0;
-        jpg->error_message = message;
+        jpg->error_code = error_code;
     }
 }
 
@@ -185,7 +181,7 @@ static bool ok_read(ok_jpg_decoder *decoder, uint8_t *buffer, size_t length) {
         return true;
     } else {
         decoder->eof_found = true;
-        ok_jpg_error(decoder->jpg, "Read error: error calling input function.");
+        ok_jpg_error(decoder->jpg, OK_JPG_ERROR_IO, "Read error: error calling input function.");
         return false;
     }
 }
@@ -194,7 +190,7 @@ static bool ok_seek(ok_jpg_decoder *decoder, long length) {
     if (length == 0) {
         return true;
     } else if (length < 0) {
-        ok_jpg_error(decoder->jpg, "Seek error: negative seek unsupported.");
+        ok_jpg_error(decoder->jpg, OK_JPG_ERROR_IO, "Seek error: negative seek unsupported.");
         return false;
     }
     size_t available = (size_t)(decoder->input_buffer_end - decoder->input_buffer_start);
@@ -207,7 +203,7 @@ static bool ok_seek(ok_jpg_decoder *decoder, long length) {
             return true;
         } else {
             decoder->eof_found = true;
-            ok_jpg_error(decoder->jpg, "Seek error: error calling input function.");
+            ok_jpg_error(decoder->jpg, OK_JPG_ERROR_IO, "Seek error: error calling input function.");
             return false;
         }
     } else {
@@ -470,7 +466,7 @@ static inline uint8_t ok_jpg_huffman_decode(ok_jpg_decoder *decoder,
     }
 
     decoder->huffman_error = true;
-    ok_jpg_error(decoder->jpg, "Invalid huffman code");
+    ok_jpg_error(decoder->jpg, OK_JPG_ERROR_INVALID, "Invalid huffman code");
     return 0;
 }
 
@@ -1158,7 +1154,7 @@ static bool ok_jpg_decode_restart_if_needed(ok_jpg_decoder *decoder) {
                 if (decoder->next_marker == 0xD0 + decoder->next_restart) {
                     decoder->next_marker = 0;
                 } else {
-                    ok_jpg_error(decoder->jpg, "Invalid restart marker (1)");
+                    ok_jpg_error(decoder->jpg, OK_JPG_ERROR_INVALID, "Invalid restart marker (1)");
                     return false;
                 }
             } else {
@@ -1167,7 +1163,7 @@ static bool ok_jpg_decode_restart_if_needed(ok_jpg_decoder *decoder) {
                     return false;
                 }
                 if (!(buffer[0] == 0xff && buffer[1] == 0xD0 + decoder->next_restart)) {
-                    ok_jpg_error(decoder->jpg, "Invalid restart marker (2)");
+                    ok_jpg_error(decoder->jpg, OK_JPG_ERROR_INVALID, "Invalid restart marker (2)");
                     return false;
                 }
             }
@@ -1458,29 +1454,29 @@ static bool ok_jpg_read_sof(ok_jpg_decoder *decoder) {
     int length = readBE16(buffer) - 8;
     int P = buffer[2];
     if (P != 8) {
-        ok_jpg_error(jpg, "Invalid component size");
+        ok_jpg_error(jpg, OK_JPG_ERROR_INVALID, "Invalid component size");
         return false;
     }
     decoder->in_height = readBE16(buffer + 3);
     decoder->in_width = readBE16(buffer + 5);
     if (decoder->in_width == 0 || decoder->in_height == 0) {
-        ok_jpg_error(jpg, "Invalid image dimensions");
+        ok_jpg_error(jpg, OK_JPG_ERROR_INVALID, "Invalid image dimensions");
         return false;
     }
     jpg->width = decoder->rotate ? decoder->in_height : decoder->in_width;
     jpg->height = decoder->rotate ? decoder->in_width : decoder->in_height;
     decoder->num_components = buffer[7];
     if (decoder->num_components == 4) {
-        ok_jpg_error(jpg, "Unsupported format (CMYK)");
+        ok_jpg_error(jpg, OK_JPG_ERROR_UNSUPPORTED, "Unsupported format (CMYK)");
         return false;
     }
     if (decoder->num_components != 1 && decoder->num_components != 3) {
-        ok_jpg_error(jpg, "Invalid component count");
+        ok_jpg_error(jpg, OK_JPG_ERROR_UNSUPPORTED, "Invalid component count");
         return false;
     }
 
     if (length < 3 * decoder->num_components) {
-        ok_jpg_error(jpg, "SOF segment too short");
+        ok_jpg_error(jpg, OK_JPG_ERROR_INVALID, "SOF segment too short");
         return false;
     }
     if (!ok_read(decoder, buffer, 3 * (size_t)decoder->num_components)) {
@@ -1499,12 +1495,12 @@ static bool ok_jpg_read_sof(ok_jpg_decoder *decoder) {
         c->Tq = buffer[i * 3 + 2];
 
         if (c->H == 0 || c->V == 0 || c->H > 4 || c->V > 4 || c->Tq > 3) {
-            ok_jpg_error(jpg, "Bad component");
+            ok_jpg_error(jpg, OK_JPG_ERROR_INVALID, "Bad component");
             return false;
         }
 
         if (c->H > MAX_SAMPLING_FACTOR || c->V > MAX_SAMPLING_FACTOR) {
-            ok_jpg_error(jpg, "Unsupported sampling factor");
+            ok_jpg_error(jpg, OK_JPG_ERROR_UNSUPPORTED, "Unsupported sampling factor");
             return false;
         }
 
@@ -1549,7 +1545,7 @@ static bool ok_jpg_read_sof(ok_jpg_decoder *decoder) {
         } else if (c->H * 2 == maxH && c->V == maxV) {
             c->idct = ok_jpg_idct_16x8;
         } else {
-            ok_jpg_error(jpg, "Unsupported IDCT sampling factor");
+            ok_jpg_error(jpg, OK_JPG_ERROR_UNSUPPORTED, "Unsupported IDCT sampling factor");
             return false;
         }
     }
@@ -1557,7 +1553,7 @@ static bool ok_jpg_read_sof(ok_jpg_decoder *decoder) {
     // Allocate data
     if (!decoder->info_only) {
         if (decoder->sof_found) {
-            ok_jpg_error(jpg, "Invalid JPEG (Multiple SOF markers)");
+            ok_jpg_error(jpg, OK_JPG_ERROR_INVALID, "Invalid JPEG (Multiple SOF markers)");
             return false;
         }
         decoder->sof_found = true;
@@ -1569,7 +1565,8 @@ static bool ok_jpg_read_sof(ok_jpg_decoder *decoder) {
                                              decoder->data_units_y * c->V);
                 c->blocks = malloc(num_blocks * 64 * sizeof(*c->blocks) + OK_JPG_BLOCK_EXTRA_SPACE);
                 if (!c->blocks) {
-                    ok_jpg_error(jpg, "Couldn't allocate internal block memory for image");
+                    ok_jpg_error(jpg, OK_JPG_ERROR_ALLOCATION,
+                                 "Couldn't allocate internal block memory for image");
                     return false;
                 }
             }
@@ -1583,7 +1580,7 @@ static bool ok_jpg_read_sof(ok_jpg_decoder *decoder) {
                 decoder->dst_buffer = malloc(platform_size);
             }
             if (!decoder->dst_buffer) {
-                ok_jpg_error(jpg, "Couldn't allocate memory for image");
+                ok_jpg_error(jpg, OK_JPG_ERROR_ALLOCATION, "Couldn't allocate memory for image");
                 return false;
             }
             jpg->data = decoder->dst_buffer;
@@ -1615,16 +1612,16 @@ static bool ok_jpg_read_sos(ok_jpg_decoder *decoder) {
     uint16_t length = readBE16(buffer);
     decoder->num_scan_components = buffer[2];
     if (decoder->num_scan_components > decoder->num_components) {
-        ok_jpg_error(jpg, "Invalid SOS segment (Ns)");
+        ok_jpg_error(jpg, OK_JPG_ERROR_INVALID, "Invalid SOS segment (Ns)");
         return false;
     }
     const size_t expected_size = 3 + (size_t)decoder->num_scan_components * 2;
     if (length != expected_size + header_size) {
-        ok_jpg_error(jpg, "Invalid SOS segment (L)");
+        ok_jpg_error(jpg, OK_JPG_ERROR_INVALID, "Invalid SOS segment (L)");
         return false;
     }
     if (sizeof(buffer) < expected_size) {
-        ok_jpg_error(jpg, "Too many components for buffer");
+        ok_jpg_error(jpg, OK_JPG_ERROR_INVALID, "Too many components for buffer");
         return false;
     }
     if (!ok_read(decoder, buffer, expected_size)) {
@@ -1643,7 +1640,7 @@ static bool ok_jpg_read_sos(ok_jpg_decoder *decoder) {
             }
         }
         if (!component_found) {
-            ok_jpg_error(jpg, "Invalid SOS segment (C)");
+            ok_jpg_error(jpg, OK_JPG_ERROR_INVALID, "Invalid SOS segment (C)");
             return false;
         }
 
@@ -1651,7 +1648,7 @@ static bool ok_jpg_read_sos(ok_jpg_decoder *decoder) {
         comp->Td = src[1] >> 4;
         comp->Ta = src[1] & 0x0f;
         if (comp->Td > 3 || comp->Ta > 3) {
-            ok_jpg_error(jpg, "Invalid SOS segment (Td/Ta)");
+            ok_jpg_error(jpg, OK_JPG_ERROR_INVALID, "Invalid SOS segment (Td/Ta)");
             return false;
         }
     }
@@ -1666,14 +1663,14 @@ static bool ok_jpg_read_sos(ok_jpg_decoder *decoder) {
             decoder->scan_end < decoder->scan_start || decoder->scan_end > 63 ||
             decoder->scan_prev_scale < 0 || decoder->scan_prev_scale > 13 ||
             decoder->scan_scale < 0 || decoder->scan_scale > 13) {
-            ok_jpg_error(jpg, "Invalid progressive SOS segment (Ss/Se/Ah/Al)");
+            ok_jpg_error(jpg, OK_JPG_ERROR_INVALID, "Invalid progressive SOS segment (Ss/Se/Ah/Al)");
             return false;
         }
     } else {
         // Sequential
         if (decoder->scan_start != 0 || decoder->scan_end != 63 ||
             decoder->scan_prev_scale != 0 || decoder->scan_scale != 0) {
-            ok_jpg_error(jpg, "Invalid SOS segment (Ss/Se/Ah/Al)");
+            ok_jpg_error(jpg, OK_JPG_ERROR_INVALID, "Invalid SOS segment (Ss/Se/Ah/Al)");
             return false;
         }
     }
@@ -1714,11 +1711,11 @@ static bool ok_jpg_read_dqt(ok_jpg_decoder *decoder) {
         int Tq = pt & 0x0f;
 
         if (Pq == 1) {
-            ok_jpg_error(jpg, "Unsupported JPEG (16-bit q_table)");
+            ok_jpg_error(jpg, OK_JPG_ERROR_UNSUPPORTED, "Unsupported JPEG (16-bit q_table)");
             return false;
         }
         if (Pq != 0 || Tq > 3) {
-            ok_jpg_error(jpg, "Invalid JPEG (Pq/Tq)");
+            ok_jpg_error(jpg, OK_JPG_ERROR_INVALID, "Invalid JPEG (Pq/Tq)");
             return false;
         }
         if (!ok_read(decoder, decoder->q_table[Tq], 64)) {
@@ -1727,7 +1724,7 @@ static bool ok_jpg_read_dqt(ok_jpg_decoder *decoder) {
         length -= 65;
     }
     if (length != 0) {
-        ok_jpg_error(jpg, "Invalid DQT segment length");
+        ok_jpg_error(jpg, OK_JPG_ERROR_INVALID, "Invalid DQT segment length");
         return false;
     } else {
         return true;
@@ -1751,7 +1748,7 @@ static bool ok_jpg_read_dht(ok_jpg_decoder *decoder) {
         int Tc = buffer[0] >> 4;
         int Th = buffer[0] & 0x0f;
         if (Tc > 1 || Th > 3) {
-            ok_jpg_error(jpg, "Invalid JPEG (Bad DHT Tc/Th)");
+            ok_jpg_error(jpg, OK_JPG_ERROR_INVALID, "Invalid JPEG (Bad DHT Tc/Th)");
             return false;
         }
         ok_jpg_huffman_table *tables = (Tc == 0 ? decoder->dc_huffman_tables :
@@ -1760,7 +1757,7 @@ static bool ok_jpg_read_dht(ok_jpg_decoder *decoder) {
         ok_jpg_generate_huffman_table(table, buffer);
         if (table->count > 0) {
             if (table->count > 256 || table->count > length) {
-                ok_jpg_error(jpg, "Invalid DHT segment length");
+                ok_jpg_error(jpg, OK_JPG_ERROR_INVALID, "Invalid DHT segment length");
                 return false;
             }
             if (!ok_read(decoder, table->val, (size_t)table->count)) {
@@ -1772,7 +1769,7 @@ static bool ok_jpg_read_dht(ok_jpg_decoder *decoder) {
         ok_jpg_generate_huffman_table_lookups(table, is_ac_table);
     }
     if (length != 0) {
-        ok_jpg_error(jpg, "Invalid DHT segment length");
+        ok_jpg_error(jpg, OK_JPG_ERROR_INVALID, "Invalid DHT segment length");
         return false;
     } else {
         return true;
@@ -1787,7 +1784,7 @@ static bool ok_jpg_read_dri(ok_jpg_decoder *decoder) {
     }
     int length = readBE16(buffer) - 2;
     if (length != 2) {
-        ok_jpg_error(decoder->jpg, "Invalid DRI segment length");
+        ok_jpg_error(decoder->jpg, OK_JPG_ERROR_INVALID, "Invalid DRI segment length");
         return false;
     } else {
         decoder->restart_intervals = readBE16(buffer + 2);
@@ -1815,7 +1812,7 @@ static void ok_jpg_decode2(ok_jpg_decoder *decoder) {
         return;
     }
     if (jpg_header[0] != 0xFF || jpg_header[1] != 0xD8) {
-        ok_jpg_error(jpg, "Invalid signature (not a JPEG file)");
+        ok_jpg_error(jpg, OK_JPG_ERROR_INVALID, "Invalid signature (not a JPEG file)");
         return;
     }
 
@@ -1838,7 +1835,7 @@ static void ok_jpg_decode2(ok_jpg_decoder *decoder) {
                 }
                 marker = buffer[0];
             } else {
-                ok_jpg_error(jpg, "Invalid JPEG marker");
+                ok_jpg_error(jpg, OK_JPG_ERROR_INVALID, "Invalid JPEG marker");
                 return;
             }
         }
@@ -1899,7 +1896,7 @@ static void ok_jpg_decode2(ok_jpg_decoder *decoder) {
         } else if (marker == 0xFF) {
             // Ignore
         } else {
-            ok_jpg_error(jpg, "Unsupported or corrupt JPEG");
+            ok_jpg_error(jpg, OK_JPG_ERROR_INVALID, "Unsupported or corrupt JPEG");
             success = false;
         }
 
@@ -1909,11 +1906,11 @@ static void ok_jpg_decode2(ok_jpg_decoder *decoder) {
     }
 
     if (decoder->num_components == 0) {
-        ok_jpg_error(jpg, "SOF not found");
+        ok_jpg_error(jpg, OK_JPG_ERROR_INVALID, "SOF not found");
     } else {
         for (int i = 0; i < decoder->num_components; i++) {
             if (!decoder->components[i].complete) {
-                ok_jpg_error(jpg, "Missing JPEG image data");
+                ok_jpg_error(jpg, OK_JPG_ERROR_INVALID, "Missing JPEG image data");
                 break;
             }
         }
@@ -1929,17 +1926,18 @@ static ok_jpg *ok_jpg_decode(void *user_data, ok_jpg_read_func input_read_func,
         return NULL;
     }
     if (check_user_data && !user_data) {
-        ok_jpg_error(jpg, "File not found");
+        ok_jpg_error(jpg, OK_JPG_ERROR_API, "File not found");
         return jpg;
     }
     if (!input_read_func || !input_seek_func) {
-        ok_jpg_error(jpg, "Invalid argument: read_func and seek_func must not be NULL");
+        ok_jpg_error(jpg, OK_JPG_ERROR_API,
+                     "Invalid argument: read_func and seek_func must not be NULL");
         return jpg;
     }
 
     ok_jpg_decoder *decoder = calloc(1, sizeof(ok_jpg_decoder));
     if (!decoder) {
-        ok_jpg_error(jpg, "Couldn't allocate decoder.");
+        ok_jpg_error(jpg, OK_JPG_ERROR_ALLOCATION, "Couldn't allocate decoder.");
         return jpg;
     }
 
