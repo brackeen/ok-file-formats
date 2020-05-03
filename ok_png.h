@@ -45,12 +45,12 @@
  *
  *     int main() {
  *         FILE *file = fopen("my_image.png", "rb");
- *         ok_png *image = ok_png_read(file, OK_PNG_COLOR_FORMAT_RGBA);
+ *         ok_png image = ok_png_read(file, OK_PNG_COLOR_FORMAT_RGBA);
  *         fclose(file);
- *         if (image->data) {
- *             printf("Got image! Size: %li x %li\n", (long)image->width, (long)image->height);
+ *         if (image.data) {
+ *             printf("Got image! Size: %li x %li\n", (long)image.width, (long)image.height);
+ *             free(image.data);
  *         }
- *         ok_png_free(image);
  *         return 0;
  *     }
  */
@@ -69,21 +69,23 @@ typedef enum {
     OK_PNG_SUCCESS = 0,
     OK_PNG_ERROR_API, // Invalid argument sent to public API function
     OK_PNG_ERROR_INVALID, // Not a valid PNG file
-    OK_PNG_ERROR_INFLATOR, // Couldn't inflate data
+    OK_PNG_ERROR_INFLATER, // Couldn't inflate data
     OK_PNG_ERROR_UNSUPPORTED, // Unsupported PNG file (width > 1073741824)
     OK_PNG_ERROR_ALLOCATION, // Couldn't allocate memory
     OK_PNG_ERROR_IO, // Couldn't read or seek the file
 } ok_png_error;
 
 /**
- * The data returned from #ok_png_read() or #ok_png_read_info().
+ * The data returned from #ok_png_read().
  */
 typedef struct {
     uint32_t width;
     uint32_t height;
+    uint32_t stride;
+    uint8_t bpp; // Always 4
     bool has_alpha;
+    ok_png_error error_code:16;
     uint8_t *data;
-    ok_png_error error_code;
 } ok_png;
 
 /**
@@ -104,116 +106,131 @@ typedef enum {
     OK_PNG_INFO_ONLY = (1 << 3)
 } ok_png_decode_flags;
 
-#ifndef OK_NO_STDIO
+// MARK: Reading from a FILE
+
+#if !defined(OK_NO_STDIO) && !defined(OK_NO_DEFAULT_ALLOCATOR)
 
 /**
- * Reads a PNG image. On success, #ok_png.data contains the packed image data, with a size of
+ * Reads a PNG image using the default "stdlib" allocator.
+ * On success, #ok_png.data contains the packed image data, with a size of
  * (`width * height * 4`). On failure, #ok_png.data is `NULL` and #ok_png.error_code is nonzero.
  *
- * @param file The file to read.
-
- * @param decode_flags The PNG decode flags. Use `OK_PNG_COLOR_FORMAT_RGBA` for the most cases.
- * first row of data is the last row in the image.
- * @return a new #ok_png object. Never returns `NULL`. The object should be freed with
- * #ok_png_free().
- */
-ok_png *ok_png_read(FILE *file, ok_png_decode_flags decode_flags);
-
-/**
- * Reads a PNG image, outputing image data to a preallocated buffer.
- *
- * On success, #ok_png.width and #ok_png.height are set.
- * On failure, #ok_png.error_code is nonzero.
+ * The returned `data` must be freed by the caller (using stdlib's `free()`).
  *
  * @param file The file to read.
- * @param dst_buffer The buffer to output data. The buffer must have a minimum size of
- * (`dst_stride * height`). If `NULL`, a newly allocated buffer is used and assigned to 
- * #ok_png.data.
- * @param dst_stride The stride of the buffer, in bytes. If 0, the stride is assumed to be
- * (`width * 4`).
  * @param decode_flags The PNG decode flags. Use `OK_PNG_COLOR_FORMAT_RGBA` for the most cases.
- * first row of data is the last row in the image.
- * @return a new #ok_png object. Never returns `NULL`. The object should be freed with
- * #ok_png_free().
+ * @return a #ok_png object.
  */
-ok_png *ok_png_read_to_buffer(FILE *file, uint8_t *dst_buffer, uint32_t dst_stride,
-                              ok_png_decode_flags decode_flags);
+ok_png ok_png_read(FILE *file, ok_png_decode_flags decode_flags);
 
 #endif
 
-/**
- * Frees the image. This function should always be called when done with the image, even if reading
- * failed.
- */
-void ok_png_free(ok_png *png);
+// MARK: Reading from a FILE, using a custom allocator
 
-// MARK: Read from callbacks
+typedef struct {
+    /**
+     * Allocates uninitilized memory.
+     *
+     * @param user_data The pointer passed to #ok_png_read_with_allocator.
+     * @param size The size of the memory to allocate.
+     * @return the pointer to the newly allocated memory, or `NULL` if the memory could not be allocated.
+     */
+    void *(*alloc)(void *user_data, size_t size);
+    
+    /**
+     * Frees memory previously allocated with `alloc`.
+     *
+     * @param user_data The pointer passed to #ok_png_read_with_allocator.
+     * @param memory The memory to free.
+     */
+    void (*free)(void *user_data, void *memory);
+    
+    /**
+     * Allocates memory for the decoded image.
+     * This function may be `NULL`, in which case `alloc` is used instead.
+     *
+     * @param user_data The pointer passed to #ok_png_read_with_allocator.
+     * @param width The image's width, in pixels.
+     * @param height The image's height, in pixels.
+     * @param bpp The image's number of bytes per pixel.
+     * @param out_buffer The buffer to output data. The buffer must have a minimum size of
+     * (`out_stride * height`) bytes. Set to `NULL` if the memory could not be allocated.
+     * @param out_stride The stride of the buffer, in bytes.
+     * By default, `out_stride` is `width * bpp`, but can be changed if needed.
+     * The value must be greater than or equal to  `width * bpp` or an error will occur.
+     */
+    void (*image_alloc)(void *user_data, uint32_t width, uint32_t height, uint8_t bpp,
+                        uint8_t **out_buffer, uint32_t *out_stride);
+} ok_png_allocator;
+
+#if !defined(OK_NO_DEFAULT_ALLOCATOR)
+
+/// The default allocator using stdlib's `malloc` and `free`.
+extern const ok_png_allocator OK_PNG_DEFAULT_ALLOCATOR;
+
+#endif
+
+#if !defined(OK_NO_STDIO)
 
 /**
- * Read function provided to the #ok_png_read_from_callbacks() or #ok_png_read_info_from_callbacks()
- * functions.
+ * Reads a PNG image using the default "stdlib" allocator.
+ * On success, #ok_png.data contains the packed image data, with a size of
+ * (`width * height * 4`). On failure, #ok_png.data is `NULL` and #ok_png.error_code is nonzero.
  *
- * This function must read bytes from its source (typically `user_data`) and copy the data to
- * `buffer`.
+ * The returned `data` must be freed by the caller.
  *
- * @param user_data The parameter that was passed to the #ok_png_read_from_callbacks() or
- * ok_png_read_info_from_callbacks() function.
- * @param buffer The data buffer to copy bytes to.
- * @param count The number of bytes to read.
- * @return The number of bytes read.
- */
-typedef size_t (*ok_png_read_func)(void *user_data, uint8_t *buffer, size_t count);
+ * @param file The file to read.
+ * @param decode_flags The PNG decode flags. Use `OK_PNG_COLOR_FORMAT_RGBA` for the most cases.
+ * @param allocator The allocator to use.
+ * @param allocator_user_data The pointer to pass to the allocator functions.
+ * If using `OK_PNG_DEFAULT_ALLOCATOR`, this value should be `NULL`.
+ * @return a #ok_png object.
+*/
+ok_png ok_png_read_with_allocator(FILE *file, ok_png_decode_flags decode_flags,
+                                  ok_png_allocator allocator, void *allocator_user_data);
 
-/**
- * Seek function provided to the #ok_png_read_from_callbacks() or #ok_png_read_info_from_callbacks()
- * functions.
- *
- * This function must skip bytes from its source (typically `user_data`).
- *
- * @param user_data The parameter that was passed to the #ok_png_read_from_callbacks() or
- * ok_png_read_info_from_callbacks() function.
- * @param count The number of bytes to skip.
- * @return `true` if success.
- */
-typedef bool (*ok_png_seek_func)(void *user_data, long count);
+#endif
+
+// MARK: Reading from custom input
+
+typedef struct {
+    /**
+     * Reads bytes from its source (typically `user_data`), copying the data to `buffer`.
+     *
+     * @param user_data The parameter that was passed to the #ok_png_read_from_input()
+     * @param buffer The data buffer to copy bytes to.
+     * @param count The number of bytes to read.
+     * @return The number of bytes read.
+     */
+    size_t (*read)(void *user_data, uint8_t *buffer, size_t count);
+
+    /**
+     * Skips bytes from its source (typically `user_data`).
+     *
+     * @param user_data The parameter that was passed to the #ok_png_read_from_input().
+     * @param count The number of bytes to skip.
+     * @return `true` if success.
+     */
+    bool (*seek)(void *user_data, long count);
+} ok_png_input;
 
 /**
  * Reads a PNG image. On success, #ok_png.data contains the packed image data, with a size of
  * (`width * height * 4`). On failure, #ok_png.data is `NULL` and #ok_png.error_code is nonzero.
  *
- * @param user_data The parameter to be passed to `read_func` and `seek_func`.
- * @param read_func The read function.
- * @param seek_func The seek function.
- * @param decode_flags The PNG decode flags. Use `OK_PNG_COLOR_FORMAT_RGBA` for the most cases.
- * @return a new #ok_png object. Never returns `NULL`. The object should be freed with
- * #ok_png_free().
- */
-ok_png *ok_png_read_from_callbacks(void *user_data, ok_png_read_func read_func,
-                                   ok_png_seek_func seek_func, ok_png_decode_flags decode_flags);
-
-/**
- * Reads a PNG image, outputing image data to a preallocated buffer.
+ * The returned `data` must be freed by the caller.
  *
- * On success, #ok_png.width and #ok_png.height are set.
- * On failure, #ok_png.error_code is nonzero.
- *
- * @param user_data The parameter to be passed to `read_func` and `seek_func`.
- * @param read_func The read function.
- * @param seek_func The seek function.
- * @param dst_buffer The buffer to output data. The buffer must have a minimum size of
- * (`dst_stride * height`). If `NULL`, a newly allocated buffer is used and assigned to
- * #ok_png.data.
- * @param dst_stride The stride of the buffer, in bytes. If 0, the stride is assumed to be
- * (`width * 4`).
  * @param decode_flags The PNG decode flags. Use `OK_PNG_COLOR_FORMAT_RGBA` for the most cases.
- * first row of data is the last row in the image.
- * @return a new #ok_png object. Never returns `NULL`. The object should be freed with
- * #ok_png_free().
+ * @param input_callbacks The custom input functions.
+ * @param input_callbacks_user_data The parameter to be passed to the input's `read` and `seek` functions.
+ * @param allocator The allocator to use.
+ * @param allocator_user_data The pointer to pass to the allocator functions.
+ * If using `OK_PNG_DEFAULT_ALLOCATOR`, this value should be `NULL`.
+ * @return a #ok_png object.
  */
-ok_png *ok_png_read_from_callbacks_to_buffer(void *user_data, ok_png_read_func read_func,
-                                             ok_png_seek_func seek_func,
-                                             uint8_t *dst_buffer, uint32_t dst_stride,
-                                             ok_png_decode_flags decode_flags);
+ok_png ok_png_read_from_input(ok_png_decode_flags decode_flags,
+                              ok_png_input input_callbacks, void *input_callbacks_user_data,
+                              ok_png_allocator allocator, void *allocator_user_data);
 
 // MARK: Inflater
 
@@ -225,7 +242,7 @@ typedef struct ok_inflater ok_inflater;
  *
  * @param nowrap If `true`, the inflater assumes there is no zlib wrapper around the data.
  */
-ok_inflater *ok_inflater_init(bool nowrap);
+ok_inflater *ok_inflater_init(bool nowrap, ok_png_allocator allocator, void *allocator_user_data);
 
 /**
  * Resets the inflater to work with a new stream.

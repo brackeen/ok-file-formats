@@ -1,6 +1,13 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+void *custom_alloc(void *user_data, size_t size);
+
+void custom_free(void *user_data, void *memory);
+
+void custom_image_alloc(void *user_data, uint32_t width, uint32_t height, uint8_t bpp,
+                        uint8_t **dst_buffer, uint32_t *dst_stride);
+
 char *append_path(const char *path, const char *name);
 
 char *get_full_path(const char *path, const char *name, const char *ext);

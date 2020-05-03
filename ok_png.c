@@ -51,6 +51,26 @@ static const uint8_t OK_PNG_COLOR_TYPE_GRAYSCALE_WITH_ALPHA = 4;
 static const uint8_t OK_PNG_COLOR_TYPE_RGB_WITH_ALPHA = 6;
 static const uint8_t OK_PNG_SAMPLES_PER_PIXEL[] = {1, 0, 3, 1, 2, 0, 4};
 
+#ifndef OK_NO_DEFAULT_ALLOCATOR
+
+static void *ok_stdlib_alloc(void *user_data, size_t size) {
+    (void)user_data;
+    return malloc(size);
+}
+
+static void ok_stdlib_free(void *user_data, void *memory) {
+    (void)user_data;
+    free(memory);
+}
+
+const ok_png_allocator OK_PNG_DEFAULT_ALLOCATOR = {
+    .alloc = ok_stdlib_alloc,
+    .free = ok_stdlib_free,
+    .image_alloc = NULL
+};
+
+#endif
+
 typedef enum {
     OK_PNG_FILTER_NONE = 0,
     OK_PNG_FILTER_SUB,
@@ -63,18 +83,17 @@ typedef enum {
 typedef struct {
     // Image
     ok_png *png;
+    
+    // Allocator
+    ok_png_allocator allocator;
+    void *allocator_user_data;
 
     // Input
-    void *input_data;
-    ok_png_read_func input_read_func;
-    ok_png_seek_func input_seek_func;
+    ok_png_input input;
+    void *input_user_data;
 
     // Decode options
     ok_png_decode_flags decode_flags;
-
-    // Output
-    uint8_t *dst_buffer;
-    uint32_t dst_stride;
 
     // Decoding
     ok_inflater *inflater;
@@ -100,12 +119,11 @@ typedef struct {
 
 } ok_png_decoder;
 
+#define ok_alloc(decoder, size) (decoder)->allocator.alloc((decoder)->allocator_user_data, (size))
 #define ok_png_error(png, error_code, message) ok_png_set_error((png), (error_code))
 
 static void ok_png_set_error(ok_png *png, ok_png_error error_code) {
     if (png) {
-        free(png->data);
-        png->data = NULL;
         png->width = 0;
         png->height = 0;
         png->error_code = error_code;
@@ -113,7 +131,7 @@ static void ok_png_set_error(ok_png *png, ok_png_error error_code) {
 }
 
 static bool ok_read(ok_png_decoder *decoder, uint8_t *buffer, size_t length) {
-    if (decoder->input_read_func(decoder->input_data, buffer, length) == length) {
+    if (decoder->input.read(decoder->input_user_data, buffer, length) == length) {
         return true;
     } else {
         ok_png_error(decoder->png, OK_PNG_ERROR_IO, "Read error: error calling input function.");
@@ -122,7 +140,7 @@ static bool ok_read(ok_png_decoder *decoder, uint8_t *buffer, size_t length) {
 }
 
 static bool ok_seek(ok_png_decoder *decoder, long length) {
-    if (decoder->input_seek_func(decoder->input_data, length)) {
+    if (decoder->input.seek(decoder->input_user_data, length)) {
         return true;
     } else {
         ok_png_error(decoder->png, OK_PNG_ERROR_IO, "Seek error: error calling input function.");
@@ -132,55 +150,57 @@ static bool ok_seek(ok_png_decoder *decoder, long length) {
 
 #ifndef OK_NO_STDIO
 
-static size_t ok_file_read_func(void *user_data, uint8_t *buffer, size_t length) {
+static size_t ok_file_read(void *user_data, uint8_t *buffer, size_t length) {
     return fread(buffer, 1, length, (FILE *)user_data);
 }
 
-static bool ok_file_seek_func(void *user_data, long count) {
+static bool ok_file_seek(void *user_data, long count) {
     return fseek((FILE *)user_data, count, SEEK_CUR) == 0;
 }
 
+static const ok_png_input OK_PNG_FILE_INPUT = {
+    .read = ok_file_read,
+    .seek = ok_file_seek,
+};
+
 #endif
 
-static ok_png *ok_png_decode(void *user_data, ok_png_read_func input_read_func,
-                             ok_png_seek_func input_seek_func,
-                             uint8_t *dst_buffer, uint32_t dst_stride,
-                             ok_png_decode_flags decode_flags, bool check_user_data);
+static void ok_png_decode(ok_png *png, ok_png_decode_flags decode_flags,
+                          ok_png_input input, void *input_user_data,
+                          ok_png_allocator allocator, void *allocator_user_data);
 
 // Public API
 
-#ifndef OK_NO_STDIO
+#if !defined(OK_NO_STDIO) && !defined(OK_NO_DEFAULT_ALLOCATOR)
 
-ok_png *ok_png_read(FILE *file, ok_png_decode_flags decode_flags) {
-    return ok_png_decode(file, ok_file_read_func, ok_file_seek_func, NULL, 0, decode_flags, true);
-}
-
-ok_png *ok_png_read_to_buffer(FILE *file, uint8_t *dst_buffer, uint32_t dst_stride,
-                              ok_png_decode_flags decode_flags) {
-    return ok_png_decode(file, ok_file_read_func, ok_file_seek_func, dst_buffer, dst_stride,
-                         decode_flags, true);
+ok_png ok_png_read(FILE *file, ok_png_decode_flags decode_flags) {
+    return ok_png_read_with_allocator(file, decode_flags, OK_PNG_DEFAULT_ALLOCATOR, NULL);
 }
 
 #endif
 
-ok_png *ok_png_read_from_callbacks(void *user_data, ok_png_read_func read_func,
-                                   ok_png_seek_func seek_func, ok_png_decode_flags decode_flags) {
-    return ok_png_decode(user_data, read_func, seek_func, NULL, 0, decode_flags, false);
-}
+#if !defined(OK_NO_STDIO)
 
-ok_png *ok_png_read_from_callbacks_to_buffer(void *user_data, ok_png_read_func read_func,
-                                             ok_png_seek_func seek_func,
-                                             uint8_t *dst_buffer, uint32_t dst_stride,
-                                             ok_png_decode_flags decode_flags) {
-    return ok_png_decode(user_data, read_func, seek_func, dst_buffer, dst_stride,
-                         decode_flags, false);
-}
-
-void ok_png_free(ok_png *png) {
-    if (png) {
-        free(png->data);
-        free(png);
+ok_png ok_png_read_with_allocator(FILE *file, ok_png_decode_flags decode_flags,
+                                  ok_png_allocator allocator, void *allocator_user_data) {
+    ok_png png = { 0 };
+    if (file) {
+        ok_png_decode(&png, decode_flags, OK_PNG_FILE_INPUT, file, allocator, allocator_user_data);
+    } else {
+        ok_png_error(&png, OK_PNG_ERROR_API, "File not found");
     }
+    return png;
+}
+
+#endif
+
+ok_png ok_png_read_from_input(ok_png_decode_flags decode_flags,
+                              ok_png_input input_callbacks, void *input_callbacks_user_data,
+                              ok_png_allocator allocator, void *allocator_user_data) {
+    ok_png png = { 0 };
+    ok_png_decode(&png, decode_flags, input_callbacks, input_callbacks_user_data,
+                  allocator, allocator_user_data);
+    return png;
 }
 
 // Main read functions
@@ -230,12 +250,13 @@ static bool ok_png_read_header(ok_png_decoder *decoder, uint32_t chunk_length) {
     }
     png->width = readBE32(chunk_data);
     png->height = readBE32(chunk_data + 4);
+    png->bpp = 4; // Always decoding to 32-bit color
     decoder->bit_depth = chunk_data[8];
     decoder->color_type = chunk_data[9];
     uint8_t compression_method = chunk_data[10];
     uint8_t filter_method = chunk_data[11];
     decoder->interlace_method = chunk_data[12];
-    uint64_t dst_stride = (uint64_t)png->width * 4;
+    uint64_t stride = (uint64_t)png->width * png->bpp;
 
     if (compression_method != 0) {
         ok_png_error(png, OK_PNG_ERROR_INVALID, "Invalid compression method");
@@ -246,7 +267,7 @@ static bool ok_png_read_header(ok_png_decoder *decoder, uint32_t chunk_length) {
     } else if (decoder->interlace_method != 0 && decoder->interlace_method != 1) {
         ok_png_error(png, OK_PNG_ERROR_INVALID, "Invalid interlace method");
         return false;
-    } else if (dst_stride > UINT32_MAX) {
+    } else if (stride > UINT32_MAX) {
         ok_png_error(png, OK_PNG_ERROR_UNSUPPORTED, "Width too large");
         return false;
     }
@@ -265,6 +286,7 @@ static bool ok_png_read_header(ok_png_decoder *decoder, uint32_t chunk_length) {
         return false;
     }
 
+    png->stride = (uint32_t)stride;
     png->has_alpha = (c == OK_PNG_COLOR_TYPE_GRAYSCALE_WITH_ALPHA ||
                       c == OK_PNG_COLOR_TYPE_RGB_WITH_ALPHA);
     decoder->interlace_pass = 0;
@@ -437,21 +459,20 @@ static void ok_png_decode_filter(uint8_t * RESTRICT curr, const uint8_t * RESTRI
 static void ok_png_transform_scanline(ok_png_decoder *decoder, const uint8_t *src, uint32_t width) {
     ok_png *png = decoder->png;
     const bool dst_flip_y = (decoder->decode_flags & OK_PNG_FLIP_Y) != 0;
-    const uint32_t dst_stride = decoder->dst_stride ? decoder->dst_stride : png->width * 4;
     uint8_t *dst_start;
     uint8_t *dst_end;
     if (decoder->interlace_method == 0) {
         const uint32_t dst_y =
             (dst_flip_y ? (png->height - decoder->scanline - 1) : decoder->scanline);
-        dst_start = decoder->dst_buffer + (dst_y * dst_stride);
+        dst_start = png->data + (dst_y * png->stride);
     } else if (decoder->interlace_pass == 7) {
         const uint32_t t_scanline = decoder->scanline * 2 + 1;
         const uint32_t dst_y = dst_flip_y ? (png->height - t_scanline - 1) : t_scanline;
-        dst_start = decoder->dst_buffer + (dst_y * dst_stride);
+        dst_start = png->data + (dst_y * png->stride);
     } else {
         dst_start = decoder->temp_data_row;
     }
-    dst_end = dst_start + width * 4;
+    dst_end = dst_start + width * png->bpp;
 
     const int c = decoder->color_type;
     const int d = decoder->bit_depth;
@@ -686,7 +707,7 @@ static void ok_png_transform_scanline(ok_png_decoder *decoder, const uint8_t *sr
 
         src = dst_start;
         uint8_t *src_end = dst_end;
-        uint8_t *dst = decoder->dst_buffer + (y * dst_stride) + (x * 4);
+        uint8_t *dst = png->data + (y * png->stride) + (x * 4);
         while (src < src_end) {
             memcpy(dst, src, 4);
             dst += dx;
@@ -741,34 +762,42 @@ static bool ok_png_read_data(ok_png_decoder *decoder, uint32_t bytes_remaining) 
     size_t platform_max_bytes_per_scanline = (size_t)max_bytes_per_scanline;
 
     // Create buffers
-    if (!decoder->dst_buffer) {
-        uint64_t dst_stride = decoder->dst_stride ? decoder->dst_stride : png->width * 4;
-        uint64_t size = dst_stride * png->height;
-        size_t platform_size = (size_t)size;
-        if (platform_size == size) {
-            decoder->dst_buffer = malloc(platform_size);
+    if (!png->data) {
+        if (decoder->allocator.image_alloc) {
+            decoder->allocator.image_alloc(decoder->allocator_user_data,
+                                           png->width, png->height, png->bpp,
+                                           &png->data, &png->stride);
+        } else {
+            uint64_t size = (uint64_t)png->stride * png->height;
+            size_t platform_size = (size_t)size;
+            if (platform_size == size) {
+                png->data = ok_alloc(decoder, platform_size);
+            }
         }
-        if (!decoder->dst_buffer) {
+        if (!png->data) {
             ok_png_error(png, OK_PNG_ERROR_ALLOCATION, "Couldn't allocate memory for image");
             return false;
         }
-        png->data = decoder->dst_buffer;
+        if (png->stride < png->width * png->bpp) {
+            ok_png_error(png, OK_PNG_ERROR_API, "Invalid stride");
+            return false;
+        }
     }
     if (!decoder->prev_scanline) {
         if (max_bytes_per_scanline == platform_max_bytes_per_scanline) {
-            decoder->prev_scanline = malloc(platform_max_bytes_per_scanline);
+            decoder->prev_scanline = ok_alloc(decoder, platform_max_bytes_per_scanline);
         }
     }
     if (!decoder->curr_scanline) {
         if (max_bytes_per_scanline == platform_max_bytes_per_scanline) {
-            decoder->curr_scanline = malloc(platform_max_bytes_per_scanline);
+            decoder->curr_scanline = ok_alloc(decoder, platform_max_bytes_per_scanline);
         }
     }
     if (!decoder->inflate_buffer) {
-        decoder->inflate_buffer = malloc(inflate_buffer_size);
+        decoder->inflate_buffer = ok_alloc(decoder, inflate_buffer_size);
     }
     if (decoder->interlace_method == 1 && !decoder->temp_data_row) {
-        decoder->temp_data_row = malloc(png->width * 4);
+        decoder->temp_data_row = ok_alloc(decoder, png->width * png->bpp);
     }
     if (!decoder->curr_scanline || !decoder->prev_scanline || !decoder->inflate_buffer ||
         (decoder->interlace_method == 1 && !decoder->temp_data_row)) {
@@ -778,7 +807,8 @@ static bool ok_png_read_data(ok_png_decoder *decoder, uint32_t bytes_remaining) 
 
     // Setup inflater
     if (!decoder->inflater) {
-        decoder->inflater = ok_inflater_init(decoder->is_ios_format);
+        decoder->inflater = ok_inflater_init(decoder->is_ios_format,
+                                             decoder->allocator, decoder->allocator_user_data);
         if (!decoder->inflater) {
             ok_png_error(png, OK_PNG_ERROR_ALLOCATION, "Couldn't init inflater");
             return false;
@@ -846,7 +876,7 @@ static bool ok_png_read_data(ok_png_decoder *decoder, uint32_t bytes_remaining) 
                                          decoder->curr_scanline + decoder->inflater_bytes_read,
                                          curr_bytes_per_scanline - decoder->inflater_bytes_read);
         if (len == OK_SIZE_MAX) {
-            ok_png_error(png, OK_PNG_ERROR_INFLATOR, "Inflator error");
+            ok_png_error(png, OK_PNG_ERROR_INFLATER, "Inflater error");
             return false;
         }
         decoder->inflater_bytes_read += len;
@@ -963,49 +993,44 @@ static void ok_png_decode2(ok_png_decoder *decoder) {
     }
 }
 
-static ok_png *ok_png_decode(void *user_data, ok_png_read_func input_read_func,
-                             ok_png_seek_func input_seek_func,
-                             uint8_t *dst_buffer, uint32_t dst_stride,
-                             ok_png_decode_flags decode_flags, bool check_user_data) {
-    ok_png *png = calloc(1, sizeof(ok_png));
-    if (!png) {
-        return NULL;
-    }
-    if (check_user_data && !user_data) {
-        ok_png_error(png, OK_PNG_ERROR_API, "File not found");
-        return png;
-    }
-    if (!input_read_func || !input_seek_func) {
+void ok_png_decode(ok_png *png, ok_png_decode_flags decode_flags,
+                   ok_png_input input, void *input_user_data,
+                   ok_png_allocator allocator, void *allocator_user_data) {
+    if (!input.read || !input.seek) {
         ok_png_error(png, OK_PNG_ERROR_API,
-                     "Invalid argument: read_func and seek_func must not be NULL");
-        return png;
+                     "Invalid argument: input read and seek functions must not be NULL");
+        return;
+    }
+    
+    if (!allocator.alloc || !allocator.free) {
+        ok_png_error(png, OK_PNG_ERROR_API,
+                     "Invalid argument: allocator alloc and free functions must not be NULL");
+        return;
     }
 
-    ok_png_decoder *decoder = calloc(1, sizeof(ok_png_decoder));
+    ok_png_decoder *decoder = allocator.alloc(allocator_user_data, sizeof(ok_png_decoder));
     if (!decoder) {
         ok_png_error(png, OK_PNG_ERROR_ALLOCATION, "Couldn't allocate decoder.");
-        return png;
+        return;
     }
+    memset(decoder, 0, sizeof(ok_png_decoder));
 
     decoder->png = png;
-    decoder->input_data = user_data;
-    decoder->input_read_func = input_read_func;
-    decoder->input_seek_func = input_seek_func;
-    decoder->dst_buffer = dst_buffer;
-    decoder->dst_stride = dst_stride;
     decoder->decode_flags = decode_flags;
+    decoder->input = input;
+    decoder->input_user_data = input_user_data;
+    decoder->allocator = allocator;
+    decoder->allocator_user_data = allocator_user_data;
 
     ok_png_decode2(decoder);
 
     // Cleanup decoder
     ok_inflater_free(decoder->inflater);
-    free(decoder->curr_scanline);
-    free(decoder->prev_scanline);
-    free(decoder->inflate_buffer);
-    free(decoder->temp_data_row);
-    free(decoder);
-
-    return png;
+    allocator.free(allocator_user_data, decoder->curr_scanline);
+    allocator.free(allocator_user_data, decoder->prev_scanline);
+    allocator.free(allocator_user_data, decoder->inflate_buffer);
+    allocator.free(allocator_user_data, decoder->temp_data_row);
+    allocator.free(allocator_user_data, decoder);
 }
 
 //
@@ -1076,6 +1101,10 @@ typedef struct {
 struct ok_inflater {
     // Options
     bool nowrap;
+
+    // Allocator
+    ok_png_allocator allocator;
+    void *allocator_user_data;
 
     // Input
     const uint8_t *input;
@@ -1425,7 +1454,7 @@ static bool ok_inflater_zlib_header(ok_inflater *inflater) {
 
 static bool ok_inflater_init_fixed_huffman(ok_inflater *inflater) {
     if (!inflater->fixed_literal_huffman) {
-        ok_inflater_huffman_tree *tree = malloc(sizeof(ok_inflater_huffman_tree));
+        ok_inflater_huffman_tree *tree = ok_alloc(inflater, sizeof(ok_inflater_huffman_tree));
         if (tree) {
             uint8_t code_length[288];
             int i;
@@ -1447,7 +1476,7 @@ static bool ok_inflater_init_fixed_huffman(ok_inflater *inflater) {
         }
     }
     if (!inflater->fixed_distance_huffman) {
-        ok_inflater_huffman_tree *tree = malloc(sizeof(ok_inflater_huffman_tree));
+        ok_inflater_huffman_tree *tree = ok_alloc(inflater, sizeof(ok_inflater_huffman_tree));
         if (tree) {
             uint8_t distance_code_length[32];
             for (int i = 0; i < 32; i++) {
@@ -1786,16 +1815,19 @@ static bool (*OK_INFLATER_STATE_FUNCTIONS[])(ok_inflater *) = {
 
 // Public Inflater API
 
-ok_inflater *ok_inflater_init(bool nowrap) {
-    ok_inflater *inflater = calloc(1, sizeof(ok_inflater));
+ok_inflater *ok_inflater_init(bool nowrap, ok_png_allocator allocator, void *allocator_user_data) {
+    ok_inflater *inflater = allocator.alloc(allocator_user_data, sizeof(ok_inflater));
     if (inflater) {
+        memset(inflater, 0, sizeof(ok_inflater));
         inflater->nowrap = nowrap;
+        inflater->allocator = allocator;
+        inflater->allocator_user_data = allocator_user_data;
         inflater->state = (nowrap ? OK_INFLATER_STATE_READY_FOR_NEXT_BLOCK :
                            OK_INFLATER_STATE_READY_FOR_HEAD);
-        inflater->buffer = malloc(BUFFER_SIZE);
-        inflater->code_length_huffman = malloc(sizeof(ok_inflater_huffman_tree));
-        inflater->literal_huffman = malloc(sizeof(ok_inflater_huffman_tree));
-        inflater->distance_huffman = malloc(sizeof(ok_inflater_huffman_tree));
+        inflater->buffer = ok_alloc(inflater, BUFFER_SIZE);
+        inflater->code_length_huffman = ok_alloc(inflater, sizeof(ok_inflater_huffman_tree));
+        inflater->literal_huffman = ok_alloc(inflater, sizeof(ok_inflater_huffman_tree));
+        inflater->distance_huffman = ok_alloc(inflater, sizeof(ok_inflater_huffman_tree));
 
         if (!inflater->buffer ||
             !inflater->code_length_huffman ||
@@ -1825,13 +1857,15 @@ void ok_inflater_reset(ok_inflater *inflater) {
 
 void ok_inflater_free(ok_inflater *inflater) {
     if (inflater) {
-        free(inflater->buffer);
-        free(inflater->code_length_huffman);
-        free(inflater->literal_huffman);
-        free(inflater->distance_huffman);
-        free(inflater->fixed_literal_huffman);
-        free(inflater->fixed_distance_huffman);
-        free(inflater);
+        ok_png_allocator allocator = inflater->allocator;
+        void *allocator_user_data = inflater->allocator_user_data;
+        allocator.free(allocator_user_data, inflater->buffer);
+        allocator.free(allocator_user_data, inflater->code_length_huffman);
+        allocator.free(allocator_user_data, inflater->literal_huffman);
+        allocator.free(allocator_user_data, inflater->distance_huffman);
+        allocator.free(allocator_user_data, inflater->fixed_literal_huffman);
+        allocator.free(allocator_user_data, inflater->fixed_distance_huffman);
+        allocator.free(allocator_user_data, inflater);
     }
 }
 

@@ -13,6 +13,29 @@
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #endif
 
+void *custom_alloc(void *user_data, size_t size) {
+    (void)user_data;
+    return malloc(size);
+}
+
+void custom_free(void *user_data, void *memory) {
+    (void)user_data;
+    free(memory);
+}
+
+void custom_image_alloc(void *user_data, uint32_t width, uint32_t height, uint8_t bpp,
+                        uint8_t **dst_buffer, uint32_t *dst_stride) {
+    (void)user_data;
+    const int alignment = 512;
+    uint64_t stride = (uint64_t)width * bpp;
+    uint64_t aligned_stride = (stride + alignment - 1) / alignment * alignment;
+    
+    if (aligned_stride <= UINT32_MAX) {
+        *dst_stride = (uint32_t)aligned_stride;
+        *dst_buffer = malloc(*dst_stride * height);
+    }
+}
+
 static void print_image(const uint8_t *data, const uint32_t width, const uint32_t height) {
     if (data) {
         for (uint32_t y = 0; y < height; y++) {

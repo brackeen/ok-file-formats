@@ -233,45 +233,34 @@ static bool test_image(const char *path_to_png_suite,
     ok_png_decode_flags decode_flags = OK_PNG_COLOR_FORMAT_RGBA;
 #endif
 
+    const ok_png_allocator allocator = {
+        .alloc = custom_alloc,
+        .free = custom_free,
+        .image_alloc = custom_image_alloc
+    };
+
     // Load via ok_png
-    ok_png *png = NULL;
-    uint8_t *png_data = NULL;
-    uint32_t png_data_stride = 0;
     char *in_filename = get_full_path(path_to_png_suite, name, "png");
     FILE *file = fopen(in_filename, "rb");
     if (file) {
+        ok_png png = { 0 };
         switch (test_type) {
             case test_normal:
                 png = ok_png_read(file, decode_flags);
-                png_data = png->data;
-                png_data_stride = png->width * 4;
                 break;
             case test_info_only:
                 png = ok_png_read(file, decode_flags | OK_PNG_INFO_ONLY);
-                png_data = png->data;
-                png_data_stride = png->width * 4;
                 break;
             case test_to_buffer:
-                png = ok_png_read(file, decode_flags | OK_PNG_INFO_ONLY);
-
-                if (png->width > 0 && png->height > 0) {
-                    fclose(file);
-                    uint32_t dst_stride = align_to(png->width * 4, 512);
-                    uint8_t *dst_buffer = malloc(dst_stride * png->height);
-                    ok_png_free(png);
-
-                    file = fopen(in_filename, "rb");
-                    png = ok_png_read_to_buffer(file, dst_buffer, dst_stride, decode_flags);
-                    png_data = dst_buffer;
-                    png_data_stride = dst_stride;
-                }
+                png = ok_png_read_with_allocator(file, decode_flags, allocator, NULL);
                 break;
         }
         fclose(file);
 
         bool info_only = test_type == test_info_only;
-        success = compare(name, "png", png_data, png_data_stride, png->width, png->height,
+        success = compare(name, "png", png.data, png.stride, png.width, png.height,
                           rgba_data, rgba_data_length, info_only, 0, verbose);
+        free(png.data);
     } else {
         printf("Warning: File not found: %s.png\n", name);
         success = true;
@@ -280,7 +269,6 @@ static bool test_image(const char *path_to_png_suite,
     free(rgba_data);
     free(rgba_filename);
     free(in_filename);
-    ok_png_free(png);
 
     return success;
 }

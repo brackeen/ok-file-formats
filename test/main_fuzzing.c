@@ -63,11 +63,11 @@ int main(int argc, char *argv[]) {
     }
 
     if (test_png) {
-        ok_png *png = ok_png_read(stdin, png_flags);
-        if (png->error_code) {
-            fprintf(stderr, "Error code: %i\n", png->error_code);
+        ok_png png = ok_png_read(stdin, png_flags);
+        if (png.error_code) {
+            fprintf(stderr, "Error code: %i\n", png.error_code);
         }
-        ok_png_free(png);
+        free(png.data);
     } else if (test_jpg) {
         ok_jpg *jpg = ok_jpg_read(stdin, jpg_flags);
         if (jpg->error_code) {
