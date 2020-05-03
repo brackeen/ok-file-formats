@@ -43,12 +43,12 @@
  *
  *     int main() {
  *         FILE *file = fopen("my_image.jpg", "rb");
- *         ok_jpg *image = ok_jpg_read(file, OK_JPG_COLOR_FORMAT_RGBA);
+ *         ok_jpg image = ok_jpg_read(file, OK_JPG_COLOR_FORMAT_RGBA);
  *         fclose(file);
- *         if (image->data) {
- *             printf("Got image! Size: %li x %li\n", (long)image->width, (long)image->height);
+ *         if (image.data) {
+ *             printf("Got image! Size: %li x %li\n", (long)image.width, (long)image.height);
+ *             free(image.data);
  *         }
- *         ok_jpg_free(image);
  *         return 0;
  *     }
  */
@@ -73,13 +73,15 @@ typedef enum {
 } ok_jpg_error;
 
 /**
- * The data returned from #ok_jpg_read() or #ok_jpg_read_info().
+ * The data returned from #ok_jpg_read() .
  */
 typedef struct {
     uint32_t width;
     uint32_t height;
+    uint32_t stride;
+    uint8_t bpp; // Always 4
+    ok_jpg_error error_code:24;
     uint8_t *data;
-    ok_jpg_error error_code;
 } ok_jpg;
 
 /**
@@ -98,114 +100,131 @@ typedef enum {
 
 } ok_jpg_decode_flags;
 
-#ifndef OK_NO_STDIO
+// MARK: Reading from a FILE
+
+#if !defined(OK_NO_STDIO) && !defined(OK_NO_DEFAULT_ALLOCATOR)
 
 /**
- * Reads a JPEG image. On success, #ok_jpg.data contains the packed image data, with a size of
+ * Reads a JPEG image using the default "stdlib" allocator.
+ * On success, #ok_jpg.data contains the packed image data, with a size of
  * (`width * height * 4`). On failure, #ok_jpg.data is `NULL` and #ok_jpg.error_code is nonzero.
  *
- * @param file The file to read.
- * @param decode_flags The JPG decode flags. Use `OK_JPG_COLOR_FORMAT_RGBA` for the most cases.
- * @return a new #ok_jpg object. Never returns `NULL`. The object should be freed with
- * #ok_jpg_free().
- */
-ok_jpg *ok_jpg_read(FILE *file, ok_jpg_decode_flags decode_flags);
-
-/**
- * Reads a JPEG image, outputing image data to a preallocated buffer.
- *
- * On success, #ok_jpg.width and #ok_jpg.height are set.
- * On failure, #ok_jpg.error_code is nonzero.
+ * The returned `data` must be freed by the caller (using stdlib's `free()`).
  *
  * @param file The file to read.
- * @param dst_buffer The buffer to output data. The buffer must have a minimum size of
- * (`dst_stride * height`). If `NULL`, a newly allocated buffer is used and assigned to
- * #ok_jpg.data.
- * @param dst_stride The stride of the buffer, in bytes. If 0, the stride is assumed to be
- * (`width * 4`).
  * @param decode_flags The JPG decode flags. Use `OK_JPG_COLOR_FORMAT_RGBA` for the most cases.
- * first row of data is the last row in the image.
- * @return a new #ok_jpg object. Never returns `NULL`. The object should be freed with
- * #ok_jpg_free().
+ * @return a #ok_jpg object.
  */
-ok_jpg *ok_jpg_read_to_buffer(FILE *file, uint8_t *dst_buffer, uint32_t dst_stride,
-                              ok_jpg_decode_flags decode_flags);
+ok_jpg ok_jpg_read(FILE *file, ok_jpg_decode_flags decode_flags);
 
 #endif
 
-/**
- * Frees the image. This function should always be called when done with the image, even if reading
- * failed.
- */
-void ok_jpg_free(ok_jpg *jpg);
+// MARK: Reading from a FILE, using a custom allocator
 
-// MARK: Read from callbacks
+typedef struct {
+    /**
+     * Allocates uninitilized memory.
+     *
+     * @param user_data The pointer passed to #ok_jpg_read_with_allocator.
+     * @param size The size of the memory to allocate.
+     * @return the pointer to the newly allocated memory, or `NULL` if the memory could not be allocated.
+     */
+    void *(*alloc)(void *user_data, size_t size);
+    
+    /**
+     * Frees memory previously allocated with `alloc`.
+     *
+     * @param user_data The pointer passed to #ok_jpg_read_with_allocator.
+     * @param memory The memory to free.
+     */
+    void (*free)(void *user_data, void *memory);
+    
+    /**
+     * Allocates memory for the decoded image.
+     * This function may be `NULL`, in which case `alloc` is used instead.
+     *
+     * @param user_data The pointer passed to #ok_jpg_read_with_allocator.
+     * @param width The image's width, in pixels.
+     * @param height The image's height, in pixels.
+     * @param bpp The image's number of bytes per pixel.
+     * @param out_buffer The buffer to output data. The buffer must have a minimum size of
+     * (`out_stride * height`) bytes. Set to `NULL` if the memory could not be allocated.
+     * @param out_stride The stride of the buffer, in bytes.
+     * By default, `out_stride` is `width * bpp`, but can be changed if needed.
+     * The value must be greater than or equal to  `width * bpp` or an error will occur.
+     */
+    void (*image_alloc)(void *user_data, uint32_t width, uint32_t height, uint8_t bpp,
+                        uint8_t **out_buffer, uint32_t *out_stride);
+} ok_jpg_allocator;
+
+#if !defined(OK_NO_DEFAULT_ALLOCATOR)
+
+/// The default allocator using stdlib's `malloc` and `free`.
+extern const ok_jpg_allocator OK_JPG_DEFAULT_ALLOCATOR;
+
+#endif
+
+#if !defined(OK_NO_STDIO)
 
 /**
- * Read function provided to the #ok_jpg_read_from_callbacks() or #ok_jpg_read_info_from_callbacks()
- * functions.
- *
- * This function must read bytes from its source (typically `user_data`) and copy the data to
- * `buffer`.
- *
- * @param user_data The parameter that was passed to the #ok_jpg_read_from_callbacks() or
- * ok_jpg_read_info_from_callbacks() function.
- * @param buffer The data buffer to copy bytes to.
- * @param count The number of bytes to read.
- * @return The number of bytes read.
- */
-typedef size_t (*ok_jpg_read_func)(void *user_data, uint8_t *buffer, size_t count);
-
-/**
- * Seek function provided to the #ok_jpg_read_from_callbacks() or #ok_jpg_read_info_from_callbacks()
- * functions.
- *
- * This function must skip bytes from its source (typically `user_data`).
- *
- * @param user_data The parameter that was passed to the #ok_jpg_read_from_callbacks() or
- * ok_jpg_read_info_from_callbacks() function.
- * @param count The number of bytes to skip.
- * @return `true` if success.
- */
-typedef bool (*ok_jpg_seek_func)(void *user_data, long count);
-
-/**
- * Reads a JPEG image. On success, #ok_jpg.data contains the packed image data, with a size of
+ * Reads a JPG image using the default "stdlib" allocator.
+ * On success, #ok_jpg.data contains the packed image data, with a size of
  * (`width * height * 4`). On failure, #ok_jpg.data is `NULL` and #ok_jpg.error_code is nonzero.
  *
- * @param user_data The parameter to be passed to `read_func` and `seek_func`.
- * @param read_func The read function.
- * @param seek_func The seek function.
+ * The returned `data` must be freed by the caller.
+ *
+ * @param file The file to read.
  * @param decode_flags The JPG decode flags. Use `OK_JPG_COLOR_FORMAT_RGBA` for the most cases.
- * @return a new #ok_jpg object. Never returns `NULL`. The object should be freed with
- * #ok_jpg_free().
- */
-ok_jpg *ok_jpg_read_from_callbacks(void *user_data, ok_jpg_read_func read_func,
-                                   ok_jpg_seek_func seek_func, ok_jpg_decode_flags decode_flags);
+ * @param allocator The allocator to use.
+ * @param allocator_user_data The pointer to pass to the allocator functions.
+ * If using `OK_JPG_DEFAULT_ALLOCATOR`, this value should be `NULL`.
+ * @return a #ok_jpg object.
+*/
+ok_jpg ok_jpg_read_with_allocator(FILE *file, ok_jpg_decode_flags decode_flags,
+                                  ok_jpg_allocator allocator, void *allocator_user_data);
+
+#endif
+
+// MARK: Reading from custom input
+
+typedef struct {
+    /**
+     * Reads bytes from its source (typically `user_data`), copying the data to `buffer`.
+     *
+     * @param user_data The parameter that was passed to the #ok_jpg_read_from_input()
+     * @param buffer The data buffer to copy bytes to.
+     * @param count The number of bytes to read.
+     * @return The number of bytes read.
+     */
+    size_t (*read)(void *user_data, uint8_t *buffer, size_t count);
+
+    /**
+     * Skips bytes from its source (typically `user_data`).
+     *
+     * @param user_data The parameter that was passed to the #ok_jpg_read_from_input().
+     * @param count The number of bytes to skip.
+     * @return `true` if success.
+     */
+    bool (*seek)(void *user_data, long count);
+} ok_jpg_input;
 
 /**
- * Reads a JPEG image, outputing image data to a preallocated buffer.
+ * Reads a JPG image. On success, #ok_jpg.data contains the packed image data, with a size of
+ * (`width * height * 4`). On failure, #ok_jpg.data is `NULL` and #ok_jpg.error_code is nonzero.
  *
- * On success, #ok_jpg.width and #ok_jpg.height are set.
- * On failure, #ok_jpg.error_code is nonzero.
+ * The returned `data` must be freed by the caller.
  *
- * @param user_data The parameter to be passed to `read_func` and `seek_func`.
- * @param read_func The read function.
- * @param seek_func The seek function.
- * @param dst_buffer The buffer to output data. The buffer must have a minimum size of
- * (`dst_stride * height`). If `NULL`, a newly allocated buffer is used and assigned to
- * #ok_jpg.data.
- * @param dst_stride The stride of the buffer, in bytes. If 0, the stride is assumed to be
- * (`width * 4`).
  * @param decode_flags The JPG decode flags. Use `OK_JPG_COLOR_FORMAT_RGBA` for the most cases.
- * first row of data is the last row in the image.
- * @return a new #ok_jpg object. Never returns `NULL`. The object should be freed with
- * #ok_jpg_free().
+ * @param input_callbacks The custom input functions.
+ * @param input_callbacks_user_data The parameter to be passed to the input's `read` and `seek` functions.
+ * @param allocator The allocator to use.
+ * @param allocator_user_data The pointer to pass to the allocator functions.
+ * If using `OK_JPG_DEFAULT_ALLOCATOR`, this value should be `NULL`.
+ * @return a #ok_jpg object.
  */
-ok_jpg *ok_jpg_read_from_callbacks_to_buffer(void *user_data, ok_jpg_read_func read_func,
-                                             ok_jpg_seek_func seek_func,
-                                             uint8_t *dst_buffer, uint32_t dst_stride,
-                                             ok_jpg_decode_flags decode_flags);
+ok_jpg ok_jpg_read_from_input(ok_jpg_decode_flags decode_flags,
+                              ok_jpg_input input_callbacks, void *input_callbacks_user_data,
+                              ok_jpg_allocator allocator, void *allocator_user_data);
 
 #ifdef __cplusplus
 }

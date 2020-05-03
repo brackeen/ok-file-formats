@@ -48,6 +48,26 @@
 #define HUFFMAN_LOOKUP_SIZE_BITS 10
 #define HUFFMAN_LOOKUP_SIZE (1 << HUFFMAN_LOOKUP_SIZE_BITS)
 
+#ifndef OK_NO_DEFAULT_ALLOCATOR
+
+static void *ok_stdlib_alloc(void *user_data, size_t size) {
+    (void)user_data;
+    return malloc(size);
+}
+
+static void ok_stdlib_free(void *user_data, void *memory) {
+    (void)user_data;
+    free(memory);
+}
+
+const ok_jpg_allocator OK_JPG_DEFAULT_ALLOCATOR = {
+    .alloc = ok_stdlib_alloc,
+    .free = ok_stdlib_free,
+    .image_alloc = NULL
+};
+
+#endif
+
 typedef void (*ok_jpg_idct_func)(const int16_t *const input, uint8_t *output);
 
 typedef struct {
@@ -85,6 +105,10 @@ typedef struct {
 typedef struct {
     // Output image
     ok_jpg *jpg;
+    
+    // Allocator
+    ok_jpg_allocator allocator;
+    void *allocator_user_data;
 
     // Decode options
     bool color_rgba;
@@ -94,18 +118,13 @@ typedef struct {
     bool info_only;
 
     // Input
-    void *input_data;
-    ok_jpg_read_func input_read_func;
-    ok_jpg_seek_func input_seek_func;
+    ok_jpg_input input;
+    void *input_user_data;
     uint8_t input_buffer[256];
     uint8_t *input_buffer_start;
     uint8_t *input_buffer_end;
     uint32_t input_buffer_bits;
     int input_buffer_bit_count;
-
-    // Output
-    uint8_t *dst_buffer;
-    uint32_t dst_stride;
 
     // State
     bool progressive;
@@ -143,8 +162,6 @@ typedef struct {
 
 static void ok_jpg_set_error(ok_jpg *jpg, ok_jpg_error error_code) {
     if (jpg) {
-        free(jpg->data);
-        jpg->data = NULL;
         jpg->width = 0;
         jpg->height = 0;
         jpg->error_code = error_code;
@@ -153,8 +170,8 @@ static void ok_jpg_set_error(ok_jpg *jpg, ok_jpg_error error_code) {
 
 static inline uint8_t ok_read_uint8(ok_jpg_decoder *decoder) {
     if (decoder->input_buffer_start == decoder->input_buffer_end) {
-        size_t len = decoder->input_read_func(decoder->input_data, decoder->input_buffer,
-                                              sizeof(decoder->input_buffer));
+        size_t len = decoder->input.read(decoder->input_user_data, decoder->input_buffer,
+                                         sizeof(decoder->input_buffer));
         decoder->input_buffer_start = decoder->input_buffer;
         decoder->input_buffer_end = decoder->input_buffer + len;
 
@@ -177,7 +194,7 @@ static bool ok_read(ok_jpg_decoder *decoder, uint8_t *buffer, size_t length) {
         }
         buffer += len;
     }
-    if (decoder->input_read_func(decoder->input_data, buffer, length) == length) {
+    if (decoder->input.read(decoder->input_user_data, buffer, length) == length) {
         return true;
     } else {
         decoder->eof_found = true;
@@ -199,7 +216,7 @@ static bool ok_seek(ok_jpg_decoder *decoder, long length) {
     decoder->input_buffer_start += len;
     length -= len;
     if (length > 0) {
-        if (decoder->input_seek_func(decoder->input_data, length)) {
+        if (decoder->input.seek(decoder->input_user_data, length)) {
             return true;
         } else {
             decoder->eof_found = true;
@@ -213,56 +230,57 @@ static bool ok_seek(ok_jpg_decoder *decoder, long length) {
 
 #ifndef OK_NO_STDIO
 
-static size_t ok_file_read_func(void *user_data, uint8_t *buffer, size_t length) {
+static size_t ok_file_read(void *user_data, uint8_t *buffer, size_t length) {
     return fread(buffer, 1, length, (FILE *)user_data);
 }
 
-static bool ok_file_seek_func(void *user_data, long count) {
+static bool ok_file_seek(void *user_data, long count) {
     return fseek((FILE *)user_data, count, SEEK_CUR) == 0;
 }
 
+static const ok_jpg_input OK_JPG_FILE_INPUT = {
+    .read = ok_file_read,
+    .seek = ok_file_seek,
+};
+
 #endif
 
-static ok_jpg *ok_jpg_decode(void *user_data, ok_jpg_read_func input_read_func,
-                             ok_jpg_seek_func input_seek_func,
-                             uint8_t *dst_buffer, uint32_t dst_stride,
-                             ok_jpg_decode_flags decode_flags, bool check_user_data);
+static void ok_jpg_decode(ok_jpg *jpg, ok_jpg_decode_flags decode_flags,
+                          ok_jpg_input input, void *input_user_data,
+                          ok_jpg_allocator allocator, void *allocator_user_data);
 
 // MARK: Public API
 
-#ifndef OK_NO_STDIO
+#if !defined(OK_NO_STDIO) && !defined(OK_NO_DEFAULT_ALLOCATOR)
 
-ok_jpg *ok_jpg_read(FILE *file, ok_jpg_decode_flags decode_flags) {
-    return ok_jpg_decode(file, ok_file_read_func, ok_file_seek_func, NULL, 0, decode_flags, true);
-}
-
-ok_jpg *ok_jpg_read_to_buffer(FILE *file, uint8_t *dst_buffer, uint32_t dst_stride,
-                              ok_jpg_decode_flags decode_flags) {
-    return ok_jpg_decode(file, ok_file_read_func, ok_file_seek_func, dst_buffer, dst_stride,
-                         decode_flags, true);
+ok_jpg ok_jpg_read(FILE *file, ok_jpg_decode_flags decode_flags) {
+    return ok_jpg_read_with_allocator(file, decode_flags, OK_JPG_DEFAULT_ALLOCATOR, NULL);
 }
 
 #endif
 
-ok_jpg *ok_jpg_read_from_callbacks(void *user_data, ok_jpg_read_func read_func,
-                                   ok_jpg_seek_func seek_func,
-                                   ok_jpg_decode_flags decode_flags) {
-    return ok_jpg_decode(user_data, read_func, seek_func, NULL, 0, decode_flags, false);
-}
+#if !defined(OK_NO_STDIO)
 
-ok_jpg *ok_jpg_read_from_callbacks_to_buffer(void *user_data, ok_jpg_read_func read_func,
-                                             ok_jpg_seek_func seek_func,
-                                             uint8_t *dst_buffer, uint32_t dst_stride,
-                                             ok_jpg_decode_flags decode_flags) {
-    return ok_jpg_decode(user_data, read_func, seek_func, dst_buffer, dst_stride,
-                         decode_flags, false);
-}
-
-void ok_jpg_free(ok_jpg *jpg) {
-    if (jpg) {
-        free(jpg->data);
-        free(jpg);
+ok_jpg ok_jpg_read_with_allocator(FILE *file, ok_jpg_decode_flags decode_flags,
+                                  ok_jpg_allocator allocator, void *allocator_user_data) {
+    ok_jpg jpg = { 0 };
+    if (file) {
+        ok_jpg_decode(&jpg, decode_flags, OK_JPG_FILE_INPUT, file, allocator, allocator_user_data);
+    } else {
+        ok_jpg_error(&jpg, OK_JPG_ERROR_API, "File not found");
     }
+    return jpg;
+}
+
+#endif
+
+ok_jpg ok_jpg_read_from_input(ok_jpg_decode_flags decode_flags,
+                              ok_jpg_input input_callbacks, void *input_callbacks_user_data,
+                              ok_jpg_allocator allocator, void *allocator_user_data) {
+    ok_jpg jpg = { 0 };
+    ok_jpg_decode(&jpg, decode_flags, input_callbacks, input_callbacks_user_data,
+                  allocator, allocator_user_data);
+    return jpg;
 }
 
 // MARK: JPEG bit reading
@@ -558,8 +576,8 @@ static void ok_jpg_convert_data_unit(ok_jpg_decoder *decoder, int data_unit_x, i
     const int width = min(c->H * 8, decoder->in_width - x);
     const int height = min(c->V * 8, decoder->in_height - y);
     int x_inc = 4;
-    int y_inc = (int)(decoder->dst_stride ? decoder->dst_stride : jpg->width * 4);
-    uint8_t *data = decoder->dst_buffer;
+    int y_inc = (int)jpg->stride;
+    uint8_t *data = jpg->data;
     if (decoder->rotate) {
         int temp = x;
         x = y;
@@ -819,7 +837,7 @@ static inline void ok_jpg_idct_1d_row_8(int h, const int *in, uint8_t *out) {
         // Quick check to avoid mults
         if (in[1] == 0 && in[2] == 0 && in[3] == 0 && in[4] == 0 &&
             in[5] == 0 && in[6] == 0 && in[7] == 0) {
-            static const int offset = 1 << (out_shift - 12 - 1);
+            const int offset = 1 << (out_shift - 12 - 1);
             t0 = (in[0] + offset) >> (out_shift - 12);
             memset(out, ok_jpg_clip_uint8(t0 + 128), 8);
         } else {
@@ -850,7 +868,7 @@ static inline void ok_jpg_idct_1d_row_16(int h, const int *in, uint8_t *out) {
         // Quick check to avoid mults
         if (in[1] == 0 && in[2] == 0 && in[3] == 0 && in[4] == 0 &&
             in[5] == 0 && in[6] == 0 && in[7] == 0) {
-            static const int offset = 1 << (out_shift - 12 - 1);
+            const int offset = 1 << (out_shift - 12 - 1);
             t0 = (in[0] + offset) >> (out_shift - 12);
             memset(out, ok_jpg_clip_uint8(t0 + 128), 16);
         } else {
@@ -1465,7 +1483,17 @@ static bool ok_jpg_read_sof(ok_jpg_decoder *decoder) {
     }
     jpg->width = decoder->rotate ? decoder->in_height : decoder->in_width;
     jpg->height = decoder->rotate ? decoder->in_width : decoder->in_height;
+    jpg->bpp = 4; // Always decoding to 32-bit color
     decoder->num_components = buffer[7];
+    
+    uint64_t stride = (uint64_t)jpg->width * jpg->bpp;
+    if (stride > INT32_MAX) {
+        // Stride must fit in a singed int, see ok_jpg_convert_data_unit
+        ok_jpg_error(jpg, OK_JPG_ERROR_UNSUPPORTED, "Width too large");
+        return false;
+    }
+    jpg->stride = (uint32_t)stride;
+    
     if (decoder->num_components == 4) {
         ok_jpg_error(jpg, OK_JPG_ERROR_UNSUPPORTED, "Unsupported format (CMYK)");
         return false;
@@ -1563,7 +1591,8 @@ static bool ok_jpg_read_sof(ok_jpg_decoder *decoder) {
                 ok_jpg_component *c = decoder->components + i;
                 size_t num_blocks = (size_t)(decoder->data_units_x * c->H *
                                              decoder->data_units_y * c->V);
-                c->blocks = malloc(num_blocks * 64 * sizeof(*c->blocks) + OK_JPG_BLOCK_EXTRA_SPACE);
+                size_t size = num_blocks * 64 * sizeof(*c->blocks) + OK_JPG_BLOCK_EXTRA_SPACE;
+                c->blocks = decoder->allocator.alloc(decoder->allocator_user_data, size);
                 if (!c->blocks) {
                     ok_jpg_error(jpg, OK_JPG_ERROR_ALLOCATION,
                                  "Couldn't allocate internal block memory for image");
@@ -1572,18 +1601,26 @@ static bool ok_jpg_read_sof(ok_jpg_decoder *decoder) {
             }
         }
 
-        if (!decoder->dst_buffer) {
-            uint64_t dst_stride = decoder->dst_stride ? decoder->dst_stride : jpg->width * 4;
-            uint64_t size = dst_stride * jpg->height;
-            size_t platform_size = (size_t)size;
-            if (platform_size == size) {
-                decoder->dst_buffer = malloc(platform_size);
+        if (!jpg->data) {
+            if (decoder->allocator.image_alloc) {
+                decoder->allocator.image_alloc(decoder->allocator_user_data,
+                                               jpg->width, jpg->height, jpg->bpp,
+                                               &jpg->data, &jpg->stride);
+            } else {
+                uint64_t size = (uint64_t)jpg->stride * jpg->height;
+                size_t platform_size = (size_t)size;
+                if (platform_size == size) {
+                    jpg->data = decoder->allocator.alloc(decoder->allocator_user_data, platform_size);
+                }
             }
-            if (!decoder->dst_buffer) {
+            if (!jpg->data) {
                 ok_jpg_error(jpg, OK_JPG_ERROR_ALLOCATION, "Couldn't allocate memory for image");
                 return false;
             }
-            jpg->data = decoder->dst_buffer;
+            if (jpg->stride < jpg->width * jpg->bpp) {
+                ok_jpg_error(jpg, OK_JPG_ERROR_API, "Invalid stride");
+                return false;
+            }
         }
     }
 
@@ -1917,36 +1954,35 @@ static void ok_jpg_decode2(ok_jpg_decoder *decoder) {
     }
 }
 
-static ok_jpg *ok_jpg_decode(void *user_data, ok_jpg_read_func input_read_func,
-                             ok_jpg_seek_func input_seek_func,
-                             uint8_t *dst_buffer, uint32_t dst_stride,
-                             ok_jpg_decode_flags decode_flags, bool check_user_data) {
-    ok_jpg *jpg = calloc(1, sizeof(ok_jpg));
-    if (!jpg) {
-        return NULL;
-    }
-    if (check_user_data && !user_data) {
-        ok_jpg_error(jpg, OK_JPG_ERROR_API, "File not found");
-        return jpg;
-    }
-    if (!input_read_func || !input_seek_func) {
+
+
+static void ok_jpg_decode(ok_jpg *jpg, ok_jpg_decode_flags decode_flags,
+                          ok_jpg_input input, void *input_user_data,
+                          ok_jpg_allocator allocator, void *allocator_user_data) {
+    if (!input.read || !input.seek) {
         ok_jpg_error(jpg, OK_JPG_ERROR_API,
                      "Invalid argument: read_func and seek_func must not be NULL");
-        return jpg;
+        return;
+    }
+    
+    if (!allocator.alloc || !allocator.free) {
+        ok_jpg_error(jpg, OK_JPG_ERROR_API,
+                     "Invalid argument: allocator alloc and free functions must not be NULL");
+        return;
     }
 
-    ok_jpg_decoder *decoder = calloc(1, sizeof(ok_jpg_decoder));
+    ok_jpg_decoder *decoder = allocator.alloc(allocator_user_data, sizeof(ok_jpg_decoder));
     if (!decoder) {
         ok_jpg_error(jpg, OK_JPG_ERROR_ALLOCATION, "Couldn't allocate decoder.");
-        return jpg;
+        return;
     }
+    memset(decoder, 0, sizeof(ok_jpg_decoder));
 
     decoder->jpg = jpg;
-    decoder->input_data = user_data;
-    decoder->input_read_func = input_read_func;
-    decoder->input_seek_func = input_seek_func;
-    decoder->dst_buffer = dst_buffer;
-    decoder->dst_stride = dst_stride;
+    decoder->input = input;
+    decoder->input_user_data = input_user_data;
+    decoder->allocator = allocator;
+    decoder->allocator_user_data = allocator_user_data;
     decoder->color_rgba = (decode_flags & OK_JPG_COLOR_FORMAT_BGRA) == 0;
     decoder->flip_y = (decode_flags & OK_JPG_FLIP_Y) != 0;
     decoder->info_only = (decode_flags & OK_JPG_INFO_ONLY) != 0;
@@ -1954,9 +1990,7 @@ static ok_jpg *ok_jpg_decode(void *user_data, ok_jpg_read_func input_read_func,
     ok_jpg_decode2(decoder);
 
     for (int i = 0; i < MAX_COMPONENTS; i++) {
-        free(decoder->components[i].blocks);
+        allocator.free(allocator_user_data, decoder->components[i].blocks);
     }
-    free(decoder);
-
-    return jpg;
+    allocator.free(allocator_user_data, decoder);
 }

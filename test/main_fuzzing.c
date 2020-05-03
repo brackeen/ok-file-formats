@@ -69,11 +69,11 @@ int main(int argc, char *argv[]) {
         }
         free(png.data);
     } else if (test_jpg) {
-        ok_jpg *jpg = ok_jpg_read(stdin, jpg_flags);
-        if (jpg->error_code) {
-            fprintf(stderr, "Error code: %i\n", jpg->error_code);
+        ok_jpg jpg = ok_jpg_read(stdin, jpg_flags);
+        if (jpg.error_code) {
+            fprintf(stderr, "Error code: %i\n", jpg.error_code);
         }
-        ok_jpg_free(jpg);
+        free(jpg.data);
     } else if (test_wav) {
         ok_wav *wav = ok_wav_read(stdin, OK_WAV_DEFAULT_DECODE_FLAGS);
         if (wav->error_message) {

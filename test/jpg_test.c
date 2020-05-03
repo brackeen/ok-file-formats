@@ -90,48 +90,35 @@ static bool test_image(const char *path_to_jpgs,
     unsigned long rgba_data_length;
     uint8_t *rgba_data = read_file(rgba_filename, &rgba_data_length);
     bool success = false;
+    
+    const ok_jpg_allocator allocator = {
+        .alloc = custom_alloc,
+        .free = custom_free,
+        .image_alloc = custom_image_alloc
+    };
 
     // Load via ok_jpg
-    ok_jpg *jpg = NULL;
-    uint8_t *jpg_data = NULL;
-    uint32_t jpg_data_stride = 0;
     char *in_filename = get_full_path(path_to_jpgs, name, "jpg");
     FILE *file = fopen(in_filename, "rb");
     if (file) {
+        ok_jpg jpg = { 0 };
         switch (test_type) {
             case test_normal:
                 jpg = ok_jpg_read(file, OK_JPG_COLOR_FORMAT_RGBA);
-                jpg_data = jpg->data;
-                jpg_data_stride = jpg->width * 4;
                 break;
             case test_info_only:
                 jpg = ok_jpg_read(file, OK_JPG_INFO_ONLY);
-                jpg_data = jpg->data;
-                jpg_data_stride = jpg->width * 4;
                 break;
             case test_to_buffer:
-                jpg = ok_jpg_read(file, OK_JPG_INFO_ONLY);
-
-                if (jpg->width > 0 && jpg->height > 0) {
-                    fclose(file);
-                    uint32_t dst_stride = align_to(jpg->width * 4, 512);
-                    uint8_t *dst_buffer = malloc(dst_stride * jpg->height);
-                    ok_jpg_free(jpg);
-
-                    file = fopen(in_filename, "rb");
-                    jpg = ok_jpg_read_to_buffer(file, dst_buffer, dst_stride,
-                                                OK_JPG_COLOR_FORMAT_RGBA);
-                    jpg_data = dst_buffer;
-                    jpg_data_stride = dst_stride;
-                }
+                jpg = ok_jpg_read_with_allocator(file, OK_JPG_COLOR_FORMAT_RGBA, allocator, NULL);
                 break;
         }
         fclose(file);
 
         bool info_only = test_type == test_info_only;
-        success = compare(name, "jpg", jpg_data, jpg_data_stride,
-                          jpg->width, jpg->height,
+        success = compare(name, "jpg", jpg.data, jpg.stride, jpg.width, jpg.height,
                           rgba_data, rgba_data_length, info_only, 4, verbose);
+        free(jpg.data);
     } else {
         printf("Warning: File not found: %s.jpg\n", name);
         success = true;
@@ -140,7 +127,6 @@ static bool test_image(const char *path_to_jpgs,
     free(rgba_data);
     free(rgba_filename);
     free(in_filename);
-    ok_jpg_free(jpg);
 
     return success;
 }
