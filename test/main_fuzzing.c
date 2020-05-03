@@ -10,6 +10,32 @@
 
 #ifdef FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
 
+// Prevent loading of images that require more than 1GB of memory (prevent hangs in AFL)
+static const size_t CUSTOM_MEMORY_MAX = 1024 * 1024 * 1024;
+
+static void *custom_alloc(void *user_data, size_t size) {
+    (void)user_data;
+    return malloc(size);
+}
+
+static void custom_free(void *user_data, void *memory) {
+    (void)user_data;
+    free(memory);
+}
+
+static void custom_image_alloc(void *user_data, uint32_t width, uint32_t height, uint8_t bpp,
+                        uint8_t **dst_buffer, uint32_t *dst_stride) {
+    (void)user_data;
+    (void)width;
+    (void)bpp;
+    uint64_t size = (uint64_t)*dst_stride * height;
+    size_t platform_size = (size_t)size;
+    
+    if (platform_size == size && platform_size <= CUSTOM_MEMORY_MAX) {
+        *dst_buffer = malloc(platform_size);
+    }
+}
+
 static void printHelp() {
     fprintf(stderr, "Reads a png, jpg, wav, fnt, csv, or mo file from stdin. "
             "Useful for fuzzing.\n\n");
@@ -63,13 +89,23 @@ int main(int argc, char *argv[]) {
     }
 
     if (test_png) {
-        ok_png png = ok_png_read(stdin, png_flags);
+        const ok_png_allocator allocator = {
+            .alloc = custom_alloc,
+            .free = custom_free,
+            .image_alloc = custom_image_alloc
+        };
+        ok_png png = ok_png_read_with_allocator(stdin, png_flags, allocator, NULL);
         if (png.error_code) {
             fprintf(stderr, "Error code: %i\n", png.error_code);
         }
         free(png.data);
     } else if (test_jpg) {
-        ok_jpg jpg = ok_jpg_read(stdin, jpg_flags);
+        const ok_jpg_allocator allocator = {
+            .alloc = custom_alloc,
+            .free = custom_free,
+            .image_alloc = custom_image_alloc
+        };
+        ok_jpg jpg = ok_jpg_read_with_allocator(stdin, jpg_flags, allocator, NULL);
         if (jpg.error_code) {
             fprintf(stderr, "Error code: %i\n", jpg.error_code);
         }

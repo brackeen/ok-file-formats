@@ -6,6 +6,19 @@
 #include "mo_test.h"
 #include "wav_test.h"
 
+#define LOCAL_TEST 0
+
+#if LOCAL_TEST
+#include "test_common.h"
+#include "ok_png.h"
+#include "ok_jpg.h"
+
+static void dataRelease(void *info, const void *data, size_t size) {
+    free((void *)data);
+}
+
+#endif
+
 @interface AppDelegate ()
 
 @end
@@ -28,34 +41,46 @@
     csv_test(path, verbose);
     gettext_test(path, verbose);
 
-#if 0
+#if LOCAL_TEST
+    const ok_png_allocator png_allocator = {
+        .alloc = custom_alloc,
+        .free = custom_free,
+        .image_alloc = custom_image_alloc
+    };
     char *src_path = get_full_path(path, "crash0", "png");
     FILE *file = fopen(src_path, "rb");
     if (!file) {
         printf("Test file not found.\n");
     } else {
-        ok_png *result = ok_png_read(file, OK_PNG_COLOR_FORMAT_RGBA);
+        ok_png result = ok_png_read_with_allocator(file, OK_PNG_COLOR_FORMAT_RGBA, png_allocator, NULL);
         fclose(file);
-        if (result->error_message) {
-            printf("%s\n", result->error_message);
+        if (result.error_code) {
+            printf("PNG error code: %i\n", result.error_code);
         }
-        ok_png_free(result);
+        free(result.data);
     }
     free(src_path);
-#endif
 
-#if 0
+    const ok_jpg_allocator jpg_allocator = {
+        .alloc = custom_alloc,
+        .free = custom_free,
+        .image_alloc = custom_image_alloc
+    };
     char *in_filename = get_full_path(path, "2001-stargate", "jpg");
-    FILE *file = fopen(in_filename, "rb");
+    file = fopen(in_filename, "rb");
     if (file) {
-        ok_jpg *jpg = ok_jpg_read(file, OK_JPG_COLOR_FORMAT_BGRA);
-        if (jpg->data) {
-            CGDataProviderRef dataProvider = CGDataProviderCreateWithData(NULL, jpg->data, jpg->width * jpg->height * 4, NULL);
+        ok_jpg jpg = ok_jpg_read_with_allocator(file, OK_JPG_COLOR_FORMAT_BGRA, jpg_allocator, NULL);
+        fclose(file);
+        if (jpg.error_code) {
+            printf("JPG error code: %i\n", jpg.error_code);
+        }
+        if (jpg.data) {
+            CGDataProviderRef dataProvider = CGDataProviderCreateWithData(NULL, jpg.data, jpg.stride * jpg.height, dataRelease);
 
-            NSUInteger bytesPerRow = 4 * jpg->width;
+            NSUInteger bytesPerRow = jpg.stride;
             CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
             CGBitmapInfo bitmapInfo = (CGBitmapInfo)(kCGBitmapByteOrder32Little | kCGImageAlphaPremultipliedFirst);
-            CGImageRef imageRef = CGImageCreate(jpg->width, jpg->height, 8, 32, bytesPerRow, colorSpace, bitmapInfo, dataProvider, NULL, NO, kCGRenderingIntentDefault);
+            CGImageRef imageRef = CGImageCreate(jpg.width, jpg.height, 8, 32, bytesPerRow, colorSpace, bitmapInfo, dataProvider, NULL, NO, kCGRenderingIntentDefault);
             UIImage *image = [UIImage imageWithCGImage:imageRef scale:2.0 orientation:UIImageOrientationUp];
             CGColorSpaceRelease(colorSpace);
             CGDataProviderRelease(dataProvider);
@@ -64,8 +89,7 @@
             imageView.backgroundColor = [UIColor grayColor];
             [self.window.rootViewController.view addSubview:imageView];
         }
-        ok_jpg_free(jpg);
-        fclose(file);
+        //free(jpg.data); Don't free, dataRelease() handles it
     }
     free(in_filename);
 #endif
