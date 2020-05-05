@@ -8,7 +8,7 @@
 enum jpg_test_type {
     test_normal,
     test_info_only,
-    test_to_buffer,
+    test_allocator,
 };
 
 static const char *filenames[] = {
@@ -109,7 +109,7 @@ static bool test_image(const char *path_to_jpgs,
             case test_info_only:
                 jpg = ok_jpg_read(file, OK_JPG_INFO_ONLY);
                 break;
-            case test_to_buffer:
+            case test_allocator:
                 jpg = ok_jpg_read_with_allocator(file, OK_JPG_COLOR_FORMAT_RGBA, allocator, NULL);
                 break;
         }
@@ -153,7 +153,7 @@ int jpg_test(const char *path_to_jpgs, const char *path_to_rgba_files, bool verb
             continue;
         }
 
-        success = test_image(path_to_jpgs, path_to_rgba_files, filenames[i], test_to_buffer,
+        success = test_image(path_to_jpgs, path_to_rgba_files, filenames[i], test_allocator,
                              verbose);
         if (!success) {
             num_failures++;

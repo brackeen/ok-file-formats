@@ -14,7 +14,7 @@
 enum png_test_type {
     test_normal,
     test_info_only,
-    test_to_buffer,
+    test_allocator,
 };
 
 // This is just copied form a directory listing of the PNG Suite files
@@ -251,7 +251,7 @@ static bool test_image(const char *path_to_png_suite,
             case test_info_only:
                 png = ok_png_read(file, decode_flags | OK_PNG_INFO_ONLY);
                 break;
-            case test_to_buffer:
+            case test_allocator:
                 png = ok_png_read_with_allocator(file, decode_flags, allocator, NULL);
                 break;
         }
@@ -295,7 +295,7 @@ int png_suite_test(const char *path_to_png_suite, const char *path_to_rgba_files
             continue;
         }
 
-        success = test_image(path_to_png_suite, path_to_rgba_files, filenames[i], test_to_buffer,
+        success = test_image(path_to_png_suite, path_to_rgba_files, filenames[i], test_allocator,
                              verbose);
         if (!success) {
             num_failures++;
