@@ -173,7 +173,7 @@ extern const ok_png_allocator OK_PNG_DEFAULT_ALLOCATOR;
 #if !defined(OK_NO_STDIO)
 
 /**
- * Reads a PNG image using the default "stdlib" allocator.
+ * Reads a PNG image using a custom allocator.
  * On success, #ok_png.data contains the packed image data, with a size of
  * (`width * height * 4`). On failure, #ok_png.data is `NULL` and #ok_png.error_code is nonzero.
  *

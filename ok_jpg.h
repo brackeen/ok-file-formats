@@ -167,7 +167,7 @@ extern const ok_jpg_allocator OK_JPG_DEFAULT_ALLOCATOR;
 #if !defined(OK_NO_STDIO)
 
 /**
- * Reads a JPG image using the default "stdlib" allocator.
+ * Reads a JPG image using a custom allocator.
  * On success, #ok_jpg.data contains the packed image data, with a size of
  * (`width * height * 4`). On failure, #ok_jpg.data is `NULL` and #ok_jpg.error_code is nonzero.
  *
