@@ -54,13 +54,13 @@ static bool test_wav(const char *path, const char *container_type, const char *f
         printf("Warning: %24.24s.%s not found.\n", src_filename, container_type);
         return true;
     }
-    ok_wav *wav = ok_wav_read(file, OK_WAV_ENDIAN_NO_CONVERSION);
+    ok_wav wav = ok_wav_read(file, OK_WAV_ENDIAN_NO_CONVERSION);
     fclose(file);
     free(src_path);
 
-    if (!wav->data) {
+    if (!wav.data) {
         printf("File:    %24.24s.%s (Couldn't load data. Error %i).\n", src_filename,
-               container_type, wav->error_code);
+               container_type, wav.error_code);
     } else {
         // Load raw
         char *raw_path = get_full_path(path, src_filename, "raw");
@@ -69,26 +69,24 @@ static bool test_wav(const char *path, const char *container_type, const char *f
         free(raw_path);
 
         // Compare
-        unsigned long length = (unsigned long)(wav->num_frames * wav->num_channels *
-                                               (wav->bit_depth / 8));
+        unsigned long length = (unsigned long)(wav.num_frames * wav.num_channels *
+                                               (wav.bit_depth / 8));
 
         if (expected_length != length) {
             printf("File:    %24.24s.%s (Invalid data length: Expected %lu, got %lu).\n",
                    src_filename, container_type, expected_length, length);
         } else {
-            success = memcmp(wav->data, raw_data, length) == 0;
+            success = memcmp(wav.data, raw_data, length) == 0;
             if (!success) {
                 printf("File:    %24.24s.%s (Data mismatch).\n", src_filename, container_type);
                 if (verbose) {
-                    print_diff(raw_data, wav->data, length);
+                    print_diff(raw_data, wav.data, length);
                 }
             }
         }
         free(raw_data);
+        free(wav.data);
     }
-
-    // Done
-    ok_wav_free(wav);
 
     return success;
 }

@@ -111,11 +111,11 @@ int main(int argc, char *argv[]) {
         }
         free(jpg.data);
     } else if (test_wav) {
-        ok_wav *wav = ok_wav_read(stdin, OK_WAV_DEFAULT_DECODE_FLAGS);
-        if (wav->error_code) {
-            fprintf(stderr, "Error code: %i\n", wav->error_code);
+        ok_wav wav = ok_wav_read(stdin, OK_WAV_DEFAULT_DECODE_FLAGS);
+        if (wav.error_code) {
+            fprintf(stderr, "Error code: %i\n", wav.error_code);
         }
-        ok_wav_free(wav);
+        free(wav.data);
     } else if (test_fnt) {
         ok_fnt *fnt = ok_fnt_read(stdin);
         if (fnt->error_message) {
