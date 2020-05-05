@@ -1,7 +1,7 @@
 /*
  ok-file-formats
  https://github.com/brackeen/ok-file-formats
- Copyright (c) 2014-2017 David Brackeen
+ Copyright (c) 2014-2020 David Brackeen
 
  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
  associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -57,17 +57,13 @@ typedef struct {
     ok_wav_seek_func input_seek_func;
 } ok_wav_decoder;
 
-#ifdef NDEBUG
-#define ok_wav_error(wav, message) ok_wav_set_error((wav), "ok_wav_error")
-#else
-#define ok_wav_error(wav, message) ok_wav_set_error((wav), (message))
-#endif
+#define ok_wav_error(wav, error_code, message) ok_wav_set_error((wav), (error_code))
 
-static void ok_wav_set_error(ok_wav *wav, const char *message) {
+static void ok_wav_set_error(ok_wav *wav, ok_wav_error error_code) {
     if (wav) {
         free(wav->data);
         wav->data = NULL;
-        wav->error_message = message;
+        wav->error_code = error_code;
     }
 }
 
@@ -75,7 +71,7 @@ static bool ok_read(ok_wav_decoder *decoder, uint8_t *buffer, size_t length) {
     if (decoder->input_read_func(decoder->input_data, buffer, length) == length) {
         return true;
     } else {
-        ok_wav_error(decoder->wav, "Read error: error calling input function.");
+        ok_wav_error(decoder->wav, OK_WAV_ERROR_IO, "Read error: error calling input function.");
         return false;
     }
 }
@@ -84,7 +80,7 @@ static bool ok_seek(ok_wav_decoder *decoder, long length) {
     if (decoder->input_seek_func(decoder->input_data, length)) {
         return true;
     } else {
-        ok_wav_error(decoder->wav, "Seek error: error calling input function.");
+        ok_wav_error(decoder->wav, OK_WAV_ERROR_IO, "Seek error: error calling input function.");
         return false;
     }
 }
@@ -113,7 +109,7 @@ ok_wav *ok_wav_read(FILE *file, ok_wav_decode_flags decode_flags) {
     if (file) {
         ok_wav_decode(wav, file, ok_file_read_func, ok_file_seek_func, decode_flags);
     } else {
-        ok_wav_error(wav, "File not found");
+        ok_wav_error(wav, OK_WAV_ERROR_API, "File not found");
     }
     return wav;
 }
@@ -126,7 +122,7 @@ ok_wav *ok_wav_read_from_callbacks(void *user_data, ok_wav_read_func read_func,
     if (read_func && seek_func) {
         ok_wav_decode(wav, user_data, read_func, seek_func, decode_flags);
     } else {
-        ok_wav_error(wav, "Invalid argument: read_func and seek_func must not be NULL");
+        ok_wav_error(wav, OK_WAV_ERROR_API, "Invalid argument: read_func and seek_func must not be NULL");
     }
     return wav;
 }
@@ -348,14 +344,14 @@ static void ok_wav_decode_logarithmic_pcm_data(ok_wav_decoder *decoder, const in
     size_t platform_data_length = (size_t)output_data_length;
     uint8_t *buffer = malloc(buffer_size);
     if (!buffer) {
-        ok_wav_error(wav, "Couldn't allocate buffer");
+        ok_wav_error(wav, OK_WAV_ERROR_ALLOCATION, "Couldn't allocate buffer");
         goto done;
     }
     if (platform_data_length > 0 && platform_data_length == output_data_length) {
         wav->data = malloc(platform_data_length);
     }
     if (!wav->data) {
-        ok_wav_error(wav, "Couldn't allocate memory for audio");
+        ok_wav_error(wav, OK_WAV_ERROR_ALLOCATION, "Couldn't allocate memory for audio");
         goto done;
     }
 
@@ -456,19 +452,19 @@ static void ok_wav_decode_apple_ima_adpcm_data(ok_wav_decoder *decoder) {
     const size_t platform_data_length = (size_t)output_data_length;
     channel_states = calloc(num_channels, sizeof(struct ok_wav_ima_state));
     if (!channel_states) {
-        ok_wav_error(wav, "Couldn't allocate channel_state buffer");
+        ok_wav_error(wav, OK_WAV_ERROR_ALLOCATION, "Couldn't allocate channel_state buffer");
         goto done;
     }
     block = malloc(decoder->block_size);
     if (!block) {
-        ok_wav_error(wav, "Couldn't allocate packet");
+        ok_wav_error(wav, OK_WAV_ERROR_ALLOCATION, "Couldn't allocate packet");
         goto done;
     }
     if (platform_data_length > 0 && platform_data_length == output_data_length) {
         wav->data = malloc(platform_data_length);
     }
     if (!wav->data) {
-        ok_wav_error(wav, "Couldn't allocate memory for audio");
+        ok_wav_error(wav, OK_WAV_ERROR_ALLOCATION, "Couldn't allocate memory for audio");
         goto done;
     }
 
@@ -539,19 +535,19 @@ static void ok_wav_decode_ms_ima_adpcm_data(ok_wav_decoder *decoder) {
     const size_t platform_data_length = (size_t)output_data_length;
     channel_states = calloc(num_channels, sizeof(struct ok_wav_ima_state));
     if (!channel_states) {
-        ok_wav_error(wav, "Couldn't allocate channel_state buffer");
+        ok_wav_error(wav, OK_WAV_ERROR_ALLOCATION, "Couldn't allocate channel_state buffer");
         goto done;
     }
     block = malloc(decoder->block_size);
     if (!block) {
-        ok_wav_error(wav, "Couldn't allocate block");
+        ok_wav_error(wav, OK_WAV_ERROR_ALLOCATION, "Couldn't allocate block");
         goto done;
     }
     if (platform_data_length > 0 && platform_data_length == output_data_length) {
         wav->data = malloc(platform_data_length);
     }
     if (!wav->data) {
-        ok_wav_error(wav, "Couldn't allocate memory for audio");
+        ok_wav_error(wav, OK_WAV_ERROR_ALLOCATION, "Couldn't allocate memory for audio");
         goto done;
     }
 
@@ -679,19 +675,19 @@ static void ok_wav_decode_ms_adpcm_data(ok_wav_decoder *decoder) {
     const size_t platform_data_length = (size_t)output_data_length;
     channel_states = calloc(num_channels, sizeof(struct ok_wav_ms_adpcm_state));
     if (!channel_states) {
-        ok_wav_error(wav, "Couldn't allocate channel_state buffer");
+        ok_wav_error(wav, OK_WAV_ERROR_ALLOCATION, "Couldn't allocate channel_state buffer");
         goto done;
     }
     block = malloc(decoder->block_size);
     if (!block) {
-        ok_wav_error(wav, "Couldn't allocate block");
+        ok_wav_error(wav, OK_WAV_ERROR_ALLOCATION, "Couldn't allocate block");
         goto done;
     }
     if (platform_data_length > 0 && platform_data_length == output_data_length) {
         wav->data = malloc(platform_data_length);
     }
     if (!wav->data) {
-        ok_wav_error(wav, "Couldn't allocate memory for audio");
+        ok_wav_error(wav, OK_WAV_ERROR_ALLOCATION, "Couldn't allocate memory for audio");
         goto done;
     }
 
@@ -784,7 +780,7 @@ static void ok_wav_decode_pcm_data(ok_wav_decoder *decoder) {
         wav->data = malloc(platform_data_length);
     }
     if (!wav->data) {
-        ok_wav_error(wav, "Couldn't allocate memory for audio");
+        ok_wav_error(wav, OK_WAV_ERROR_ALLOCATION, "Couldn't allocate memory for audio");
         return;
     }
 
@@ -816,7 +812,7 @@ static bool ok_wav_valid_bit_depth(const ok_wav *wav, enum ok_wav_encoding encod
 static void ok_wav_decode_data(ok_wav_decoder *decoder, uint64_t data_length) {
     ok_wav *wav = decoder->wav;
     if (wav->sample_rate <= 0 || wav->num_channels <= 0) {
-        ok_wav_error(wav, "Invalid file (header not found)");
+        ok_wav_error(wav, OK_WAV_ERROR_INVALID, "Invalid file (header not found)");
         return;
     }
 
@@ -824,7 +820,7 @@ static void ok_wav_decode_data(ok_wav_decoder *decoder, uint64_t data_length) {
         decoder->encoding == OK_WAV_ENCODING_MS_IMA_ADPCM ||
         decoder->encoding == OK_WAV_ENCODING_MS_ADPCM) {
         if (decoder->block_size == 0 || decoder->frames_per_block == 0) {
-            ok_wav_error(wav, "Invalid block size");
+            ok_wav_error(wav, OK_WAV_ERROR_INVALID, "Invalid block size");
             return;
         }
         const uint64_t blocks_needed = ((wav->num_frames + (decoder->frames_per_block - 1)) /
@@ -839,7 +835,7 @@ static void ok_wav_decode_data(ok_wav_decoder *decoder, uint64_t data_length) {
         if (wav->bit_depth >= 8) {
             wav->num_frames = data_length / ((wav->bit_depth / 8) * wav->num_channels);
         } else {
-            ok_wav_error(wav, "Frame length not defined");
+            ok_wav_error(wav, OK_WAV_ERROR_INVALID, "Frame length not defined");
             return;
         }
     }
@@ -883,7 +879,7 @@ static void ok_wav_decode_wav_file(ok_wav_decoder *decoder, bool is_little_endia
 
     bool valid = memcmp("WAVE", header + 4, 4) == 0;
     if (!valid) {
-        ok_wav_error(wav, "Not a valid WAV file");
+        ok_wav_error(wav, OK_WAV_ERROR_INVALID, "Not a valid WAV file");
         return;
     }
 
@@ -900,7 +896,7 @@ static void ok_wav_decode_wav_file(ok_wav_decoder *decoder, bool is_little_endia
         if (memcmp("fmt ", chunk_header, 4) == 0) {
             uint8_t chunk_data[50];
             if (!(chunk_length >= 16 && chunk_length <= sizeof(chunk_data))) {
-                ok_wav_error(wav, "Invalid WAV file (not PCM)");
+                ok_wav_error(wav, OK_WAV_ERROR_INVALID, "Invalid WAV file (not PCM)");
                 return;
             }
             if (!ok_read(decoder, chunk_data, chunk_length)) {
@@ -957,7 +953,7 @@ static void ok_wav_decode_wav_file(ok_wav_decoder *decoder, bool is_little_endia
                     }
                 }
                 if (!valid_frames_per_block) {
-                    ok_wav_error(wav, "Invalid frames per block");
+                    ok_wav_error(wav, OK_WAV_ERROR_INVALID, "Invalid frames per block");
                     return;
                 }
             }
@@ -966,8 +962,9 @@ static void ok_wav_decode_wav_file(ok_wav_decoder *decoder, bool is_little_endia
                                  ok_wav_valid_bit_depth(wav, decoder->encoding) &&
                                  wav->num_channels > 0);
             if (!valid_format) {
-                ok_wav_error(wav, "Invalid WAV format. Must be PCM, and a bit depth of "
-                                  "8, 16, 32, 48, or 64-bit.");
+                ok_wav_error(wav, OK_WAV_ERROR_UNSUPPORTED,
+                             "Unsupported WAV format. Must be PCM, and a bit depth of "
+                             "8, 16, 32, 48, or 64-bit.");
                 return;
             }
         } else if (memcmp("fact", chunk_header, 4) == 0) {
@@ -1004,7 +1001,7 @@ static void ok_wav_decode_caf_file(ok_wav_decoder *decoder) {
 
     uint16_t file_version = readBE16(header);
     if (file_version != 1) {
-        ok_wav_error(wav, "Not a CAF file");
+        ok_wav_error(wav, OK_WAV_ERROR_INVALID, "Not a CAF file");
         return;
     }
 
@@ -1019,7 +1016,7 @@ static void ok_wav_decode_caf_file(ok_wav_decoder *decoder) {
         if (memcmp("desc", chunk_header, 4) == 0) {
             // Read desc chunk
             if (chunk_length != 32) {
-                ok_wav_error(wav, "Corrupt CAF file (bad desc)");
+                ok_wav_error(wav, OK_WAV_ERROR_INVALID, "Corrupt CAF file (bad desc)");
                 return;
             }
             uint8_t chunk_data[32];
@@ -1081,13 +1078,14 @@ static void ok_wav_decode_caf_file(ok_wav_decoder *decoder) {
                                  valid_bytes_per_packet &&
                                  (ok_wav_valid_bit_depth(wav, decoder->encoding)));
             if (!valid_format) {
-                ok_wav_error(wav, "Invalid CAF format. Must be PCM, mono or stereo, and "
-                                  "8-, 16-, 24- or 32-bit.)");
+                ok_wav_error(wav, OK_WAV_ERROR_UNSUPPORTED,
+                             "Unsupported CAF format. Must be PCM, mono or stereo, and "
+                             "8-, 16-, 24- or 32-bit.)");
                 return;
             }
         } else if (memcmp("data", chunk_header, 4) == 0) {
             if (chunk_length < 4) {
-                ok_wav_error(wav, "Corrupt CAF file (bad data)");
+                ok_wav_error(wav, OK_WAV_ERROR_INVALID, "Corrupt CAF file (bad data)");
                 return;
             }
             // Skip the edit count
@@ -1100,7 +1098,7 @@ static void ok_wav_decode_caf_file(ok_wav_decoder *decoder) {
         } else if (memcmp("pakt", chunk_header, 4) == 0) {
             // Read pakt chunk
             if (chunk_length != 24) {
-                ok_wav_error(wav, "Corrupt CAF file (bad pakt)");
+                ok_wav_error(wav, OK_WAV_ERROR_INVALID, "Corrupt CAF file (bad pakt)");
                 return;
             }
             uint8_t chunk_data[24];
@@ -1126,7 +1124,7 @@ static void ok_wav_decode(ok_wav *wav, void *input_data, ok_wav_read_func read_f
     }
     ok_wav_decoder *decoder = calloc(1, sizeof(ok_wav_decoder));
     if (!decoder) {
-        ok_wav_error(wav, "Couldn't allocate decoder.");
+        ok_wav_error(wav, OK_WAV_ERROR_ALLOCATION, "Couldn't allocate decoder.");
         return;
     }
 
@@ -1146,7 +1144,7 @@ static void ok_wav_decode(ok_wav *wav, void *input_data, ok_wav_read_func read_f
         } else if (memcmp("caff", header, 4) == 0) {
             ok_wav_decode_caf_file(decoder);
         } else {
-            ok_wav_error(wav, "Not a PCM WAV or CAF file.");
+            ok_wav_error(wav, OK_WAV_ERROR_INVALID, "Not a PCM WAV or CAF file.");
         }
     }
     free(decoder);

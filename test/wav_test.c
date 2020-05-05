@@ -59,8 +59,8 @@ static bool test_wav(const char *path, const char *container_type, const char *f
     free(src_path);
 
     if (!wav->data) {
-        printf("File:    %24.24s.%s (Couldn't load data. %s).\n", src_filename, container_type,
-               wav->error_message);
+        printf("File:    %24.24s.%s (Couldn't load data. Error %i).\n", src_filename,
+               container_type, wav->error_code);
     } else {
         // Load raw
         char *raw_path = get_full_path(path, src_filename, "raw");

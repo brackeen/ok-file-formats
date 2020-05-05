@@ -1,7 +1,7 @@
 /*
  ok-file-formats
  https://github.com/brackeen/ok-file-formats
- Copyright (c) 2014-2017 David Brackeen
+ Copyright (c) 2014-2020 David Brackeen
 
  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
  associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -60,6 +60,15 @@
 extern "C" {
 #endif
 
+typedef enum {
+    OK_WAV_SUCCESS = 0,
+    OK_WAV_ERROR_API, // Invalid argument sent to public API function
+    OK_WAV_ERROR_INVALID, // Not a valid WAV file
+    OK_WAV_ERROR_UNSUPPORTED, // Unsupported WAV file (Not PCM, u-law, a-law, or ADPCM)
+    OK_WAV_ERROR_ALLOCATION, // Couldn't allocate memory
+    OK_WAV_ERROR_IO, // Couldn't read or seek the file
+} ok_wav_error;
+
 /**
  * The data returned from #ok_wav_read().
  */
@@ -69,9 +78,9 @@ typedef struct {
     uint8_t bit_depth;
     bool is_float;
     bool little_endian;
+    ok_wav_error error_code;
     uint64_t num_frames;
     void *data;
-    const char *error_message;
 } ok_wav;
 
 /**
