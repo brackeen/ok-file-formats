@@ -10,6 +10,11 @@
 #define min(a, b) ((a) < (b) ? (a) : (b))
 #endif
 
+enum wav_test_type {
+    test_normal,
+    test_allocator,
+};
+
 static void print_diff(const uint8_t *data1, const uint8_t *data2, const unsigned long length) {
     printf("Expected:                                         Actual:\n");
     if (data1 && data2) {
@@ -42,7 +47,7 @@ static void print_diff(const uint8_t *data1, const uint8_t *data2, const unsigne
 }
 
 static bool test_wav(const char *path, const char *container_type, const char *format,
-                     int channels, bool verbose) {
+                     int channels, enum wav_test_type test_type, bool verbose) {
     char src_filename[256];
     bool success = false;
 
@@ -54,7 +59,21 @@ static bool test_wav(const char *path, const char *container_type, const char *f
         printf("Warning: %24.24s.%s not found.\n", src_filename, container_type);
         return true;
     }
-    ok_wav wav = ok_wav_read(file, OK_WAV_ENDIAN_NO_CONVERSION);
+    const ok_wav_allocator allocator = {
+        .alloc = custom_alloc,
+        .free = custom_free,
+        .audio_alloc = custom_audio_alloc
+    };
+    
+    ok_wav wav = { 0 };
+    switch (test_type) {
+        case test_normal:
+            wav = ok_wav_read(file, OK_WAV_ENDIAN_NO_CONVERSION);
+            break;
+        case test_allocator:
+            wav = ok_wav_read_with_allocator(file, OK_WAV_ENDIAN_NO_CONVERSION, allocator, NULL);
+            break;
+    }
     fclose(file);
     free(src_path);
 
@@ -114,15 +133,24 @@ int wav_test(const char *path, bool verbose) {
     double startTime = clock() / (double)CLOCKS_PER_SEC;
     int num_failures = 0;
     for (int i = 0; i < num_channels; i++) {
+        bool success;
         for (int j = 0; j < num_caf_types; j++) {
-            bool success = test_wav(path, "caf", caf_data_formats[j], channels[i], verbose);
+            success = test_wav(path, "caf", caf_data_formats[j], channels[i], test_normal, verbose);
+            if (!success) {
+                num_failures++;
+            }
+            success = test_wav(path, "caf", caf_data_formats[j], channels[i], test_allocator, verbose);
             if (!success) {
                 num_failures++;
             }
         }
 
         for (int j = 0; j < num_wav_types; j++) {
-            bool success = test_wav(path, "wav", wav_data_formats[j], channels[i], verbose);
+            success = test_wav(path, "wav", wav_data_formats[j], channels[i], test_normal, verbose);
+            if (!success) {
+                num_failures++;
+            }
+            success = test_wav(path, "wav", wav_data_formats[j], channels[i], test_allocator, verbose);
             if (!success) {
                 num_failures++;
             }

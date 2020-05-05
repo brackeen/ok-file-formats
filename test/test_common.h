@@ -9,6 +9,9 @@ void custom_free(void *user_data, void *memory);
 void custom_image_alloc(void *user_data, uint32_t width, uint32_t height, uint8_t bpp,
                         uint8_t **dst_buffer, uint32_t *dst_stride);
 
+uint8_t *custom_audio_alloc(void *user_data, uint64_t num_frames, uint8_t num_channels,
+                            uint8_t bit_depth);
+
 char *append_path(const char *path, const char *name);
 
 char *get_full_path(const char *path, const char *name, const char *ext);

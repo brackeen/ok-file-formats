@@ -41,6 +41,16 @@ void custom_image_alloc(void *user_data, uint32_t width, uint32_t height, uint8_
     }
 }
 
+uint8_t *custom_audio_alloc(void *user_data, uint64_t num_frames, uint8_t num_channels, uint8_t bit_depth) {
+    (void)user_data;
+    uint64_t size = num_frames * num_channels * (bit_depth / 8);
+    size_t platform_size = (size_t)size;
+    if (platform_size == 0 || platform_size != size) {
+        return NULL;
+    }
+    return malloc(platform_size);
+}
+
 static void print_image(const uint8_t *data, const uint32_t width, const uint32_t height) {
     if (data) {
         for (uint32_t y = 0; y < height; y++) {
