@@ -1680,6 +1680,14 @@ static bool ok_jpg_read_sos(ok_jpg_decoder *decoder) {
             ok_jpg_error(jpg, OK_JPG_ERROR_INVALID, "Invalid SOS segment (C)");
             return false;
         }
+        
+        // Make sure component is unique
+        for (int j = 0; j < i; j++) {
+            if (decoder->scan_components[i] == decoder->scan_components[j]) {
+                ok_jpg_error(jpg, OK_JPG_ERROR_INVALID, "Invalid SOS segment (component ids)");
+                return false;
+            }
+        }
 
         ok_jpg_component *comp = decoder->components + decoder->scan_components[i];
         comp->Td = src[1] >> 4;
