@@ -1591,7 +1591,7 @@ static bool ok_jpg_read_sof(ok_jpg_decoder *decoder) {
                 ok_jpg_component *c = decoder->components + i;
                 size_t num_blocks = (size_t)(decoder->data_units_x * c->H *
                                              decoder->data_units_y * c->V);
-                size_t size = num_blocks * 64 * sizeof(*c->blocks) + OK_JPG_BLOCK_EXTRA_SPACE;
+                size_t size = (num_blocks * 64 + OK_JPG_BLOCK_EXTRA_SPACE) * sizeof(*c->blocks);
                 c->blocks = decoder->allocator.alloc(decoder->allocator_user_data, size);
                 if (!c->blocks) {
                     ok_jpg_error(jpg, OK_JPG_ERROR_ALLOCATION,
