@@ -45,6 +45,8 @@ Then build the test as usual, which builds `ok-file-formats-fuzzing` and generat
     mkdir build && cd build
     cmake .. && cmake --build .
 
+Optionally, the `ok-file-formats-fuzzing` binary can be built with Address Sanitizer by setting `FUZZ_WITH_ASAN` to `ON`. This is slow, however. (Thanks to [WayneDevMaze](https://github.com/WayneDevMaze) for the idea to fuzz with Address Sanitizer.)
+
 Then run one of these commands:
 
     afl-fuzz -i gen/fuzzing/input/wav -o gen/fuzzing/afl_results/wav ./ok-file-formats-fuzzing --wav

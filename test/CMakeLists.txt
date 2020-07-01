@@ -1,8 +1,9 @@
-cmake_minimum_required(VERSION 2.8.7)
+cmake_minimum_required(VERSION 3.3)
 
 project(OK_FILE_FORMATS_TESTS C)
 
 option(TREAT_WARNINGS_AS_ERRORS "Treat warnings as errors" OFF)
+option(FUZZ_WITH_ASAN "Use Address Sanitizer when building the fuzz test (Warning: slow)" OFF)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 include(FileInformation)
@@ -83,6 +84,7 @@ endforeach()
 
 # Convert jpg files to raw RGBA8888 format, applying exif orientation tags if found.
 # Tested against jpeg 8d via ImageMagick.
+set(FUZZING_JPG_LIST "jpg-gray" "jpeg444" "LEVEL76" "65500w" "park" "orientation_1" "jpg-size-1x1" "jpg-size-7x7" "jpg-size-33x33" "2004" "gort")
 foreach(jpg_file ${test_jpg_files})
     get_filename_component(file_name ${jpg_file} NAME_WE)
     set(gen_file "${CMAKE_CURRENT_BINARY_DIR}/gen/${file_name}.rgba")
@@ -96,9 +98,7 @@ foreach(jpg_file ${test_jpg_files})
     list(APPEND GEN_FILES ${gen_file})
 
     if (FUZZING_COMPILER)
-        # Use only small jpg files (<10KB) for fuzzing
-        file(SIZE ${jpg_file} JPG_FILE_SIZE)
-        if (${JPG_FILE_SIZE} LESS 10240)
+        if (${file_name} IN_LIST FUZZING_JPG_LIST)
             add_custom_command(
                 OUTPUT ${JPG_FUZZING_OUT_DIR}/${file_name}.jpg
                 DEPENDS ${jpg_file}
@@ -122,9 +122,11 @@ add_executable(ok-file-formats-test ${src_files} ${test_src_files})
 add_dependencies(ok-file-formats-test gen)
 if (CMAKE_C_COMPILER_ID MATCHES "Clang")
     # Enable -Wwrite-strings because -Weverything doesn't enable it in all versions of Clang
-    set_target_properties(ok-file-formats-test PROPERTIES COMPILE_FLAGS "-Weverything -Wwrite-strings -Wno-padded -Wno-covered-switch-default ${TREAT_WARNINGS_AS_ERRORS_FLAG}")
+    set_target_properties(ok-file-formats-test PROPERTIES COMPILE_FLAGS "-fsanitize=address -fno-omit-frame-pointer -O3 -g -Weverything -Wwrite-strings -Wno-padded -Wno-covered-switch-default ${TREAT_WARNINGS_AS_ERRORS_FLAG}")
+    set_target_properties(ok-file-formats-test PROPERTIES LINK_FLAGS "-fsanitize=address")
 elseif (CMAKE_C_COMPILER_ID MATCHES "GNU")
-    set_target_properties(ok-file-formats-test PROPERTIES COMPILE_FLAGS "-Wall -Wextra -Wwrite-strings ${TREAT_WARNINGS_AS_ERRORS_FLAG}")
+    set_target_properties(ok-file-formats-test PROPERTIES COMPILE_FLAGS "-fsanitize=address -fno-omit-frame-pointer -O3 -g -Wall -Wextra -Wwrite-strings ${TREAT_WARNINGS_AS_ERRORS_FLAG}")
+    set_target_properties(ok-file-formats-test PROPERTIES LINK_FLAGS "-fsanitize=address")
 elseif (CMAKE_C_COMPILER_ID MATCHES "MSVC")
     set_target_properties(ok-file-formats-test PROPERTIES COMPILE_FLAGS "/Wall ${TREAT_WARNINGS_AS_ERRORS_FLAG}")
 endif()
@@ -150,5 +152,9 @@ endif()
 if (FUZZING_COMPILER)
     add_executable(ok-file-formats-fuzzing ${src_files} "main_fuzzing.c")
     add_dependencies(ok-file-formats-fuzzing gen)
+    if (FUZZ_WITH_ASAN)
+        set_target_properties(ok-file-formats-fuzzing PROPERTIES COMPILE_FLAGS "-fsanitize=address -fno-omit-frame-pointer -O3")
+        set_target_properties(ok-file-formats-fuzzing PROPERTIES LINK_FLAGS "-fsanitize=address")
+    endif()
     set_target_properties(ok-file-formats-fuzzing PROPERTIES C_COMPILER_LAUNCHER ${FUZZING_COMPILER})
 endif()
