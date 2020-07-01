@@ -1,0 +1,10 @@
+# AFL dictionary for PNG images (only sections used by ok_png)
+
+header_png="\x89PNG\x0d\x0a\x1a\x0a"
+
+section_IHDR="IHDR"
+section_PLTE="PLTE"
+section_tRNS="tRNS"
+section_IDAT="IDAT"
+section_IEND="IEND"
+section_CgBI="CgBI"

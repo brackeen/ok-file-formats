@@ -49,8 +49,8 @@ Then run one of these commands:
 
     afl-fuzz -i gen/fuzzing/input/wav -o gen/fuzzing/afl_results/wav ./ok-file-formats-fuzzing --wav
     afl-fuzz -i gen/fuzzing/input/caf -o gen/fuzzing/afl_results/caf ./ok-file-formats-fuzzing --caf
-    afl-fuzz -t 1000 -i gen/fuzzing/input/png -o gen/fuzzing/afl_results/png ./ok-file-formats-fuzzing --png
-    afl-fuzz -t 1000 -i gen/fuzzing/input/jpg -o gen/fuzzing/afl_results/jpg ./ok-file-formats-fuzzing --jpg
+    afl-fuzz -t 1000 -x ../png.dict -i gen/fuzzing/input/png -o gen/fuzzing/afl_results/png ./ok-file-formats-fuzzing --png
+    afl-fuzz -t 1000 -x ../jpg.dict -i gen/fuzzing/input/jpg -o gen/fuzzing/afl_results/jpg ./ok-file-formats-fuzzing --jpg
 
 Fuzzing will take hours or even days to complete, depending on the input. `afl-fuzz` runs on one core, so if you have a multi-core machine you can run multiple tests at once.
 
