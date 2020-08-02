@@ -1846,6 +1846,24 @@ static bool ok_jpg_skip_segment(ok_jpg_decoder *decoder) {
     return ok_seek(decoder, length);
 }
 
+static bool ok_jpg_scan_to_next_marker(ok_jpg_decoder *decoder) {
+    uint8_t buffer[1];
+    while (true) {
+        if (!ok_read(decoder, buffer, 1)) {
+            return false;
+        }
+        if (buffer[0] == 0xff) {
+            if (!ok_read(decoder, buffer, 1)) {
+                return false;
+            }
+            if (buffer[0] != 0 && !(buffer[0] >= 0xD0 && buffer[0] <= 0xD7)) {
+                decoder->next_marker = buffer[0];
+                return true;
+            }
+        }
+    }
+}
+
 // MARK: JPEG decoding entry point
 
 static void ok_jpg_decode2(ok_jpg_decoder *decoder) {
@@ -1896,6 +1914,10 @@ static void ok_jpg_decode2(ok_jpg_decoder *decoder) {
         } else if (marker == 0xC4) {
             // DHT
             success = decoder->info_only ? ok_jpg_skip_segment(decoder) : ok_jpg_read_dht(decoder);
+        } else if (marker >= 0xD0 && marker <= 0xD7) {
+            decoder->next_marker = marker;
+            ok_jpg_decode_restart_if_needed(decoder);
+            success = ok_jpg_scan_to_next_marker(decoder);
         } else if (marker == 0xD9) {
             // EOI
             decoder->eoi_found = true;
@@ -1909,21 +1931,7 @@ static void ok_jpg_decode2(ok_jpg_decoder *decoder) {
             } else {
                 success = ok_jpg_skip_segment(decoder);
                 if (success) {
-                    // Scan to next marker
-                    while (true) {
-                        if (!ok_read(decoder, buffer, 1)) {
-                            return;
-                        }
-                        if (buffer[0] == 0xff) {
-                            if (!ok_read(decoder, buffer, 1)) {
-                                return;
-                            }
-                            if (buffer[0] != 0 && !(buffer[0] >= 0xD0 && buffer[0] <= 0xD7)) {
-                                decoder->next_marker = buffer[0];
-                                break;
-                            }
-                        }
-                    }
+                    success = ok_jpg_scan_to_next_marker(decoder);
                 }
             }
         } else if (marker == 0xDB) {
@@ -1961,8 +1969,6 @@ static void ok_jpg_decode2(ok_jpg_decoder *decoder) {
         }
     }
 }
-
-
 
 static void ok_jpg_decode(ok_jpg *jpg, ok_jpg_decode_flags decode_flags,
                           ok_jpg_input input, void *input_user_data,

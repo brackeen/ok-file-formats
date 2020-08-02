@@ -86,6 +86,8 @@ static void dataRelease(void *info, const void *data, size_t size) {
             CGDataProviderRelease(dataProvider);
 
             UIImageView *imageView = [[UIImageView alloc] initWithImage:image];
+            imageView.frame = self.window.frame;
+            imageView.contentMode = UIViewContentModeScaleAspectFit;
             imageView.backgroundColor = [UIColor grayColor];
             [self.window.rootViewController.view addSubview:imageView];
         }
