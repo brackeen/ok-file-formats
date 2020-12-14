@@ -1238,6 +1238,15 @@ static inline void ok_inflater_skip_byte_align(ok_inflater *inflater) {
     inflater->input_buffer_bits -= skip_bits;
 }
 
+static inline bool ok_inflater_can_read_bits(ok_inflater *inflater, unsigned int num_bits) {
+    if (inflater->input_buffer_bits >= num_bits) {
+        return true;
+    }
+    int bytes_needed = (num_bits - inflater->input_buffer_bits + 7) >> 3;
+    return bytes_needed <= (inflater->input_end - inflater->input);
+}
+
+// Assumes no more than 32 bits are loaded total (inflater->input_buffer_bits + num_bits)
 static inline bool ok_inflater_load_bits(ok_inflater *inflater, unsigned int num_bits) {
     while (inflater->input_buffer_bits < num_bits) {
         if (inflater->input == inflater->input_end) {
@@ -1581,10 +1590,13 @@ static int ok_inflater_decode_distance(ok_inflater *inflater,
         return -1;
     } else {
         unsigned int extra_bits = (unsigned int)((value >> 1) - 1);
-        if (!ok_inflater_load_bits(inflater, value_bits + extra_bits)) {
+        if (!ok_inflater_can_read_bits(inflater, value_bits + extra_bits)) {
             return -1;
         }
-        int d = (int)(ok_inflater_read_bits(inflater, value_bits + extra_bits) >> value_bits);
+        // Make sure to load no more than 32 bits at once
+        ok_inflater_read_bits(inflater, value_bits);
+        ok_inflater_load_bits(inflater, extra_bits);
+        int d = (int)ok_inflater_read_bits(inflater, extra_bits);
         return OK_INFLATER_DISTANCE_TABLE[value] + d;
     }
 }
