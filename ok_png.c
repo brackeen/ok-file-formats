@@ -1238,18 +1238,9 @@ static inline void ok_inflater_skip_byte_align(ok_inflater *inflater) {
     inflater->input_buffer_bits -= skip_bits;
 }
 
-static inline bool ok_inflater_can_read_bits(ok_inflater *inflater, unsigned int num_bits) {
-    if (inflater->input_buffer_bits >= num_bits) {
-        return true;
-    }
-    int bytes_needed = (num_bits - inflater->input_buffer_bits + 7) >> 3;
-    return bytes_needed <= (inflater->input_end - inflater->input);
-}
-
-// Assumes no more than 32 bits are loaded total (inflater->input_buffer_bits + num_bits)
 static inline bool ok_inflater_load_bits(ok_inflater *inflater, unsigned int num_bits) {
     while (inflater->input_buffer_bits < num_bits) {
-        if (inflater->input == inflater->input_end) {
+        if (inflater->input == inflater->input_end || inflater->input_buffer_bits + 8 > 32) {
             return false;
         }
         uint32_t input = *inflater->input++;
@@ -1257,6 +1248,14 @@ static inline bool ok_inflater_load_bits(ok_inflater *inflater, unsigned int num
         inflater->input_buffer_bits += 8;
     }
     return true;
+}
+
+static inline bool ok_inflater_can_read_bits(ok_inflater *inflater, unsigned int num_bits) {
+    if (ok_inflater_load_bits(inflater, num_bits)) {
+        return true;
+    }
+    int bytes_needed = (num_bits - inflater->input_buffer_bits + 7) >> 3;
+    return bytes_needed <= (inflater->input_end - inflater->input);
 }
 
 // Assumes at least num_bits bits are loaded into buffer (call load_bits first)
