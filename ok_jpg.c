@@ -362,12 +362,18 @@ static inline int ok_jpg_extend(const int v, const int t) {
 
 // MARK: Huffman decoding
 
-static void ok_jpg_generate_huffman_table(ok_jpg_huffman_table *huff, const uint8_t *bits) {
+static bool ok_jpg_generate_huffman_table(ok_jpg_huffman_table *huff, const uint8_t *bits) {
     // JPEG spec: "Generate_size_table"
     int k = 0;
     for (uint8_t i = 1; i <= 16; i++) {
-        for (int j = 1; j <= bits[i]; j++) {
-            huff->size[k++] = i;
+        uint8_t len = bits[i];
+        if (len == 0) {
+            continue;
+        } else if ((unsigned)k + len >= sizeof(huff->size)) {
+            return false;
+        } else {
+            memset(huff->size + k, i, len);
+            k += len;
         }
     }
     huff->size[k] = 0;
@@ -406,6 +412,7 @@ static void ok_jpg_generate_huffman_table(ok_jpg_huffman_table *huff, const uint
             }
         }
     }
+    return true;
 }
 
 static void ok_jpg_generate_huffman_table_lookups(ok_jpg_huffman_table *huff, bool is_ac_table) {
@@ -1799,9 +1806,11 @@ static bool ok_jpg_read_dht(ok_jpg_decoder *decoder) {
         ok_jpg_huffman_table *tables = (Tc == 0 ? decoder->dc_huffman_tables :
                                         decoder->ac_huffman_tables);
         ok_jpg_huffman_table *table = tables + Th;
-        ok_jpg_generate_huffman_table(table, buffer);
-        if (table->count > 0) {
-            if (table->count > 256 || table->count > length) {
+        if (!ok_jpg_generate_huffman_table(table, buffer)) {
+            ok_jpg_error(jpg, OK_JPG_ERROR_INVALID, "Invalid DHT");
+            return false;
+        } else if (table->count > 0) {
+            if (table->count > length) {
                 ok_jpg_error(jpg, OK_JPG_ERROR_INVALID, "Invalid DHT segment length");
                 return false;
             }
