@@ -1220,7 +1220,9 @@ static bool ok_jpg_decode_scan(ok_jpg_decoder *decoder) {
             for (int data_unit_y = 0; data_unit_y < c->blocks_v; data_unit_y++) {
                 int16_t *block = c->blocks + (c->next_block * 64);
                 for (int data_unit_x = 0; data_unit_x < c->blocks_h; data_unit_x++) {
-                    ok_jpg_decode_restart_if_needed(decoder);
+                    if (!ok_jpg_decode_restart_if_needed(decoder)) {
+                        return false;
+                    }
                     decode_function(decoder, c, block);
                     block += 64;
                 }
@@ -1236,7 +1238,9 @@ static bool ok_jpg_decode_scan(ok_jpg_decoder *decoder) {
             }
             for (int data_unit_y = 0; data_unit_y < decoder->data_units_y; data_unit_y++) {
                 for (int data_unit_x = 0; data_unit_x < decoder->data_units_x; data_unit_x++) {
-                    ok_jpg_decode_restart_if_needed(decoder);
+                    if (!ok_jpg_decode_restart_if_needed(decoder)) {
+                        return false;
+                    }
                     for (int i = 0; i < decoder->num_scan_components; i++) {
                         ok_jpg_component *c = decoder->components + decoder->scan_components[i];
                         size_t block_index = c->next_block;
@@ -1263,7 +1267,9 @@ static bool ok_jpg_decode_scan(ok_jpg_decoder *decoder) {
         int16_t block[64];
         for (int data_unit_y = 0; data_unit_y < decoder->data_units_y; data_unit_y++) {
             for (int data_unit_x = 0; data_unit_x < decoder->data_units_x; data_unit_x++) {
-                ok_jpg_decode_restart_if_needed(decoder);
+                if (!ok_jpg_decode_restart_if_needed(decoder)) {
+                    return false;
+                }
                 for (int i = 0; i < decoder->num_scan_components; i++) {
                     ok_jpg_component *c = decoder->components + decoder->scan_components[i];
                     int offset_y = 0;
@@ -1925,8 +1931,10 @@ static void ok_jpg_decode2(ok_jpg_decoder *decoder) {
             success = decoder->info_only ? ok_jpg_skip_segment(decoder) : ok_jpg_read_dht(decoder);
         } else if (marker >= 0xD0 && marker <= 0xD7) {
             decoder->next_marker = marker;
-            ok_jpg_decode_restart_if_needed(decoder);
-            success = ok_jpg_scan_to_next_marker(decoder);
+            success = ok_jpg_decode_restart_if_needed(decoder);
+            if (success) {
+                success = ok_jpg_scan_to_next_marker(decoder);
+            }
         } else if (marker == 0xD9) {
             // EOI
             decoder->eoi_found = true;
