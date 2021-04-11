@@ -108,13 +108,13 @@ static uint8_t ok_color_type_channels(ok_png_write_color_type color_type) {
 
 /*
  Writes uncompressed data, splitting the data into blocks and chunks.
- "chunk" = IDAT (max size 0xffffffff)
+ "chunk" = IDAT (max size 0x7fffffff)
  "block" = deflate stored block (max size 0xffff)
  For wide images, each row is split into multiple blocks.
  Otherwise, each block contains multiple rows.
  */
 static bool ok_png_write_uncompressed_idat(ok_png_write_function write_function, void *write_function_context, ok_png_write_params image) {
-    const uint32_t idat_max_length = 0xffffffff;
+    const uint32_t idat_max_length = 0x7fffffff; // "Although encoders and decoders should treat the length as unsigned, its value must not exceed 2^31-1 bytes."
     const uint16_t deflate_stored_block_max_length = 0xffff;
     const uint32_t deflate_header_length = 2;
     const uint32_t deflate_footer_length = 4; // adler-32

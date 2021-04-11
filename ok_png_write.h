@@ -67,15 +67,16 @@ typedef enum {
  
  Color type                         | Bit depth | Max Width
  -----------------------------------+-----------+-----------
- OK_PNG_WRITE_COLOR_TYPE_GRAY       | 1,2, or 4 | 4294967295
- OK_PNG_WRITE_COLOR_TYPE_GRAY       | 8         | 4294639622
- OK_PNG_WRITE_COLOR_TYPE_GRAY       | 16        | 2147319811
- OK_PNG_WRITE_COLOR_TYPE_GRAY_ALPHA | 8         | 2147319811
- OK_PNG_WRITE_COLOR_TYPE_GRAY_ALPHA | 16        | 1073659905
- OK_PNG_WRITE_COLOR_TYPE_RGB        | 8         | 1431546540
- OK_PNG_WRITE_COLOR_TYPE_RGB        | 16        |  715773270
- OK_PNG_WRITE_COLOR_TYPE_RGB_ALPHA  | 8         | 1073659905
- OK_PNG_WRITE_COLOR_TYPE_RGB_ALPHA  | 16        |  536829952
+ OK_PNG_WRITE_COLOR_TYPE_GRAY       | 1 or 2    | 4294967295
+ OK_PNG_WRITE_COLOR_TYPE_GRAY       | 4         | 4294639618
+ OK_PNG_WRITE_COLOR_TYPE_GRAY       | 8         | 2147319809
+ OK_PNG_WRITE_COLOR_TYPE_GRAY       | 16        | 1073659904
+ OK_PNG_WRITE_COLOR_TYPE_GRAY_ALPHA | 8         | 1073659904
+ OK_PNG_WRITE_COLOR_TYPE_GRAY_ALPHA | 16        |  536829952
+ OK_PNG_WRITE_COLOR_TYPE_RGB        | 8         |  715773269
+ OK_PNG_WRITE_COLOR_TYPE_RGB        | 16        |  357886634
+ OK_PNG_WRITE_COLOR_TYPE_RGB_ALPHA  | 8         |  536829952
+ OK_PNG_WRITE_COLOR_TYPE_RGB_ALPHA  | 16        |  268414976
  
  @field width The width of the image, in pixels.
  
