@@ -1,6 +1,7 @@
 
 #import "AppDelegate.h"
 #include "png_suite_test.h"
+#include "png_write_test.h"
 #include "jpg_test.h"
 #include "csv_test.h"
 #include "mo_test.h"
@@ -36,6 +37,7 @@ static void dataRelease(void *info, const void *data, size_t size) {
 
     bool verbose = false;
     png_suite_test(path, path, verbose);
+    png_write_test(verbose);
     wav_test(path, verbose);
     jpg_test(path, path, verbose);
     csv_test(path, verbose);

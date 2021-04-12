@@ -2,6 +2,7 @@
 #include "jpg_test.h"
 #include "mo_test.h"
 #include "png_suite_test.h"
+#include "png_write_test.h"
 #include "wav_test.h"
 #include "test_common.h"
 #include <stdio.h>
@@ -43,6 +44,7 @@ int main(int argc, char *argv[]) {
         char *path_gen = append_path(path, "gen");
 
         error_count += png_suite_test(path_png, path_gen, verbose);
+        error_count += png_write_test(verbose);
         error_count += wav_test(path_gen, verbose);
         error_count += jpg_test(path_jpg, path_gen, verbose);
         error_count += csv_test(path_csv, verbose);

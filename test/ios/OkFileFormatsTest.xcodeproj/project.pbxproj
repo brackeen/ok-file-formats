@@ -229,6 +229,8 @@
 		E360E30D1F19AF3500C6BB9B /* gort.rgba in Resources */ = {isa = PBXBuildFile; fileRef = E360E30C1F19AF3500C6BB9B /* gort.rgba */; };
 		E360E30F1F19AF5100C6BB9B /* robot.rgba in Resources */ = {isa = PBXBuildFile; fileRef = E360E30E1F19AF5100C6BB9B /* robot.rgba */; };
 		E360E3111F19AF9D00C6BB9B /* pumpkins.rgba in Resources */ = {isa = PBXBuildFile; fileRef = E360E3101F19AF5600C6BB9B /* pumpkins.rgba */; };
+		E376F703262476A000AF1E7C /* ok_png_write.c in Sources */ = {isa = PBXBuildFile; fileRef = E376F702262476A000AF1E7C /* ok_png_write.c */; };
+		E376F70826247EB300AF1E7C /* png_write_test.c in Sources */ = {isa = PBXBuildFile; fileRef = E376F70726247EB300AF1E7C /* png_write_test.c */; };
 		E38036AF1F2D406200417052 /* ghost.jpg in Resources */ = {isa = PBXBuildFile; fileRef = E38036AE1F2D406200417052 /* ghost.jpg */; };
 		E38036B11F2D409400417052 /* ghost.rgba in Resources */ = {isa = PBXBuildFile; fileRef = E38036B01F2D409400417052 /* ghost.rgba */; };
 		E388A35819917097003BC626 /* ok_mo.c in Sources */ = {isa = PBXBuildFile; fileRef = E388A35619917097003BC626 /* ok_mo.c */; };
@@ -796,6 +798,12 @@
 		E360E30C1F19AF3500C6BB9B /* gort.rgba */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = gort.rgba; sourceTree = "<group>"; };
 		E360E30E1F19AF5100C6BB9B /* robot.rgba */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = robot.rgba; sourceTree = "<group>"; };
 		E360E3101F19AF5600C6BB9B /* pumpkins.rgba */ = {isa = PBXFileReference; lastKnownFileType = file; path = pumpkins.rgba; sourceTree = "<group>"; };
+		E376F701262476A000AF1E7C /* ok_png_write.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; name = ok_png_write.h; path = ../../ok_png_write.h; sourceTree = "<group>"; };
+		E376F702262476A000AF1E7C /* ok_png_write.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = ok_png_write.c; path = ../../ok_png_write.c; sourceTree = "<group>"; };
+		E376F70626247EB300AF1E7C /* png_write_test.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = png_write_test.h; sourceTree = "<group>"; };
+		E376F70726247EB300AF1E7C /* png_write_test.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = png_write_test.c; sourceTree = "<group>"; };
+		E376F70B2624842600AF1E7C /* file_compat.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = file_compat.h; sourceTree = "<group>"; };
+		E376F70E2624CBC400AF1E7C /* CMakeLists.txt */ = {isa = PBXFileReference; lastKnownFileType = text; name = CMakeLists.txt; path = ../CMakeLists.txt; sourceTree = "<group>"; };
 		E38036AE1F2D406200417052 /* ghost.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = ghost.jpg; sourceTree = "<group>"; };
 		E38036B01F2D409400417052 /* ghost.rgba */ = {isa = PBXFileReference; lastKnownFileType = file; path = ghost.rgba; sourceTree = "<group>"; };
 		E388A35619917097003BC626 /* ok_mo.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; name = ok_mo.c; path = ../../ok_mo.c; sourceTree = "<group>"; };
@@ -1481,6 +1489,7 @@
 		E35A633F1948F54900CEBD42 = {
 			isa = PBXGroup;
 			children = (
+				E376F70E2624CBC400AF1E7C /* CMakeLists.txt */,
 				E35A636C1948F5A400CEBD42 /* ok-file-formats */,
 				E35A634A1948F54900CEBD42 /* OkFileFormatsTest */,
 				E35A63491948F54900CEBD42 /* Products */,
@@ -1528,6 +1537,8 @@
 				E388A35619917097003BC626 /* ok_mo.c */,
 				E35A636F1948F5D500CEBD42 /* ok_png.h */,
 				E35A63731948F5D500CEBD42 /* ok_png.c */,
+				E376F701262476A000AF1E7C /* ok_png_write.h */,
+				E376F702262476A000AF1E7C /* ok_png_write.c */,
 				E35A63701948F5D500CEBD42 /* ok_wav.h */,
 				E35A63741948F5D500CEBD42 /* ok_wav.c */,
 				E35A63751948F5D500CEBD42 /* test */,
@@ -1540,18 +1551,21 @@
 			children = (
 				E3F35E121950F8F0004E7952 /* main.c */,
 				E3E2E1092159C0030012DD94 /* main_fuzzing.c */,
-				E3F35E151950FD48004E7952 /* test_common.c */,
+				E376F70B2624842600AF1E7C /* file_compat.h */,
 				E3F35E141950FCA4004E7952 /* test_common.h */,
-				E3371206198707C9001F4DBF /* csv_test.c */,
+				E3F35E151950FD48004E7952 /* test_common.c */,
 				E3371207198707C9001F4DBF /* csv_test.h */,
-				E3F35E0F1950F8C4004E7952 /* jpg_test.c */,
+				E3371206198707C9001F4DBF /* csv_test.c */,
 				E3F35E111950F8D7004E7952 /* jpg_test.h */,
-				E388A3591991ACB2003BC626 /* mo_test.c */,
+				E3F35E0F1950F8C4004E7952 /* jpg_test.c */,
 				E388A35A1991ACB2003BC626 /* mo_test.h */,
-				E35A64291948F5D500CEBD42 /* png_suite_test.c */,
+				E388A3591991ACB2003BC626 /* mo_test.c */,
 				E35A642A1948F5D500CEBD42 /* png_suite_test.h */,
-				E359EEE01E10BE8C0040AE53 /* wav_test.c */,
+				E35A64291948F5D500CEBD42 /* png_suite_test.c */,
+				E376F70626247EB300AF1E7C /* png_write_test.h */,
+				E376F70726247EB300AF1E7C /* png_write_test.c */,
 				E359EEE11E10BE8C0040AE53 /* wav_test.h */,
+				E359EEE01E10BE8C0040AE53 /* wav_test.c */,
 				E388A35C1991AD1F003BC626 /* gettext */,
 				E337120919870B34001F4DBF /* csv */,
 				E3F35E4119511DFF004E7952 /* jpg */,
@@ -2410,10 +2424,12 @@
 				E3E2E10A2159C0030012DD94 /* main_fuzzing.c in Sources */,
 				E337120519834EF0001F4DBF /* ok_csv.c in Sources */,
 				E35A6A69194A7EB700CEBD42 /* ok_jpg.c in Sources */,
+				E376F703262476A000AF1E7C /* ok_png_write.c in Sources */,
 				E388A35B1991ACB2003BC626 /* mo_test.c in Sources */,
 				E35A65921948F5D600CEBD42 /* ok_fnt.c in Sources */,
 				E359EEE21E10BE8C0040AE53 /* wav_test.c in Sources */,
 				E3371208198707C9001F4DBF /* csv_test.c in Sources */,
+				E376F70826247EB300AF1E7C /* png_write_test.c in Sources */,
 				E35A65941948F5D600CEBD42 /* ok_png.c in Sources */,
 				E388A35819917097003BC626 /* ok_mo.c in Sources */,
 				E3F35E101950F8C4004E7952 /* jpg_test.c in Sources */,
@@ -2554,7 +2570,7 @@
 				GCC_WARN_UNUSED_PARAMETER = YES;
 				INFOPLIST_FILE = OkFileFormatsTest/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				OTHER_CFLAGS = "";
+				OTHER_CFLAGS = "-DOK_PNG_WRITE_IDAT_MAX_LENGTH=0x7ffff";
 				PRODUCT_BUNDLE_IDENTIFIER = "com.brackeen.${PRODUCT_NAME:rfc1034identifier}";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				TARGETED_DEVICE_FAMILY = 1;
@@ -2585,7 +2601,7 @@
 				GCC_WARN_UNUSED_PARAMETER = YES;
 				INFOPLIST_FILE = OkFileFormatsTest/Info.plist;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				OTHER_CFLAGS = "";
+				OTHER_CFLAGS = "-DOK_PNG_WRITE_IDAT_MAX_LENGTH=0x7ffff";
 				PRODUCT_BUNDLE_IDENTIFIER = "com.brackeen.${PRODUCT_NAME:rfc1034identifier}";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				TARGETED_DEVICE_FAMILY = 1;

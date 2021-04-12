@@ -119,6 +119,7 @@ add_custom_target(gen ALL DEPENDS ${GEN_FILES})
 # Test
 file(GLOB test_src_files "*.h" "*.c")
 add_executable(ok-file-formats-test ${src_files} ${test_src_files})
+target_compile_options(ok-file-formats-test PUBLIC -DOK_PNG_WRITE_IDAT_MAX_LENGTH=0x7ffff)
 add_dependencies(ok-file-formats-test gen)
 if (CMAKE_C_COMPILER_ID MATCHES "Clang")
     # Enable -Wwrite-strings because -Weverything doesn't enable it in all versions of Clang
