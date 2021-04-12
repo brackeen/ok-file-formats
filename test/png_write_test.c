@@ -80,7 +80,21 @@ static int test_image_size(uint32_t width, uint32_t height, bool verbose) {
     
     // Compare original vs. read
     success = compare(test_name, "png", png.data, png.stride, png.width, png.height, original_rgba_data, original_rgba_data_len, false, 0, verbose);
-
+    if (!success) {
+        goto cleanup;
+    }
+    
+#if defined(__APPLE__) && TARGET_OS_OSX
+    char command[4096];
+    snprintf(command, sizeof(command), "convert %s /dev/null", path);
+    success = (system(command) == 0);
+    if (!success) {
+        printf("Error checking via convert command\n");
+        goto cleanup;
+    }
+    goto cleanup;
+#endif
+    
     // Cleanup
 cleanup:
     remove(path);
