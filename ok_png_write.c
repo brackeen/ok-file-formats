@@ -65,6 +65,42 @@ static void ok_crc_update(uint32_t *crc, const uint8_t *buffer, size_t length) {
     *crc = c ^ 0xffffffffL;
 }
 
+// MARK: Adler
+
+static uint32_t ok_adler_init(void) {
+    return 1;
+}
+
+static uint32_t ok_adler_update(const uint32_t adler, const uint8_t *buffer, size_t length) {
+    static const uint32_t adler_base = 65521;
+    static const size_t adler_max_run_length = 5552;
+    
+    uint32_t adler_sum1 = adler & 0xffff;
+    uint32_t adler_sum2 = (adler >> 16) & 0xffff;
+    
+    if (length == 1) {
+        adler_sum1 += buffer[0];
+        if (adler_sum1 >= adler_base) {
+            adler_sum1 -= adler_base;
+        }
+        adler_sum2 += adler_sum1;
+        if (adler_sum2 >= adler_base) {
+            adler_sum2 -= adler_base;
+        }
+    } else {
+        for (size_t i = 0; i < length; i += adler_max_run_length) {
+            const size_t end = i + ok_min(length - i, adler_max_run_length);
+            for (size_t j = i; j < end; j++) {
+                adler_sum1 += buffer[j];
+                adler_sum2 += adler_sum1;
+            }
+            adler_sum1 %= adler_base;
+            adler_sum2 %= adler_base;
+        }
+    }
+    return (adler_sum2 << 16) | adler_sum1;
+}
+
 // MARK: Write helper macros
 
 // These macros require write_function and write_function_context be defined.
@@ -130,8 +166,7 @@ static bool ok_png_write_uncompressed_idat(ok_png_write_function write_function,
     const uint64_t bytes_per_row = ((uint64_t)image.width * bits_per_pixel + 7) / 8;
     const uint64_t output_row_length = bytes_per_row + 1; // 1 byte for filter
     bool add_extra_chunk_for_adler = false;
-    uint16_t adler_sum1 = 1;
-    uint16_t adler_sum2 = 0;
+    uint32_t adler = ok_adler_init();
     uint32_t crc = 0;
     
     uint64_t deflate_num_full_blocks_per_row;
@@ -240,8 +275,7 @@ static bool ok_png_write_uncompressed_idat(ok_png_write_function write_function,
                     num_bytes = deflate_block_length - 1;
                     const uint8_t filter = 0;
                     ok_write_uint8(filter, &crc);
-                    adler_sum1 = (adler_sum1 + filter) % 65521;
-                    adler_sum2 = (adler_sum2 + adler_sum1) % 65521;
+                    adler = ok_adler_update(adler, &filter, 1);
                 } else {
                     x = i - 1;
                     num_bytes = deflate_block_length;
@@ -257,10 +291,7 @@ static bool ok_png_write_uncompressed_idat(ok_png_write_function write_function,
                 ok_write(src, num_bytes, &crc);
                 
                 // Update adler32
-                for (uint32_t j = 0; j < num_bytes; j++) {
-                    adler_sum1 = (adler_sum1 + src[j]) % 65521;
-                    adler_sum2 = (adler_sum2 + adler_sum1) % 65521;
-                }
+                adler = ok_adler_update(adler, src, num_bytes);
             }
         } else {
             // Write uncompressed data as N rows per block
@@ -290,12 +321,8 @@ static bool ok_png_write_uncompressed_idat(ok_png_write_function write_function,
                 ok_write(src, (size_t)bytes_per_row, &crc);
                 
                 // Update adler32
-                adler_sum1 = (adler_sum1 + filter) % 65521;
-                adler_sum2 = (adler_sum2 + adler_sum1) % 65521;
-                for (uint32_t j = 0; j < (uint32_t)bytes_per_row; j++) {
-                    adler_sum1 = (adler_sum1 + src[j]) % 65521;
-                    adler_sum2 = (adler_sum2 + adler_sum1) % 65521;
-                }
+                adler = ok_adler_update(adler, &filter, 1);
+                adler = ok_adler_update(adler, src, bytes_per_row);
             }
         }
 
@@ -303,8 +330,7 @@ static bool ok_png_write_uncompressed_idat(ok_png_write_function write_function,
         iterations_until_next_idat--;
         if (iterations_until_next_idat == 0) {
             if (row + rowInc >= image.height && !add_extra_chunk_for_adler) {
-                const uint32_t adler32 = ((uint32_t)adler_sum2 << 16) | adler_sum1;
-                ok_write_uint32(adler32, &crc);
+                ok_write_uint32(adler, &crc);
             }
             ok_write_chunk_end(crc);
         }
@@ -313,8 +339,7 @@ static bool ok_png_write_uncompressed_idat(ok_png_write_function write_function,
     // Write adler-32
     if (add_extra_chunk_for_adler) {
         ok_write_chunk_start("IDAT", 4, &crc);
-        const uint32_t adler32 = ((uint32_t)adler_sum2 << 16) | adler_sum1;
-        ok_write_uint32(adler32, &crc);
+        ok_write_uint32(adler, &crc);
         ok_write_chunk_end(crc);
     }
     return true;
