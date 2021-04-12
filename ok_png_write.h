@@ -50,8 +50,9 @@ typedef enum {
 } ok_png_write_color_type;
 
 /**
- The ok_png_write_params struct contains the parameters for
- the #ok_png_write_to_file or #ok_png_write functions.
+ @struct ok_png_write_params
+  
+ Parameters for the #ok_png_write_to_file or #ok_png_write functions.
  
  The bit depth must be valid for the color type. The following bit depths are valid:
  
@@ -78,19 +79,19 @@ typedef enum {
  OK_PNG_WRITE_COLOR_TYPE_RGB_ALPHA  | 8         |  536829952
  OK_PNG_WRITE_COLOR_TYPE_RGB_ALPHA  | 16        |  268414976
  
- @field width The width of the image, in pixels.
+ @var width The width of the image, in pixels.
  
- @field height The height of the image, in pixels.
+ @var height The height of the image, in pixels.
  
- @field data_stride The stride of the input image data, in bytes. If 0, the default "bytes per row" is assumed.
+ @var data_stride The stride of the input image data, in bytes. If 0, the default "bytes per row" is assumed.
  
- @field data The input image data, which is written as-is without modification or verification.
+ @var data The input image data, which is written as-is without modification or verification.
  
- @field bit_depth The bit depth. If 0, the default is 8.
+ @var bit_depth The bit depth. If 0, the default is 8.
  
- @field color_type The color type.
+ @var color_type The color type.
  
- @field flip_y If true, the image is written bottom-up instead of top-down.
+ @var flip_y If true, the image is written bottom-up instead of top-down.
  */
 typedef struct {
     uint32_t width;
