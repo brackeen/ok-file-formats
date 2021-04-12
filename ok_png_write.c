@@ -8,8 +8,13 @@
 #define ok_assert(expression) assert(expression);
 #endif
 
+#ifndef OK_PNG_WRITE_IDAT_MAX_LENGTH
+// "Although encoders and decoders should treat the length as unsigned, its value must not exceed 2^31-1 bytes."
+// To test splitting output into multiple IDAT chunks, this can be redefined as a smaller value.
+#define OK_PNG_WRITE_IDAT_MAX_LENGTH 0x7fffffff
+#endif
+
 #define ok_min(a, b) ((a) < (b) ? (a) : (b))
-#define ok_max(a, b) ((a) > (b) ? (a) : (b))
 
 // MARK: PNG write to FILE
 
@@ -20,6 +25,10 @@ static bool ok_file_write(void *user_data, const uint8_t *buffer, size_t length)
 }
 
 bool ok_png_write_to_file(FILE *file, ok_png_write_params image_data) {
+    ok_assert(file != NULL);
+    if (!file) {
+        return false;
+    }
     return ok_png_write(ok_file_write, file, image_data);
 }
 
@@ -114,7 +123,6 @@ static uint8_t ok_color_type_channels(ok_png_write_color_type color_type) {
  Otherwise, each block contains multiple rows.
  */
 static bool ok_png_write_uncompressed_idat(ok_png_write_function write_function, void *write_function_context, ok_png_write_params image) {
-    const uint32_t idat_max_length = 0x7fffffff; // "Although encoders and decoders should treat the length as unsigned, its value must not exceed 2^31-1 bytes."
     const uint16_t deflate_stored_block_max_length = 0xffff;
     const uint32_t deflate_header_length = 2;
     const uint32_t deflate_footer_length = 4; // adler-32
@@ -134,13 +142,14 @@ static bool ok_png_write_uncompressed_idat(ok_png_write_function write_function,
     if (output_row_length > deflate_stored_block_max_length) {
         // Write uncompressed data as N blocks per row
         rowInc = 1;
-        deflate_num_full_blocks_per_row = (output_row_length + deflate_stored_block_max_length - 1) / deflate_stored_block_max_length;
-        deflate_full_block_length = (uint16_t)(output_row_length / deflate_num_full_blocks_per_row);
+        deflate_num_full_blocks_per_row = output_row_length / deflate_stored_block_max_length;
+        deflate_full_block_length = deflate_stored_block_max_length;
         deflate_small_block_length = (uint16_t)(output_row_length % deflate_full_block_length);
         deflate_data_iteration_full_length = (deflate_num_full_blocks_per_row * (deflate_full_block_length + 5) + // 5 for block header
                                               (deflate_small_block_length > 0 ? (deflate_small_block_length + 5) : 0)); // 5 for block header
-        if (deflate_header_length + deflate_data_iteration_full_length > idat_max_length) {
-            assert(false); // Width is too large
+        bool oneImageRowFitsInOneIDATChunk = deflate_header_length + deflate_data_iteration_full_length <= OK_PNG_WRITE_IDAT_MAX_LENGTH;
+        ok_assert(oneImageRowFitsInOneIDATChunk); // Image width is too large
+        if (!oneImageRowFitsInOneIDATChunk) {
             return false;
         }
     } else {
@@ -149,7 +158,7 @@ static bool ok_png_write_uncompressed_idat(ok_png_write_function write_function,
         deflate_num_full_blocks_per_row = 0;
         deflate_full_block_length = (uint16_t)(output_row_length * rowInc);
         deflate_small_block_length = (uint16_t)(output_row_length * (image.height % rowInc));
-        deflate_data_iteration_full_length = deflate_full_block_length;
+        deflate_data_iteration_full_length = 5 + deflate_full_block_length; // 5 for block header
     }
     
     uint32_t iterations_until_next_idat = 0;
@@ -166,26 +175,25 @@ static bool ok_png_write_uncompressed_idat(ok_png_write_function write_function,
                 if (output_row_length > deflate_stored_block_max_length) {
                     remaining_iterations = remaining_full_iterations;
                     remaining_data_length = (deflate_current_header_length +
-                                             remaining_full_iterations * deflate_data_iteration_full_length +
-                                             deflate_footer_length);
+                                             remaining_full_iterations * deflate_data_iteration_full_length);
                 } else {
                     remaining_iterations = remaining_full_iterations + (deflate_small_block_length > 0 ? 1 : 0);
                     remaining_data_length = (deflate_current_header_length +
                                              remaining_full_iterations * (deflate_full_block_length + 5) + // 5 for block header
-                                             (deflate_small_block_length > 0 ? (deflate_small_block_length + 5) : 0) + // 5 for block header
-                                             deflate_footer_length);
+                                             (deflate_small_block_length > 0 ? (deflate_small_block_length + 5) : 0)); // 5 for block header
                 }
                 
-                if (remaining_data_length <= idat_max_length) {
+                if (remaining_data_length + deflate_footer_length <= OK_PNG_WRITE_IDAT_MAX_LENGTH) {
                     iterations_until_next_idat = remaining_iterations;
-                    idat_length = (uint32_t)remaining_data_length;
+                    idat_length = (uint32_t)(remaining_data_length + deflate_footer_length);
                 } else {
-                    iterations_until_next_idat = (idat_max_length - deflate_current_header_length) / deflate_data_iteration_full_length;
-                    if (iterations_until_next_idat >= remaining_iterations) {
+                    iterations_until_next_idat = (OK_PNG_WRITE_IDAT_MAX_LENGTH - deflate_current_header_length) / deflate_data_iteration_full_length;
+                    if (iterations_until_next_idat >= remaining_iterations ||
+                        remaining_data_length <= OK_PNG_WRITE_IDAT_MAX_LENGTH) {
                         // Everything fits but the footer (adler-32).
                         iterations_until_next_idat = remaining_iterations;
+                        idat_length = (uint32_t)remaining_data_length;
                         add_extra_chunk_for_adler = true;
-                        idat_length = (uint32_t)(remaining_data_length - deflate_footer_length);
                     } else {
                         idat_length = (uint32_t)(deflate_current_header_length + iterations_until_next_idat * deflate_data_iteration_full_length);
                     }
