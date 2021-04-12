@@ -101,6 +101,7 @@ typedef struct {
     uint8_t bit_depth;
     ok_png_write_color_type color_type;
     bool flip_y;
+    bool apple_cgbi_format;
 } ok_png_write_params;
 
 #ifndef OK_NO_STDIO

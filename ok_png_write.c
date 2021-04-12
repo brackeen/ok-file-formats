@@ -160,8 +160,8 @@ static uint8_t ok_color_type_channels(ok_png_write_color_type color_type) {
  */
 static bool ok_png_write_uncompressed_idat(ok_png_write_function write_function, void *write_function_context, ok_png_write_params image) {
     const uint16_t deflate_stored_block_max_length = 0xffff;
-    const uint32_t deflate_header_length = 2;
-    const uint32_t deflate_footer_length = 4; // adler-32
+    const uint32_t deflate_header_length = image.apple_cgbi_format ? 0 : 2;
+    const uint32_t deflate_footer_length = image.apple_cgbi_format ? 0 : 4; // adler-32
     const uint8_t bits_per_pixel = image.bit_depth * ok_color_type_channels(image.color_type);
     const uint64_t bytes_per_row = ((uint64_t)image.width * bits_per_pixel + 7) / 8;
     const uint64_t output_row_length = bytes_per_row + 1; // 1 byte for filter
@@ -237,7 +237,7 @@ static bool ok_png_write_uncompressed_idat(ok_png_write_function write_function,
             ok_write_chunk_start("IDAT", idat_length, &crc);
 
             // Write deflate header
-            if (row == 0) {
+            if (row == 0 && !image.apple_cgbi_format) {
                 const uint16_t deflate_compression_info = 0x7; // 4 bits
                 const uint16_t deflate_compression_method = 0x8; // 4 bits
                 const uint16_t deflate_flag_compression_level = 0; // 2 bits
@@ -275,7 +275,11 @@ static bool ok_png_write_uncompressed_idat(ok_png_write_function write_function,
                     num_bytes = deflate_block_length - 1;
                     const uint8_t filter = 0;
                     ok_write_uint8(filter, &crc);
-                    adler = ok_adler_update(adler, &filter, 1);
+                    
+                    // Update adler32
+                    if (!image.apple_cgbi_format) {
+                        adler = ok_adler_update(adler, &filter, 1);
+                    }
                 } else {
                     x = i - 1;
                     num_bytes = deflate_block_length;
@@ -291,7 +295,9 @@ static bool ok_png_write_uncompressed_idat(ok_png_write_function write_function,
                 ok_write(src, num_bytes, &crc);
                 
                 // Update adler32
-                adler = ok_adler_update(adler, src, num_bytes);
+                if (!image.apple_cgbi_format) {
+                    adler = ok_adler_update(adler, src, num_bytes);
+                }
             }
         } else {
             // Write uncompressed data as N rows per block
@@ -321,15 +327,17 @@ static bool ok_png_write_uncompressed_idat(ok_png_write_function write_function,
                 ok_write(src, (size_t)bytes_per_row, &crc);
                 
                 // Update adler32
-                adler = ok_adler_update(adler, &filter, 1);
-                adler = ok_adler_update(adler, src, bytes_per_row);
+                if (!image.apple_cgbi_format) {
+                    adler = ok_adler_update(adler, &filter, 1);
+                    adler = ok_adler_update(adler, src, bytes_per_row);
+                }
             }
         }
 
         // Finish IDAT chunk
         iterations_until_next_idat--;
         if (iterations_until_next_idat == 0) {
-            if (row + rowInc >= image.height && !add_extra_chunk_for_adler) {
+            if (row + rowInc >= image.height && !add_extra_chunk_for_adler && !image.apple_cgbi_format) {
                 ok_write_uint32(adler, &crc);
             }
             ok_write_chunk_end(crc);
@@ -337,7 +345,7 @@ static bool ok_png_write_uncompressed_idat(ok_png_write_function write_function,
     }
 
     // Write adler-32
-    if (add_extra_chunk_for_adler) {
+    if (add_extra_chunk_for_adler && !image.apple_cgbi_format) {
         ok_write_chunk_start("IDAT", 4, &crc);
         ok_write_uint32(adler, &crc);
         ok_write_chunk_end(crc);
@@ -385,6 +393,13 @@ bool ok_png_write(ok_png_write_function write_function, void *write_function_con
     // Write PNG signature
     const uint8_t png_signature[8] = { 137, 80, 78, 71, 13, 10, 26, 10 };
     ok_write(png_signature, sizeof(png_signature), &crc);
+    
+    // Write CgBI chunk
+    if (image.apple_cgbi_format) {
+        ok_write_chunk_start("CgBI", 4, &crc);
+        ok_write_uint32(0x50002002, &crc); // lower 16 bits are probably CGBitmapInfo mask
+        ok_write_chunk_end(crc);
+    }
     
     // Write IHDR chunk
     ok_write_chunk_start("IHDR", 13, &crc);
