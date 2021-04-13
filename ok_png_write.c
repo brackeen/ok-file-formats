@@ -2,6 +2,7 @@
 // https://github.com/brackeen/ok-file-formats
 
 #include "ok_png_write.h"
+#include <string.h>
 
 #ifndef ok_assert
 #include <assert.h>
@@ -135,12 +136,11 @@ static uint32_t ok_adler_update(const uint32_t adler, const uint8_t *buffer, siz
 
 // MARK: PNG write
 
-// Palette type not supported, as no PLTE or tRNS chunks are written
-#define OK_PNG_WRITE_COLOR_TYPE_PALETTE 3
-
 static uint8_t ok_color_type_channels(ok_png_write_color_type color_type) {
     switch (color_type) {
-        case OK_PNG_WRITE_COLOR_TYPE_GRAY: default:
+        case OK_PNG_WRITE_COLOR_TYPE_GRAY:
+        case OK_PNG_WRITE_COLOR_TYPE_PALETTE:
+        default:
             return 1;
         case OK_PNG_WRITE_COLOR_TYPE_GRAY_ALPHA:
             return 2;
@@ -385,6 +385,138 @@ bool ok_png_write(ok_png_write_function write_function, void *write_function_con
             return false;
         }
     }
+    
+    // Validate additional chunks
+    size_t palette_color_count = 0;
+    if (image.additional_chunks) {
+        bool trns_found = false;
+        for (ok_png_write_chunk **chunk_ptr = image.additional_chunks; *chunk_ptr != NULL; chunk_ptr++) {
+            ok_png_write_chunk *chunk = *chunk_ptr;
+            
+            // Valid name
+            bool valid_chunk_name = chunk->name != NULL && strlen(chunk->name) == 4;
+            ok_assert(valid_chunk_name);
+            if (!valid_chunk_name) {
+                return false;
+            }
+            
+            // Valid data
+            bool valid_chunk_data = (chunk->data == NULL && chunk->length == 0) || (chunk->data != NULL && chunk->length > 0);
+            ok_assert(valid_chunk_data);
+            if (!valid_chunk_data) {
+                return false;
+            }
+            
+            // Check if is existing chunk
+            bool is_existing_chunk = (strcmp("IHDR", chunk->name) == 0 ||
+                                      strcmp("IDAT", chunk->name) == 0 ||
+                                      strcmp("IEND", chunk->name) == 0 ||
+                                      strcmp("CgBI", chunk->name) == 0);
+            ok_assert(!is_existing_chunk);
+            if (is_existing_chunk) {
+                return false;
+            }
+            
+            // Validate PLTE chunk
+            if (strcmp("PLTE", chunk->name) == 0) {
+                ok_assert(palette_color_count == 0); // PLTE chunk already added
+                if (palette_color_count > 0) {
+                    return false;
+                }
+                ok_assert(!trns_found); // PLTE chunk must appear before tRNS chunk
+                if (trns_found) {
+                    return false;
+                }
+                
+                // Valid color type
+                bool valid_color_type = !(image.color_type == OK_PNG_WRITE_COLOR_TYPE_GRAY ||
+                                          image.color_type == OK_PNG_WRITE_COLOR_TYPE_GRAY_ALPHA);
+                ok_assert(valid_color_type);
+                if (!valid_color_type) {
+                    return false;
+                }
+                
+                // Valid length
+                size_t max_color_count;
+                switch (image.color_type) {
+                    case OK_PNG_WRITE_COLOR_TYPE_PALETTE:
+                        max_color_count = 1 << image.bit_depth;
+                        break;
+                    case OK_PNG_WRITE_COLOR_TYPE_RGB:
+                    case OK_PNG_WRITE_COLOR_TYPE_RGB_ALPHA:
+                        max_color_count = 256;
+                        break;
+                    case OK_PNG_WRITE_COLOR_TYPE_GRAY:
+                    case OK_PNG_WRITE_COLOR_TYPE_GRAY_ALPHA:
+                    default:
+                        max_color_count = 0;
+                        break;
+                }
+                palette_color_count = chunk->length / 3;
+                bool valid_palette_length = palette_color_count <= max_color_count && chunk->length == palette_color_count * 3;
+                ok_assert(valid_palette_length);
+                if (!valid_palette_length) {
+                    return false;
+                }
+            }
+            
+            // Validate tRNS chunk
+            if (strcmp("tRNS", chunk->name) == 0) {
+                ok_assert(!trns_found); // tRNS chunk already added
+                if (trns_found) {
+                    return false;
+                }
+                bool palette_missing = image.color_type == OK_PNG_WRITE_COLOR_TYPE_PALETTE && palette_color_count == 0;
+                ok_assert(!palette_missing);
+                if (palette_missing) {
+                    return false;
+                }
+                
+                // Valid color type
+                bool valid_color_type = (image.color_type == OK_PNG_WRITE_COLOR_TYPE_PALETTE ||
+                                         image.color_type == OK_PNG_WRITE_COLOR_TYPE_GRAY ||
+                                         image.color_type == OK_PNG_WRITE_COLOR_TYPE_RGB);
+                ok_assert(valid_color_type);
+                if (!valid_color_type) {
+                    return false;
+                }
+                
+                // Valid length
+                size_t min_length;
+                size_t max_length;
+                switch (image.color_type) {
+                    case OK_PNG_WRITE_COLOR_TYPE_PALETTE:
+                        min_length = 1;
+                        max_length = palette_color_count;
+                        break;
+                    case OK_PNG_WRITE_COLOR_TYPE_GRAY:
+                        min_length = 2; max_length = 2; // Single-color transparency, 16-bit key
+                        break;
+                    case OK_PNG_WRITE_COLOR_TYPE_RGB:
+                        min_length = 6; max_length = 6;  // Single-color transparency, 16-bit key
+                        break;
+                    case OK_PNG_WRITE_COLOR_TYPE_GRAY_ALPHA:
+                    case OK_PNG_WRITE_COLOR_TYPE_RGB_ALPHA:
+                    default:
+                        min_length = 0; max_length = 0;
+                        break;
+                }
+                
+                bool valid_trns_length = chunk->length >= min_length && chunk->length <= max_length;
+                ok_assert(valid_trns_length);
+                if (!valid_trns_length) {
+                    return false;
+                }
+                trns_found = true;
+            }
+        }
+    }
+    if (image.color_type == OK_PNG_WRITE_COLOR_TYPE_PALETTE) {
+        ok_assert(palette_color_count != 0); // PLTE not found
+        if (palette_color_count == 0) {
+            return false;
+        }
+    }
 
     // Initialize CRC table
     uint32_t crc = 0;
@@ -411,6 +543,18 @@ bool ok_png_write(ok_png_write_function write_function, void *write_function_con
     ok_write_uint8(0, &crc); // filter method
     ok_write_uint8(0, &crc); // interlace method
     ok_write_chunk_end(crc);
+    
+    // Write additional chunks
+    if (image.additional_chunks) {
+        for (ok_png_write_chunk **chunk_ptr = image.additional_chunks; *chunk_ptr != NULL; chunk_ptr++) {
+            ok_png_write_chunk *chunk = *chunk_ptr;
+            ok_write_chunk_start(chunk->name, chunk->length, &crc);
+            if (chunk->data && chunk->length > 0) {
+                ok_write(chunk->data, chunk->length, &crc);
+            }
+            ok_write_chunk_end(crc);
+        }
+    }
     
     // Write IDAT chunk(s)
     if (!ok_png_write_uncompressed_idat(write_function, write_function_context, image)) {
