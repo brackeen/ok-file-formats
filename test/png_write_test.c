@@ -176,8 +176,8 @@ int png_write_test(bool verbose) {
     output_dir[0] = '\0';
 #endif
     
-#ifndef OK_PNG_WRITE_IDAT_MAX_LENGTH
-#pragma message("Define OK_PNG_WRITE_IDAT_MAX_LENGTH=0x7ffff to test writing multiple IDAT chunks")
+#ifndef OK_PNG_WRITE_CHUNK_MAX_LENGTH
+#pragma message("Define OK_PNG_WRITE_CHUNK_MAX_LENGTH=0x7ffff to test writing multiple IDAT chunks")
 #endif
     // Sizes for 8-bit RGBA format images
     const uint32_t test_sizes[] = {
@@ -195,7 +195,7 @@ int png_write_test(bool verbose) {
         49151, 4, // no small block at end
         
         // Adler in separate chunk
-#if defined(OK_PNG_WRITE_IDAT_MAX_LENGTH) && OK_PNG_WRITE_IDAT_MAX_LENGTH == 0x7ffff
+#if defined(OK_PNG_WRITE_CHUNK_MAX_LENGTH) && OK_PNG_WRITE_CHUNK_MAX_LENGTH == 0x7ffff
         1, 196598, // N rows per block, Adler in separate chunk
         131061, 1 // N blocks per row, Adler in separate chunk
 #endif

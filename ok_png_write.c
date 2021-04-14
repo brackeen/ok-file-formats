@@ -9,10 +9,10 @@
 #define ok_assert(expression) assert(expression);
 #endif
 
-#ifndef OK_PNG_WRITE_IDAT_MAX_LENGTH
+#ifndef OK_PNG_WRITE_CHUNK_MAX_LENGTH
 // "Although encoders and decoders should treat the length as unsigned, its value must not exceed 2^31-1 bytes."
 // To test splitting output into multiple IDAT chunks, this can be redefined as a smaller value.
-#define OK_PNG_WRITE_IDAT_MAX_LENGTH 0x7fffffff
+#define OK_PNG_WRITE_CHUNK_MAX_LENGTH 0x7fffffff
 #endif
 
 #define ok_min(a, b) ((a) < (b) ? (a) : (b))
@@ -182,7 +182,7 @@ static bool ok_png_write_uncompressed_idat(ok_png_write_function write_function,
         deflate_small_block_length = (uint16_t)(output_row_length % deflate_full_block_length);
         deflate_data_iteration_full_length = (deflate_num_full_blocks_per_row * (deflate_full_block_length + 5) + // 5 for block header
                                               (deflate_small_block_length > 0 ? (deflate_small_block_length + 5) : 0)); // 5 for block header
-        bool oneImageRowFitsInOneIDATChunk = deflate_header_length + deflate_data_iteration_full_length <= OK_PNG_WRITE_IDAT_MAX_LENGTH;
+        bool oneImageRowFitsInOneIDATChunk = deflate_header_length + deflate_data_iteration_full_length <= OK_PNG_WRITE_CHUNK_MAX_LENGTH;
         ok_assert(oneImageRowFitsInOneIDATChunk); // Image width is too large
         if (!oneImageRowFitsInOneIDATChunk) {
             return false;
@@ -218,13 +218,13 @@ static bool ok_png_write_uncompressed_idat(ok_png_write_function write_function,
                                              (deflate_small_block_length > 0 ? (deflate_small_block_length + 5) : 0)); // 5 for block header
                 }
                 
-                if (remaining_data_length + deflate_footer_length <= OK_PNG_WRITE_IDAT_MAX_LENGTH) {
+                if (remaining_data_length + deflate_footer_length <= OK_PNG_WRITE_CHUNK_MAX_LENGTH) {
                     iterations_until_next_idat = remaining_iterations;
                     idat_length = (uint32_t)(remaining_data_length + deflate_footer_length);
                 } else {
-                    iterations_until_next_idat = (OK_PNG_WRITE_IDAT_MAX_LENGTH - deflate_current_header_length) / deflate_data_iteration_full_length;
+                    iterations_until_next_idat = (OK_PNG_WRITE_CHUNK_MAX_LENGTH - deflate_current_header_length) / deflate_data_iteration_full_length;
                     if (iterations_until_next_idat >= remaining_iterations ||
-                        remaining_data_length <= OK_PNG_WRITE_IDAT_MAX_LENGTH) {
+                        remaining_data_length <= OK_PNG_WRITE_CHUNK_MAX_LENGTH) {
                         // Everything fits but the footer (adler-32).
                         iterations_until_next_idat = remaining_iterations;
                         idat_length = (uint32_t)remaining_data_length;
@@ -407,6 +407,13 @@ bool ok_png_write(ok_png_write_function write_function, void *write_function_con
                 return false;
             }
             
+            // Valid data length
+            bool valid_chunk_data_length = chunk->length <= OK_PNG_WRITE_CHUNK_MAX_LENGTH;
+            ok_assert(valid_chunk_data_length);
+            if (!valid_chunk_data_length) {
+                return false;
+            }
+            
             // Check if is existing chunk
             bool is_existing_chunk = (strcmp("IHDR", chunk->name) == 0 ||
                                       strcmp("IDAT", chunk->name) == 0 ||
@@ -493,7 +500,7 @@ bool ok_png_write(ok_png_write_function write_function, void *write_function_con
                         min_length = 2; max_length = 2; // Single-color transparency, 16-bit key
                         break;
                     case OK_PNG_WRITE_COLOR_TYPE_RGB:
-                        min_length = 6; max_length = 6;  // Single-color transparency, 16-bit key
+                        min_length = 6; max_length = 6; // Single-color transparency, 16-bit key
                         break;
                     case OK_PNG_WRITE_COLOR_TYPE_GRAY_ALPHA:
                     case OK_PNG_WRITE_COLOR_TYPE_RGB_ALPHA:

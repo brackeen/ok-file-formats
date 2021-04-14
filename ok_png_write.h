@@ -77,7 +77,7 @@ typedef enum {
 typedef struct {
     const char *name;
     const uint8_t *data;
-    size_t length;
+    uint32_t length;
 } ok_png_write_chunk;
 
 /**
