@@ -162,51 +162,51 @@ static bool ok_png_deflate_output_buffer_write(void *write_context, const uint8_
 
 // MARK: PNG write
 
-bool ok_png_write(ok_png_write_function write_function, void *write_function_context, ok_png_write_params image) {
+bool ok_png_write(ok_png_write_function write_function, void *write_function_context, ok_png_write_params params) {
     // Set default parameters
-    if (image.bit_depth == 0) {
-        image.bit_depth = 8;
+    if (params.bit_depth == 0) {
+        params.bit_depth = 8;
     }
-    if (image.buffer_size == 0) {
-        image.buffer_size = 0x10000;
+    if (params.buffer_size == 0) {
+        params.buffer_size = 0x10000;
     }
-    const uint8_t bits_per_pixel = image.bit_depth * ok_color_type_channels(image.color_type);
-    const uint64_t bytes_per_row = ((uint64_t)image.width * bits_per_pixel + 7) / 8;
-    if (image.data_stride == 0) {
-        image.data_stride = bytes_per_row;
+    const uint8_t bits_per_pixel = params.bit_depth * ok_color_type_channels(params.color_type);
+    const uint64_t bytes_per_row = ((uint64_t)params.width * bits_per_pixel + 7) / 8;
+    if (params.data_stride == 0) {
+        params.data_stride = bytes_per_row;
     }
     
 #ifndef OK_NO_DEFAULT_ALLOCATOR
-    if (image.alloc == NULL && image.free == NULL) {
-        image.alloc = ok_stdlib_alloc;
-        image.free = ok_stdlib_free;
+    if (params.alloc == NULL && params.free == NULL) {
+        params.alloc = ok_stdlib_alloc;
+        params.free = ok_stdlib_free;
     }
 #endif
     
     // Validate input parameters
     {
-        const int b = image.bit_depth;
+        const int b = params.bit_depth;
         const bool valid_bit_depth =
-            (image.color_type == OK_PNG_WRITE_COLOR_TYPE_GRAY && (b == 1 || b == 2 || b == 4 || b == 8 || b == 16)) ||
-            (image.color_type == OK_PNG_WRITE_COLOR_TYPE_RGB && (b == 8 || b == 16)) ||
-            (image.color_type == OK_PNG_WRITE_COLOR_TYPE_PALETTE && (b == 1 || b == 2 || b == 4 || b == 8)) ||
-            (image.color_type == OK_PNG_WRITE_COLOR_TYPE_GRAY_ALPHA && (b == 8 || b == 16)) ||
-            (image.color_type == OK_PNG_WRITE_COLOR_TYPE_RGB_ALPHA && (b == 8 || b == 16));
-        ok_assert(image.width > 0);
-        ok_assert(image.height > 0);
-        ok_assert(image.data != NULL);
-        ok_assert(image.data_stride >= bytes_per_row); // stride is too small
+            (params.color_type == OK_PNG_WRITE_COLOR_TYPE_GRAY && (b == 1 || b == 2 || b == 4 || b == 8 || b == 16)) ||
+            (params.color_type == OK_PNG_WRITE_COLOR_TYPE_RGB && (b == 8 || b == 16)) ||
+            (params.color_type == OK_PNG_WRITE_COLOR_TYPE_PALETTE && (b == 1 || b == 2 || b == 4 || b == 8)) ||
+            (params.color_type == OK_PNG_WRITE_COLOR_TYPE_GRAY_ALPHA && (b == 8 || b == 16)) ||
+            (params.color_type == OK_PNG_WRITE_COLOR_TYPE_RGB_ALPHA && (b == 8 || b == 16));
+        ok_assert(params.width > 0);
+        ok_assert(params.height > 0);
+        ok_assert(params.data != NULL);
+        ok_assert(params.data_stride >= bytes_per_row); // stride is too small
         ok_assert(valid_bit_depth);
-        ok_assert(image.buffer_size <= OK_PNG_WRITE_CHUNK_MAX_LENGTH); // buffer too large
+        ok_assert(params.buffer_size <= OK_PNG_WRITE_CHUNK_MAX_LENGTH); // buffer too large
         ok_assert(write_function != NULL);
-        if (image.width == 0 || image.height == 0 || image.data == NULL ||
-            image.data_stride < bytes_per_row || !valid_bit_depth ||
-            image.buffer_size > OK_PNG_WRITE_CHUNK_MAX_LENGTH ||
+        if (params.width == 0 || params.height == 0 || params.data == NULL ||
+            params.data_stride < bytes_per_row || !valid_bit_depth ||
+            params.buffer_size > OK_PNG_WRITE_CHUNK_MAX_LENGTH ||
             write_function == NULL) {
             return false;
         }
         
-        const bool has_allocator = image.alloc != NULL && image.free != NULL;
+        const bool has_allocator = params.alloc != NULL && params.free != NULL;
         ok_assert(has_allocator);
         if (!has_allocator) {
             return NULL;
@@ -215,9 +215,9 @@ bool ok_png_write(ok_png_write_function write_function, void *write_function_con
     
     // Validate additional chunks
     size_t palette_color_count = 0;
-    if (image.additional_chunks) {
+    if (params.additional_chunks) {
         bool trns_found = false;
-        for (ok_png_write_chunk **chunk_ptr = image.additional_chunks; *chunk_ptr != NULL; chunk_ptr++) {
+        for (ok_png_write_chunk **chunk_ptr = params.additional_chunks; *chunk_ptr != NULL; chunk_ptr++) {
             ok_png_write_chunk *chunk = *chunk_ptr;
             
             // Valid name
@@ -263,8 +263,8 @@ bool ok_png_write(ok_png_write_function write_function, void *write_function_con
                 }
                 
                 // Valid color type
-                bool valid_color_type = !(image.color_type == OK_PNG_WRITE_COLOR_TYPE_GRAY ||
-                                          image.color_type == OK_PNG_WRITE_COLOR_TYPE_GRAY_ALPHA);
+                bool valid_color_type = !(params.color_type == OK_PNG_WRITE_COLOR_TYPE_GRAY ||
+                                          params.color_type == OK_PNG_WRITE_COLOR_TYPE_GRAY_ALPHA);
                 ok_assert(valid_color_type);
                 if (!valid_color_type) {
                     return false;
@@ -272,9 +272,9 @@ bool ok_png_write(ok_png_write_function write_function, void *write_function_con
                 
                 // Valid length
                 size_t max_color_count;
-                switch (image.color_type) {
+                switch (params.color_type) {
                     case OK_PNG_WRITE_COLOR_TYPE_PALETTE:
-                        max_color_count = 1 << image.bit_depth;
+                        max_color_count = 1 << params.bit_depth;
                         break;
                     case OK_PNG_WRITE_COLOR_TYPE_RGB:
                     case OK_PNG_WRITE_COLOR_TYPE_RGB_ALPHA:
@@ -300,16 +300,16 @@ bool ok_png_write(ok_png_write_function write_function, void *write_function_con
                 if (trns_found) {
                     return false;
                 }
-                bool palette_missing = image.color_type == OK_PNG_WRITE_COLOR_TYPE_PALETTE && palette_color_count == 0;
+                bool palette_missing = params.color_type == OK_PNG_WRITE_COLOR_TYPE_PALETTE && palette_color_count == 0;
                 ok_assert(!palette_missing);
                 if (palette_missing) {
                     return false;
                 }
                 
                 // Valid color type
-                bool valid_color_type = (image.color_type == OK_PNG_WRITE_COLOR_TYPE_PALETTE ||
-                                         image.color_type == OK_PNG_WRITE_COLOR_TYPE_GRAY ||
-                                         image.color_type == OK_PNG_WRITE_COLOR_TYPE_RGB);
+                bool valid_color_type = (params.color_type == OK_PNG_WRITE_COLOR_TYPE_PALETTE ||
+                                         params.color_type == OK_PNG_WRITE_COLOR_TYPE_GRAY ||
+                                         params.color_type == OK_PNG_WRITE_COLOR_TYPE_RGB);
                 ok_assert(valid_color_type);
                 if (!valid_color_type) {
                     return false;
@@ -318,7 +318,7 @@ bool ok_png_write(ok_png_write_function write_function, void *write_function_con
                 // Valid length
                 size_t min_length;
                 size_t max_length;
-                switch (image.color_type) {
+                switch (params.color_type) {
                     case OK_PNG_WRITE_COLOR_TYPE_PALETTE:
                         min_length = 1;
                         max_length = palette_color_count;
@@ -345,7 +345,7 @@ bool ok_png_write(ok_png_write_function write_function, void *write_function_con
             }
         }
     }
-    if (image.color_type == OK_PNG_WRITE_COLOR_TYPE_PALETTE) {
+    if (params.color_type == OK_PNG_WRITE_COLOR_TYPE_PALETTE) {
         ok_assert(palette_color_count != 0); // PLTE not found
         if (palette_color_count == 0) {
             return false;
@@ -354,9 +354,9 @@ bool ok_png_write(ok_png_write_function write_function, void *write_function_con
     
     // Create output buffer
     ok_png_deflate_output_buffer deflate_output_buffer;
-    deflate_output_buffer.data = (uint8_t *)image.alloc(image.allocator_context, image.buffer_size);
+    deflate_output_buffer.data = (uint8_t *)params.alloc(params.allocator_context, params.buffer_size);
     deflate_output_buffer.length = 0;
-    deflate_output_buffer.capacity = image.buffer_size;
+    deflate_output_buffer.capacity = params.buffer_size;
     deflate_output_buffer.write_function = write_function;
     deflate_output_buffer.write_function_context = write_function_context;
     ok_assert(deflate_output_buffer.data != NULL);
@@ -366,10 +366,10 @@ bool ok_png_write(ok_png_write_function write_function, void *write_function_con
     
     // Create deflater
     ok_deflate *deflate = ok_deflate_init((ok_deflate_params) {
-        .nowrap = image.apple_cgbi_format,
-        .alloc = image.alloc,
-        .free = image.free,
-        .allocator_context = image.allocator_context,
+        .nowrap = params.apple_cgbi_format,
+        .alloc = params.alloc,
+        .free = params.free,
+        .allocator_context = params.allocator_context,
         .write = ok_png_deflate_output_buffer_write,
         .write_context = &deflate_output_buffer,
     });
@@ -387,7 +387,7 @@ bool ok_png_write(ok_png_write_function write_function, void *write_function_con
     ok_write(png_signature, sizeof(png_signature), &crc);
     
     // Write CgBI chunk
-    if (image.apple_cgbi_format) {
+    if (params.apple_cgbi_format) {
         ok_write_chunk_start("CgBI", 4, &crc);
         ok_write_uint32(0x50002002, &crc); // lower 16 bits are probably CGBitmapInfo mask
         ok_write_chunk_end(crc);
@@ -395,18 +395,18 @@ bool ok_png_write(ok_png_write_function write_function, void *write_function_con
     
     // Write IHDR chunk
     ok_write_chunk_start("IHDR", 13, &crc);
-    ok_write_uint32(image.width, &crc);
-    ok_write_uint32(image.height, &crc);
-    ok_write_uint8(image.bit_depth, &crc);
-    ok_write_uint8(image.color_type, &crc);
+    ok_write_uint32(params.width, &crc);
+    ok_write_uint32(params.height, &crc);
+    ok_write_uint8(params.bit_depth, &crc);
+    ok_write_uint8(params.color_type, &crc);
     ok_write_uint8(0, &crc); // compression method
     ok_write_uint8(0, &crc); // filter method
     ok_write_uint8(0, &crc); // interlace method
     ok_write_chunk_end(crc);
     
     // Write additional chunks
-    if (image.additional_chunks) {
-        for (ok_png_write_chunk **chunk_ptr = image.additional_chunks; *chunk_ptr != NULL; chunk_ptr++) {
+    if (params.additional_chunks) {
+        for (ok_png_write_chunk **chunk_ptr = params.additional_chunks; *chunk_ptr != NULL; chunk_ptr++) {
             ok_png_write_chunk *chunk = *chunk_ptr;
             ok_write_chunk_start(chunk->name, chunk->length, &crc);
             if (chunk->data && chunk->length > 0) {
@@ -418,16 +418,16 @@ bool ok_png_write(ok_png_write_function write_function, void *write_function_con
     
     // Compress data, writing IDAT chunk(s) when deflate_output_buffer is full
     bool success = true;
-    for (uint32_t y = 0; success && y < image.height; y++) {
+    for (uint32_t y = 0; success && y < params.height; y++) {
         const uint8_t filter = 0;
         const uint8_t *src;
-        if (image.flip_y) {
-            src = image.data + (image.height - 1 - y) * image.data_stride;
+        if (params.flip_y) {
+            src = params.data + (params.height - 1 - y) * params.data_stride;
         } else {
-            src = image.data + y * image.data_stride;
+            src = params.data + y * params.data_stride;
         }
         success &= ok_deflate_data(deflate, &filter, 1, false);
-        success &= ok_deflate_data(deflate, src, bytes_per_row, y == image.height - 1);
+        success &= ok_deflate_data(deflate, src, bytes_per_row, y == params.height - 1);
     }
     ok_deflate_free(deflate);
 
@@ -437,7 +437,7 @@ bool ok_png_write(ok_png_write_function write_function, void *write_function_con
         ok_write(deflate_output_buffer.data, deflate_output_buffer.length, &crc);
         ok_write_chunk_end(crc);
     }
-    image.free(image.allocator_context, deflate_output_buffer.data);
+    params.free(params.allocator_context, deflate_output_buffer.data);
     if (!success) {
         return false;
     }
