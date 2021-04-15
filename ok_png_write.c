@@ -499,8 +499,8 @@ static uint32_t ok_adler_update(const uint32_t adler, const uint8_t *buffer, siz
 // MARK: Deflate
 
 #define OK_DEFLATE_BUFFER_LENGTH 0xffff
-#define OK_DEFLATE_BLOCK_TYPE_NO_COMPRESSION 0
-//#define OK_DEFLATE_BLOCK_TYPE_FIXED_HUFFMAN 1
+//#define OK_DEFLATE_BLOCK_TYPE_NO_COMPRESSION 0
+#define OK_DEFLATE_BLOCK_TYPE_FIXED_HUFFMAN 1
 //#define OK_DEFLATE_BLOCK_TYPE_DYNAMIC_HUFFMAN 2
 
 struct ok_deflate {
@@ -572,6 +572,108 @@ static bool ok_deflate_write_byte_align(ok_deflate *deflate) {
     }
 }
 
+static uint16_t ok_deflate_reverse_bits(uint16_t value, uint8_t num_bits) {
+    uint16_t rev_value = value & 1;
+    for (uint8_t i = num_bits - 1; i > 0; i--) {
+        value >>= 1;
+        rev_value <<= 1;
+        rev_value |= value & 1;
+    }
+    return rev_value;
+}
+
+static bool ok_deflate_write_fixed_huffman_code(ok_deflate *deflate, uint16_t value) {
+    // RFC 1951 section 3.2.6.
+    ok_assert(value < 288);
+    uint8_t num_bits;
+    if (value < 144) {
+        value += 48;
+        num_bits = 8;
+    } else if (value < 256) {
+        value += 256;
+        num_bits = 9;
+    } else if (value < 280) {
+        value -= 256;
+        num_bits = 7;
+    } else {
+        value -= 88;
+        num_bits = 8;
+    }
+    value = ok_deflate_reverse_bits(value, num_bits);
+    return ok_deflate_write_bits(deflate, value, num_bits);
+}
+
+static bool ok_deflate_write_fixed_huffman_length(ok_deflate *deflate, uint16_t length) {
+    // RFC 1951 section 3.2.5.
+    ok_assert(length >= 3 && length <= 258);
+    if (length == 258) {
+        return ok_deflate_write_fixed_huffman_code(deflate, 285);
+    }
+    length -= 3; // 0..255
+    
+    uint8_t extra_bits_count = 0;
+    while (length >= (1 << (extra_bits_count + 3))) {
+        extra_bits_count++;
+    }
+    const uint16_t code = 257 + extra_bits_count * 4 + (length >> extra_bits_count);
+    const uint16_t extra_bits = length & ((1 << extra_bits_count) - 1);
+    return (ok_deflate_write_fixed_huffman_code(deflate, code) &&
+            (extra_bits_count == 0 || ok_deflate_write_bits(deflate, extra_bits, extra_bits_count)));
+}
+
+static bool ok_deflate_write_fixed_huffman_distance(ok_deflate *deflate, uint16_t distance) {
+    // RFC 1951 section 3.2.5.
+    ok_assert(distance >= 1 && distance <= 32768);
+    if (distance == 1) {
+        return ok_deflate_write_bits(deflate, 0, 5);
+    }
+    distance -= 1; // 0..32767
+    
+    uint8_t extra_bits_count = 0;
+    while (distance >= (1 << (extra_bits_count + 2))) {
+        extra_bits_count++;
+    }
+    const uint16_t code = extra_bits_count * 2 + (distance >> extra_bits_count);
+    const uint16_t extra_bits = distance & ((1 << extra_bits_count) - 1);
+    return (ok_deflate_write_bits(deflate, ok_deflate_reverse_bits(code, 5), 5) &&
+            (extra_bits_count == 0 || ok_deflate_write_bits(deflate, extra_bits, extra_bits_count)));
+}
+
+static bool ok_deflate_write_rle_block(ok_deflate *deflate, const uint8_t *buffer, uint16_t buffer_length, bool is_final) {
+    const size_t max_run_length = 258;
+    bool success = (ok_deflate_write_bits(deflate, is_final ? 1 : 0, 1) && // final block flag
+                    ok_deflate_write_bits(deflate, OK_DEFLATE_BLOCK_TYPE_FIXED_HUFFMAN, 2));
+    int prev = -1;
+    int run_length = -1;
+    for (uint16_t i = 0; success && i < buffer_length; i++) {
+        bool identical = buffer[i] == prev;
+        if (identical) {
+            run_length++;
+        }
+        
+        if (run_length > 0 && (!identical || run_length == max_run_length || i == buffer_length - 1)) {
+            if (run_length >= 3) {
+                success &= (ok_deflate_write_fixed_huffman_length(deflate, (uint16_t)run_length) &&
+                            ok_deflate_write_fixed_huffman_distance(deflate, 1));
+                run_length = 0;
+            } else {
+                while (run_length-- > 0) {
+                    success &= ok_deflate_write_fixed_huffman_code(deflate, (uint16_t)prev);
+                }
+            }
+        }
+        
+        if (!identical) {
+            success &= ok_deflate_write_fixed_huffman_code(deflate, buffer[i]);
+            prev = buffer[i];
+            run_length = 0;
+        }
+    }
+    return success && ok_deflate_write_fixed_huffman_code(deflate, 256);
+}
+
+#if 0
+
 static bool ok_deflate_write_stored_block(ok_deflate *deflate, const uint8_t *buffer, uint16_t buffer_length, bool is_final) {
     ok_assert(buffer_length <= 0xffff);
     const uint8_t block_length[4] = {
@@ -586,6 +688,8 @@ static bool ok_deflate_write_stored_block(ok_deflate *deflate, const uint8_t *bu
     success &= deflate->params.write(deflate->params.write_context, buffer, buffer_length);
     return success;
 }
+
+#endif
 
 bool ok_deflate_data(ok_deflate *deflate, const uint8_t *data, size_t length, bool is_final) {
     do {
@@ -633,7 +737,7 @@ bool ok_deflate_data(ok_deflate *deflate, const uint8_t *data, size_t length, bo
             }
             
             // Deflate
-            if (!ok_deflate_write_stored_block(deflate, current_buffer, current_buffer_length, is_final_write)) {
+            if (!ok_deflate_write_rle_block(deflate, current_buffer, current_buffer_length, is_final_write)) {
                 return false;
             }
             
