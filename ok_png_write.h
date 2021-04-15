@@ -85,6 +85,17 @@ typedef struct {
   
  Parameters for the #ok_png_write_to_file or #ok_png_write functions.
  
+ @var width The width of the image, in pixels.
+ 
+ @var height The height of the image, in pixels.
+ 
+ @var data_stride The stride of the input image data, in bytes. If 0, the default "bytes per row" is assumed.
+ 
+ @var data The input image data, which is written as-is without modification or verification.
+ Note, even for 1, 2, and 4-bit images, rows must be byte-aligned.
+ 
+ @var bit_depth The bit depth. If 0, the default is 8.
+ 
  The bit depth must be valid for the color type. The following bit depths are valid:
  
  Color type                         | Valid bit depths
@@ -94,49 +105,29 @@ typedef struct {
  OK_PNG_WRITE_COLOR_TYPE_GRAY_ALPHA | 8, 16
  OK_PNG_WRITE_COLOR_TYPE_RGB        | 8, 16
  OK_PNG_WRITE_COLOR_TYPE_RGB_ALPHA  | 8, 16
- 
- Large uncompressed images can be written as long as one row fits in one IDAT chunk.
- For uncompressed images, the image width is limited to the following values:
- 
- Color type                         | Bit depth | Max Width
- -----------------------------------+-----------+-----------
- OK_PNG_WRITE_COLOR_TYPE_PALETTE    | 1 or 2    | 4294967295
- OK_PNG_WRITE_COLOR_TYPE_PALETTE    | 4         | 4294639618
- OK_PNG_WRITE_COLOR_TYPE_PALETTE    | 8         | 2147319809
- OK_PNG_WRITE_COLOR_TYPE_GRAY       | 1 or 2    | 4294967295
- OK_PNG_WRITE_COLOR_TYPE_GRAY       | 4         | 4294639618
- OK_PNG_WRITE_COLOR_TYPE_GRAY       | 8         | 2147319809
- OK_PNG_WRITE_COLOR_TYPE_GRAY       | 16        | 1073659904
- OK_PNG_WRITE_COLOR_TYPE_GRAY_ALPHA | 8         | 1073659904
- OK_PNG_WRITE_COLOR_TYPE_GRAY_ALPHA | 16        |  536829952
- OK_PNG_WRITE_COLOR_TYPE_RGB        | 8         |  715773269
- OK_PNG_WRITE_COLOR_TYPE_RGB        | 16        |  357886634
- OK_PNG_WRITE_COLOR_TYPE_RGB_ALPHA  | 8         |  536829952
- OK_PNG_WRITE_COLOR_TYPE_RGB_ALPHA  | 16        |  268414976
- 
- @var width The width of the image, in pixels.
- 
- @var height The height of the image, in pixels.
- 
- @var data_stride The stride of the input image data, in bytes. If 0, the default "bytes per row" is assumed.
- 
- @var data The input image data, which is written as-is without modification or verification.
- Note, for 1, 2, and 4-bit images, each row must be byte-aligned.
- 
- @var bit_depth The bit depth. If 0, the default is 8.
- 
+  
  @var color_type The color type.
  
  @var flip_y If true, the image is written bottom-up instead of top-down.
  
  @var apple_cgbi_format If true, write PNGs in Apple's proprietary PNG format.
- This adds the CgBI chunk before the IHDR chunk and does not include deflate headers or checksums.
+ This adds the CgBI chunk before the IHDR chunk and does not include zlib headers or checksums.
  Image data must be provided in premultiplied BGRA format (ok_png_write does not convert data).
  
  @var additional_chunks A NULL-terminated array of additional chunks to write.
  The chunks are written after the header chunk ("IHDR") and before the data chunk ("IDAT").
  Images with a color type of OK_PNG_WRITE_COLOR_TYPE_PALETTE must include a "PLTE" chunk.
  See the PNG spec for details.
+ 
+ @var buffer_size The size of the buffer for compressed IDAT chunks. If the compressed output
+ is larger than the buffer, multiple IDAT chunks are written.
+ If this value is 0, a default value of 65536 is used. This value must be 0x7fffffff or less.
+ 
+ @var alloc The memory allocator, or NULL to use the stdlib's malloc.
+ 
+ @var free The memory deallocator, or NULL to use the stdlib's free.
+ 
+ @var allocator_context The context passed to the allocator.
  */
 typedef struct {
     uint32_t width;
@@ -148,6 +139,12 @@ typedef struct {
     bool flip_y;
     bool apple_cgbi_format;
     ok_png_write_chunk **additional_chunks;
+    
+    // Compress options
+    uint32_t buffer_size;
+    void *(*alloc)(void *allocator_context, size_t length);
+    void (*free)(void *allocator_context, void *memory);
+    void *allocator_context;
 } ok_png_write_params;
 
 #ifndef OK_NO_STDIO
@@ -162,6 +159,59 @@ typedef bool (*ok_png_write_function)(void *context, const uint8_t *buffer, size
 
 /// Writes an image and returns true on success.
 bool ok_png_write(ok_png_write_function write_function, void *write_function_context, ok_png_write_params params);
+
+// MARK: Deflate
+
+typedef struct ok_deflate ok_deflate;
+
+/**
+ @var nowrap If `true`, no header or footer is written before or after the output.
+
+ @var alloc The memory allocator, or NULL to use the stdlib's malloc.
+ 
+ @var free The memory deallocator, or NULL to use the stdlib's free.
+ 
+ @var allocator_context The context passed to the allocator.
+ 
+ @var write The write function for output. Must not be NULL.
+ This function should write the specified buffer and return true on success.
+ 
+ @var write_context The context passed to the write function.
+*/
+typedef struct {
+    bool nowrap;
+    
+    void *(*alloc)(void *allocator_context, size_t length);
+    void (*free)(void *allocator_context, void *memory);
+    void *allocator_context;
+    
+    bool (*write)(void *write_context, const uint8_t *data, size_t length);
+    void *write_context;
+} ok_deflate_params;
+
+/// Create a deflater. The object must be freed with #ok_deflate_free
+ok_deflate *ok_deflate_init(ok_deflate_params params);
+
+/**
+ Deflates data.
+
+ This function may be called repeatedly.
+
+ If `is_final` is true, this data represents the final data block in the stream.
+ The footer is written (if nowrap is false) and the stream is reset. Another stream
+ can be written using the same deflater.
+ 
+ If `is_final` is false, some or all of the data may be buffered.
+
+ @param data The data to deflate.
+ @param length The data length. May be zero.
+ @param is_final Flag indicating the data is the last in a stream.
+ @return true on success, false on write error.
+ */
+bool ok_deflate_data(ok_deflate *deflate, const uint8_t *data, size_t length, bool is_final);
+
+/// Frees a deflater created with #ok_deflate_init
+void ok_deflate_free(ok_deflate *deflate);
 
 #ifdef __cplusplus
 }

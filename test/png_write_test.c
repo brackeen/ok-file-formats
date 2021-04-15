@@ -87,15 +87,15 @@ static int api_test(const char *output_dir, bool verbose) {
     return success ? 0 : 1;
 }
 
-static int test_image_size(const char *output_dir, uint32_t width, uint32_t height, bool verbose) {
+static int test_image(const char *output_dir, ok_png_write_params params, bool verbose) {
     ok_png png = { 0 };
     uint8_t *original_rgba_data = NULL;
     bool success = false;
     char test_name[PATH_MAX];
-    snprintf(test_name, sizeof(test_name), "png_write_%ux%u", width, height);
+    snprintf(test_name, sizeof(test_name), "png_write_%ux%u", params.width, params.height);
        
     // Fill an image with data
-    const size_t original_rgba_data_len = (size_t)width * 4 * height;
+    const size_t original_rgba_data_len = (size_t)params.width * 4 * params.height;
     original_rgba_data = malloc(original_rgba_data_len);
     if (!original_rgba_data) {
         printf("Error: Couldn't allocate memory\n");
@@ -104,6 +104,7 @@ static int test_image_size(const char *output_dir, uint32_t width, uint32_t heig
     for (size_t i = 0; i < original_rgba_data_len; i++) {
         original_rgba_data[i] = i & 0xff;
     }
+    params.data = original_rgba_data;
     
     // Write image to PNG file
     char path[PATH_MAX];
@@ -113,25 +114,24 @@ static int test_image_size(const char *output_dir, uint32_t width, uint32_t heig
         printf("Error: Couldn't open file for writing\n");
         goto cleanup;
     }
-    bool write_success = ok_png_write_to_file(out_file, (ok_png_write_params) {
-        .width = width,
-        .height = height,
-        .data = original_rgba_data,
-        .color_type = OK_PNG_WRITE_COLOR_TYPE_RGB_ALPHA,
-    });
+    bool write_success = ok_png_write_to_file(out_file, params);
     fclose(out_file);
     if (!write_success) {
         printf("Error writing PNG data\n");
         goto cleanup;
     }
     
-    // Read image from PNG file
+    // Read image from PNG file (without any data conversion)
     FILE *in_file = fopen(path, "rb");
     if (!in_file) {
         printf("Error: Couldn't open file for reading\n");
         goto cleanup;
     }
-    png = ok_png_read(in_file, OK_PNG_COLOR_FORMAT_RGBA);
+    if (params.apple_cgbi_format) {
+        png = ok_png_read(in_file, (ok_png_decode_flags)(OK_PNG_COLOR_FORMAT_BGRA | OK_PNG_PREMULTIPLIED_ALPHA));
+    } else {
+        png = ok_png_read(in_file, OK_PNG_COLOR_FORMAT_RGBA);
+    }
     fclose(in_file);
     if (png.error_code != OK_PNG_SUCCESS) {
         printf("Error reading PNG data (error %i)\n", png.error_code);
@@ -145,14 +145,16 @@ static int test_image_size(const char *output_dir, uint32_t width, uint32_t heig
     }
     
 #if defined(__APPLE__) && TARGET_OS_OSX
-    char command[4096];
-    snprintf(command, sizeof(command), "convert %s /dev/null", path);
-    success = (system(command) == 0);
-    if (!success) {
-        printf("Error checking via convert command\n");
+    if (!params.apple_cgbi_format) {
+        char command[4096];
+        snprintf(command, sizeof(command), "convert %s /dev/null", path);
+        success = (system(command) == 0);
+        if (!success) {
+            printf("Error checking via convert command\n");
+            goto cleanup;
+        }
         goto cleanup;
     }
-    goto cleanup;
 #endif
     
     // Cleanup
@@ -161,6 +163,13 @@ cleanup:
     free(original_rgba_data);
     free(png.data);
     return success;
+}
+
+static size_t uncompressed_size(uint32_t width, uint32_t height, uint32_t bpp, bool apple_cgbi_format) {
+    size_t data_size = (((size_t)width * bpp) + 1) * height; // RGBA data + filter per row
+    size_t stored_block_count = (data_size + 0xffff - 1) / 0xffff; // Number of stored blocks (max size 0xffff)
+    size_t wrapper = apple_cgbi_format ? 0 : 2 + 4; // zlib header (2 bytes), adler (4 bytes)
+    return wrapper + 5 * stored_block_count + data_size;
 }
 
 // This tests writing various size images; doesn't test CRC or Adler checksums (ok_png reader ignores them)
@@ -176,44 +185,50 @@ int png_write_test(bool verbose) {
     output_dir[0] = '\0';
 #endif
     
-#ifndef OK_PNG_WRITE_CHUNK_MAX_LENGTH
-#pragma message("Define OK_PNG_WRITE_CHUNK_MAX_LENGTH=0x7ffff to test writing multiple IDAT chunks")
-#endif
-    // Sizes for 8-bit RGBA format images
-    const uint32_t test_sizes[] = {
-        // One block
-        16383, 1,
-        384, 42,
-        
-        // N rows per block
-        384, 43, // 1 small block per row
-        384, 84, // no small block per row
-        384, 85, // 1 small block per row
-        
-        // N blocks per row
-        16384, 4, // 1 small block at end
-        49151, 4, // no small block at end
-        
-        // Adler in separate chunk
-#if defined(OK_PNG_WRITE_CHUNK_MAX_LENGTH) && OK_PNG_WRITE_CHUNK_MAX_LENGTH == 0x7ffff
-        1, 196598, // N rows per block, Adler in separate chunk
-        131061, 1 // N blocks per row, Adler in separate chunk
-#endif
-        
-    };
-    int num_tests = sizeof(test_sizes) / (sizeof(*test_sizes) * 2);
+    int num_tests = 0;
     int num_failures = 0;
+
+    num_tests++;
+    num_failures += api_test(output_dir, verbose);
     
-    for (int i = 0; i < num_tests; i++) {
-        uint32_t width = test_sizes[i * 2 + 0];
-        uint32_t height = test_sizes[i * 2 + 1];
-        if (!test_image_size(output_dir, width, height, verbose)) {
+    // Test params. Image data filled in by test_image()
+    const ok_png_write_params test_params[] = {
+        (ok_png_write_params) {
+            .width = 100, .height = 100,
+            .color_type = OK_PNG_WRITE_COLOR_TYPE_RGB_ALPHA,
+        },
+        (ok_png_write_params) {
+            .width = 65536, .height = 1, // Multiple stored blocks; Lots of deflating without buffering
+            .color_type = OK_PNG_WRITE_COLOR_TYPE_RGB_ALPHA,
+        },
+        (ok_png_write_params) {
+            .width = 100, .height = 1,
+            .buffer_size = (uint32_t)uncompressed_size(100, 1, 4, false), // Exactly one IDAT chunk
+            .color_type = OK_PNG_WRITE_COLOR_TYPE_RGB_ALPHA,
+        },
+        (ok_png_write_params) {
+            .width = 100, .height = 1,
+            .buffer_size = (uint32_t)uncompressed_size(100, 1, 4, false) - 4, // Adler in a separate IDAT chunk
+            .color_type = OK_PNG_WRITE_COLOR_TYPE_RGB_ALPHA,
+        },
+    };
+        
+    for (size_t i = 0; i < sizeof(test_params) / sizeof(*test_params); i++) {
+        ok_png_write_params params = test_params[i];
+        
+        // Test params as is
+        num_tests++;
+        if (!test_image(output_dir, params, verbose)) {
+            num_failures++;
+        }
+
+        // Test again as CgBI
+        params.apple_cgbi_format = true;
+        num_tests++;
+        if (!test_image(output_dir, params, verbose)) {
             num_failures++;
         }
     }
-    
-    num_failures += api_test(output_dir, verbose);
-    num_tests++;
     
     printf("Success: PNG write %i of %i\n", (num_tests - num_failures), num_tests);
     return num_failures;

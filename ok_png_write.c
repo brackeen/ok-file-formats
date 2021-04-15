@@ -9,11 +9,24 @@
 #define ok_assert(expression) assert(expression);
 #endif
 
-#ifndef OK_PNG_WRITE_CHUNK_MAX_LENGTH
+#ifndef OK_NO_DEFAULT_ALLOCATOR
+#include <stdlib.h>
+
+static void *ok_stdlib_alloc(void *context, size_t length) {
+    (void)context;
+    return malloc(length);
+}
+
+static void ok_stdlib_free(void *context, void *memory) {
+    (void)context;
+    free(memory);
+}
+
+#endif
+
 // "Although encoders and decoders should treat the length as unsigned, its value must not exceed 2^31-1 bytes."
 // To test splitting output into multiple IDAT chunks, this can be redefined as a smaller value.
 #define OK_PNG_WRITE_CHUNK_MAX_LENGTH 0x7fffffff
-#endif
 
 #define ok_min(a, b) ((a) < (b) ? (a) : (b))
 
@@ -66,42 +79,6 @@ static void ok_crc_update(uint32_t *crc, const uint8_t *buffer, size_t length) {
     *crc = c ^ 0xffffffffL;
 }
 
-// MARK: Adler
-
-static uint32_t ok_adler_init(void) {
-    return 1;
-}
-
-static uint32_t ok_adler_update(const uint32_t adler, const uint8_t *buffer, size_t length) {
-    static const uint32_t adler_base = 65521;
-    static const size_t adler_max_run_length = 5552;
-    
-    uint32_t adler_sum1 = adler & 0xffff;
-    uint32_t adler_sum2 = (adler >> 16) & 0xffff;
-    
-    if (length == 1) {
-        adler_sum1 += buffer[0];
-        if (adler_sum1 >= adler_base) {
-            adler_sum1 -= adler_base;
-        }
-        adler_sum2 += adler_sum1;
-        if (adler_sum2 >= adler_base) {
-            adler_sum2 -= adler_base;
-        }
-    } else {
-        for (size_t i = 0; i < length; i += adler_max_run_length) {
-            const size_t end = i + ok_min(length - i, adler_max_run_length);
-            for (size_t j = i; j < end; j++) {
-                adler_sum1 += buffer[j];
-                adler_sum2 += adler_sum1;
-            }
-            adler_sum1 %= adler_base;
-            adler_sum2 %= adler_base;
-        }
-    }
-    return (adler_sum2 << 16) | adler_sum1;
-}
-
 // MARK: Write helper macros
 
 // These macros require write_function and write_function_context be defined.
@@ -112,18 +89,18 @@ static uint32_t ok_adler_update(const uint32_t adler, const uint8_t *buffer, siz
     ok_crc_update(crc, (buffer), (length));
 
 #define ok_write_uint8(value, crc) {\
-    uint8_t buffer[1] = { (uint8_t)(value) }; \
-    ok_write(buffer, sizeof(buffer), crc); \
+    uint8_t _buffer[1] = { (uint8_t)(value) }; \
+    ok_write(_buffer, sizeof(_buffer), crc); \
 }
 
 #define ok_write_uint16(value, crc) {\
-    uint8_t buffer[2] = { (uint8_t)((value) >> 8), (uint8_t)((value) & 0xff) }; \
-    ok_write(buffer, sizeof(buffer), crc); \
+    uint8_t _buffer[2] = { (uint8_t)((value) >> 8), (uint8_t)((value) & 0xff) }; \
+    ok_write(_buffer, sizeof(_buffer), crc); \
 }
 
 #define ok_write_uint32(value, crc) {\
-    uint8_t buffer[4] = { (uint8_t)((value) >> 24), (uint8_t)((value) >> 16), (uint8_t)((value) >> 8), (uint8_t)((value) & 0xff) }; \
-    ok_write(buffer, sizeof(buffer), crc); \
+    uint8_t _buffer[4] = { (uint8_t)((value) >> 24), (uint8_t)((value) >> 16), (uint8_t)((value) >> 8), (uint8_t)((value) & 0xff) }; \
+    ok_write(_buffer, sizeof(_buffer), crc); \
 }
 
 #define ok_write_chunk_start(name, length, crc) \
@@ -134,7 +111,7 @@ static uint32_t ok_adler_update(const uint32_t adler, const uint8_t *buffer, siz
 #define ok_write_chunk_end(crc) \
     ok_write_uint32(crc, &crc);
 
-// MARK: PNG write
+// MARK: PNG writer helper functions
 
 static uint8_t ok_color_type_channels(ok_png_write_color_type color_type) {
     switch (color_type) {
@@ -151,218 +128,60 @@ static uint8_t ok_color_type_channels(ok_png_write_color_type color_type) {
     }
 }
 
-/*
- Writes uncompressed data, splitting the data into blocks and chunks.
- "chunk" = IDAT (max size 0x7fffffff)
- "block" = deflate stored block (max size 0xffff)
- For wide images, each row is split into multiple blocks.
- Otherwise, each block contains multiple rows.
- */
-static bool ok_png_write_uncompressed_idat(ok_png_write_function write_function, void *write_function_context, ok_png_write_params image) {
-    const uint16_t deflate_stored_block_max_length = 0xffff;
-    const uint32_t deflate_header_length = image.apple_cgbi_format ? 0 : 2;
-    const uint32_t deflate_footer_length = image.apple_cgbi_format ? 0 : 4; // adler-32
-    const uint8_t bits_per_pixel = image.bit_depth * ok_color_type_channels(image.color_type);
-    const uint64_t bytes_per_row = ((uint64_t)image.width * bits_per_pixel + 7) / 8;
-    const uint64_t output_row_length = bytes_per_row + 1; // 1 byte for filter
-    bool add_extra_chunk_for_adler = false;
-    uint32_t adler = ok_adler_init();
-    uint32_t crc = 0;
+// MARK: Deflate output buffer
+
+typedef struct {
+    uint8_t *data;
+    size_t length;
+    size_t capacity;
     
-    uint64_t deflate_num_full_blocks_per_row;
-    uint16_t deflate_full_block_length;
-    uint16_t deflate_small_block_length;
-    uint64_t deflate_data_iteration_full_length;
-    uint32_t rowInc;
-    if (output_row_length > deflate_stored_block_max_length) {
-        // Write uncompressed data as N blocks per row
-        rowInc = 1;
-        deflate_num_full_blocks_per_row = output_row_length / deflate_stored_block_max_length;
-        deflate_full_block_length = deflate_stored_block_max_length;
-        deflate_small_block_length = (uint16_t)(output_row_length % deflate_full_block_length);
-        deflate_data_iteration_full_length = (deflate_num_full_blocks_per_row * (deflate_full_block_length + 5) + // 5 for block header
-                                              (deflate_small_block_length > 0 ? (deflate_small_block_length + 5) : 0)); // 5 for block header
-        bool oneImageRowFitsInOneIDATChunk = deflate_header_length + deflate_data_iteration_full_length <= OK_PNG_WRITE_CHUNK_MAX_LENGTH;
-        ok_assert(oneImageRowFitsInOneIDATChunk); // Image width is too large
-        if (!oneImageRowFitsInOneIDATChunk) {
-            return false;
-        }
-    } else {
-        // Write uncompressed data as N rows per block
-        rowInc = ok_min(image.height, deflate_stored_block_max_length / output_row_length);
-        deflate_num_full_blocks_per_row = 0;
-        deflate_full_block_length = (uint16_t)(output_row_length * rowInc);
-        deflate_small_block_length = (uint16_t)(output_row_length * (image.height % rowInc));
-        deflate_data_iteration_full_length = 5 + deflate_full_block_length; // 5 for block header
-    }
-    
-    uint32_t iterations_until_next_idat = 0;
-    for (uint32_t row = 0; row < image.height; row += rowInc) {
-        if (iterations_until_next_idat == 0) {
-            // Determine idat length
-            uint32_t idat_length;
-            {
-                const uint32_t deflate_current_header_length = row == 0 ? deflate_header_length : 0;
-                const uint32_t remaining_full_iterations = (image.height - row) / rowInc;
-                uint32_t remaining_iterations;
-                uint64_t remaining_data_length;
+    ok_png_write_function write_function;
+    void *write_function_context;
+} ok_png_deflate_output_buffer;
 
-                if (output_row_length > deflate_stored_block_max_length) {
-                    remaining_iterations = remaining_full_iterations;
-                    remaining_data_length = (deflate_current_header_length +
-                                             remaining_full_iterations * deflate_data_iteration_full_length);
-                } else {
-                    remaining_iterations = remaining_full_iterations + (deflate_small_block_length > 0 ? 1 : 0);
-                    remaining_data_length = (deflate_current_header_length +
-                                             remaining_full_iterations * (deflate_full_block_length + 5) + // 5 for block header
-                                             (deflate_small_block_length > 0 ? (deflate_small_block_length + 5) : 0)); // 5 for block header
-                }
-                
-                if (remaining_data_length + deflate_footer_length <= OK_PNG_WRITE_CHUNK_MAX_LENGTH) {
-                    iterations_until_next_idat = remaining_iterations;
-                    idat_length = (uint32_t)(remaining_data_length + deflate_footer_length);
-                } else {
-                    iterations_until_next_idat = (OK_PNG_WRITE_CHUNK_MAX_LENGTH - deflate_current_header_length) / deflate_data_iteration_full_length;
-                    if (iterations_until_next_idat >= remaining_iterations ||
-                        remaining_data_length <= OK_PNG_WRITE_CHUNK_MAX_LENGTH) {
-                        // Everything fits but the footer (adler-32).
-                        iterations_until_next_idat = remaining_iterations;
-                        idat_length = (uint32_t)remaining_data_length;
-                        add_extra_chunk_for_adler = true;
-                    } else {
-                        idat_length = (uint32_t)(deflate_current_header_length + iterations_until_next_idat * deflate_data_iteration_full_length);
-                    }
-                }
-            }
-            ok_write_chunk_start("IDAT", idat_length, &crc);
-
-            // Write deflate header
-            if (row == 0 && !image.apple_cgbi_format) {
-                const uint16_t deflate_compression_info = 0x7; // 4 bits
-                const uint16_t deflate_compression_method = 0x8; // 4 bits
-                const uint16_t deflate_flag_compression_level = 0; // 2 bits
-                const uint16_t deflate_flag_dict = 0; // 1 bit
-                const uint16_t deflate_raw_header = ((deflate_compression_info << 12) |
-                                                     (deflate_compression_method << 8) |
-                                                     (deflate_flag_compression_level << 6) |
-                                                     (deflate_flag_dict << 5));
-                const uint16_t deflate_flag_check = 31 - (deflate_raw_header % 31); // 5 bits (ensure deflate_header is divisible by 31)
-                const uint16_t deflate_header = deflate_raw_header | deflate_flag_check;
-                ok_write_uint16(deflate_header, &crc);
-            }
-        }
-        
-        if (output_row_length > deflate_stored_block_max_length) {
-            // Write uncompressed data as N blocks per row
-            for (uint32_t i = 0; i < output_row_length; i += deflate_full_block_length) {
-                const uint16_t deflate_block_length = (uint16_t)ok_min(deflate_full_block_length, output_row_length - i);
-                
-                // Write deflate block header (5 bytes)
-                const uint8_t deflate_block_type = 0; // 2 bits (no compression)
-                const uint8_t deflate_final_block_flag = row == image.height - 1 && i + deflate_block_length == output_row_length ? 1 : 0; // 1 bit
-                const uint8_t deflate_block_header[5] = {
-                    deflate_block_type << 1 | deflate_final_block_flag,
-                    (deflate_block_length & 0xff), (deflate_block_length >> 8),
-                    ((~deflate_block_length) & 0xff), ((~deflate_block_length) >> 8),
-                };
-                ok_write(deflate_block_header, sizeof(deflate_block_header), &crc);
-                
-                // Write filter and determine x, num_bytes
-                uint32_t x;
-                uint32_t num_bytes;
-                if (i == 0) {
-                    x = 0;
-                    num_bytes = deflate_block_length - 1;
-                    const uint8_t filter = 0;
-                    ok_write_uint8(filter, &crc);
-                    
-                    // Update adler32
-                    if (!image.apple_cgbi_format) {
-                        adler = ok_adler_update(adler, &filter, 1);
-                    }
-                } else {
-                    x = i - 1;
-                    num_bytes = deflate_block_length;
-                }
-                
-                // Write row data
-                const uint8_t *src;
-                if (image.flip_y) {
-                    src = image.data + x + (image.height - 1 - row) * image.data_stride;
-                } else {
-                    src = image.data + x + row * image.data_stride;
-                }
-                ok_write(src, num_bytes, &crc);
-                
-                // Update adler32
-                if (!image.apple_cgbi_format) {
-                    adler = ok_adler_update(adler, src, num_bytes);
-                }
-            }
-        } else {
-            // Write uncompressed data as N rows per block
-            const uint32_t num_rows = ok_min(rowInc, image.height - row);
-            const uint16_t deflate_block_length = (uint16_t)(output_row_length * num_rows);
-            
-            // Write deflate block header (5 bytes)
-            const uint8_t deflate_block_type = 0; // 2 bits (no compression)
-            const uint8_t deflate_final_block_flag = row + num_rows == image.height ? 1 : 0; // 1 bit
-            const uint8_t deflate_block_header[5] = {
-                deflate_block_type << 1 | deflate_final_block_flag,
-                (deflate_block_length & 0xff), (deflate_block_length >> 8),
-                ((~deflate_block_length) & 0xff), ((~deflate_block_length) >> 8),
-            };
-            ok_write(deflate_block_header, sizeof(deflate_block_header), &crc);
-            
-            // Write row data
-            for (uint32_t y = row; y < row + num_rows; y++) {
-                const uint8_t filter = 0;
-                const uint8_t *src;
-                if (image.flip_y) {
-                    src = image.data + (image.height - 1 - y) * image.data_stride;
-                } else {
-                    src = image.data + y * image.data_stride;
-                }
-                ok_write_uint8(filter, &crc);
-                ok_write(src, (size_t)bytes_per_row, &crc);
-                
-                // Update adler32
-                if (!image.apple_cgbi_format) {
-                    adler = ok_adler_update(adler, &filter, 1);
-                    adler = ok_adler_update(adler, src, bytes_per_row);
-                }
-            }
-        }
-
-        // Finish IDAT chunk
-        iterations_until_next_idat--;
-        if (iterations_until_next_idat == 0) {
-            if (row + rowInc >= image.height && !add_extra_chunk_for_adler && !image.apple_cgbi_format) {
-                ok_write_uint32(adler, &crc);
-            }
+static bool ok_png_deflate_output_buffer_write(void *write_context, const uint8_t *data, size_t length) {
+    while (length > 0) {
+        ok_png_deflate_output_buffer *output_buffer = (ok_png_deflate_output_buffer *)write_context;
+        const size_t copy_length = ok_min(length, output_buffer->capacity - output_buffer->length);
+        memcpy(output_buffer->data + output_buffer->length, data, copy_length);
+        output_buffer->length += copy_length;
+        data += copy_length;
+        length -= copy_length;
+        if (output_buffer->length == output_buffer->capacity) {
+            uint32_t crc = 0;
+            ok_png_write_function write_function = output_buffer->write_function;
+            void *write_function_context = output_buffer->write_function_context;
+            ok_write_chunk_start("IDAT", output_buffer->length, &crc);
+            ok_write(output_buffer->data, output_buffer->length, &crc);
             ok_write_chunk_end(crc);
+            output_buffer->length = 0;
         }
-    }
-
-    // Write adler-32
-    if (add_extra_chunk_for_adler && !image.apple_cgbi_format) {
-        ok_write_chunk_start("IDAT", 4, &crc);
-        ok_write_uint32(adler, &crc);
-        ok_write_chunk_end(crc);
     }
     return true;
 }
+
+// MARK: PNG write
 
 bool ok_png_write(ok_png_write_function write_function, void *write_function_context, ok_png_write_params image) {
     // Set default parameters
     if (image.bit_depth == 0) {
         image.bit_depth = 8;
     }
+    if (image.buffer_size == 0) {
+        image.buffer_size = 0x10000;
+    }
     const uint8_t bits_per_pixel = image.bit_depth * ok_color_type_channels(image.color_type);
     const uint64_t bytes_per_row = ((uint64_t)image.width * bits_per_pixel + 7) / 8;
     if (image.data_stride == 0) {
         image.data_stride = bytes_per_row;
     }
+    
+#ifndef OK_NO_DEFAULT_ALLOCATOR
+    if (image.alloc == NULL && image.free == NULL) {
+        image.alloc = ok_stdlib_alloc;
+        image.free = ok_stdlib_free;
+    }
+#endif
     
     // Validate input parameters
     {
@@ -378,11 +197,19 @@ bool ok_png_write(ok_png_write_function write_function, void *write_function_con
         ok_assert(image.data != NULL);
         ok_assert(image.data_stride >= bytes_per_row); // stride is too small
         ok_assert(valid_bit_depth);
+        ok_assert(image.buffer_size <= OK_PNG_WRITE_CHUNK_MAX_LENGTH); // buffer too large
         ok_assert(write_function != NULL);
         if (image.width == 0 || image.height == 0 || image.data == NULL ||
             image.data_stride < bytes_per_row || !valid_bit_depth ||
+            image.buffer_size > OK_PNG_WRITE_CHUNK_MAX_LENGTH ||
             write_function == NULL) {
             return false;
+        }
+        
+        const bool has_allocator = image.alloc != NULL && image.free != NULL;
+        ok_assert(has_allocator);
+        if (!has_allocator) {
+            return NULL;
         }
     }
     
@@ -524,6 +351,32 @@ bool ok_png_write(ok_png_write_function write_function, void *write_function_con
             return false;
         }
     }
+    
+    // Create output buffer
+    ok_png_deflate_output_buffer deflate_output_buffer;
+    deflate_output_buffer.data = (uint8_t *)image.alloc(image.allocator_context, image.buffer_size);
+    deflate_output_buffer.length = 0;
+    deflate_output_buffer.capacity = image.buffer_size;
+    deflate_output_buffer.write_function = write_function;
+    deflate_output_buffer.write_function_context = write_function_context;
+    ok_assert(deflate_output_buffer.data != NULL);
+    if (deflate_output_buffer.data == NULL) {
+        return false;
+    }
+    
+    // Create deflater
+    ok_deflate *deflate = ok_deflate_init((ok_deflate_params) {
+        .nowrap = image.apple_cgbi_format,
+        .alloc = image.alloc,
+        .free = image.free,
+        .allocator_context = image.allocator_context,
+        .write = ok_png_deflate_output_buffer_write,
+        .write_context = &deflate_output_buffer,
+    });
+    ok_assert(deflate != NULL);
+    if (deflate == NULL) {
+        return NULL;
+    }
 
     // Initialize CRC table
     uint32_t crc = 0;
@@ -563,13 +416,247 @@ bool ok_png_write(ok_png_write_function write_function, void *write_function_con
         }
     }
     
-    // Write IDAT chunk(s)
-    if (!ok_png_write_uncompressed_idat(write_function, write_function_context, image)) {
+    // Compress data, writing IDAT chunk(s) when deflate_output_buffer is full
+    bool success = true;
+    for (uint32_t y = 0; success && y < image.height; y++) {
+        const uint8_t filter = 0;
+        const uint8_t *src;
+        if (image.flip_y) {
+            src = image.data + (image.height - 1 - y) * image.data_stride;
+        } else {
+            src = image.data + y * image.data_stride;
+        }
+        success &= ok_deflate_data(deflate, &filter, 1, false);
+        success &= ok_deflate_data(deflate, src, bytes_per_row, y == image.height - 1);
+    }
+    ok_deflate_free(deflate);
+
+    // Write final IDAT chunk
+    if (success && deflate_output_buffer.length > 0) {
+        ok_write_chunk_start("IDAT", deflate_output_buffer.length, &crc);
+        ok_write(deflate_output_buffer.data, deflate_output_buffer.length, &crc);
+        ok_write_chunk_end(crc);
+    }
+    image.free(image.allocator_context, deflate_output_buffer.data);
+    if (!success) {
         return false;
     }
     
     // Write IEND chunk
     ok_write_chunk_start("IEND", 0, &crc);
     ok_write_chunk_end(crc);
+    return success;
+}
+
+// MARK: Adler
+
+static uint32_t ok_adler_init(void) {
+    return 1;
+}
+
+static uint32_t ok_adler_update(const uint32_t adler, const uint8_t *buffer, size_t length) {
+    static const uint32_t adler_base = 65521;
+    static const size_t adler_max_run_length = 5552;
+    
+    uint32_t adler_sum1 = adler & 0xffff;
+    uint32_t adler_sum2 = (adler >> 16) & 0xffff;
+    
+    if (length == 1) {
+        adler_sum1 += buffer[0];
+        if (adler_sum1 >= adler_base) {
+            adler_sum1 -= adler_base;
+        }
+        adler_sum2 += adler_sum1;
+        if (adler_sum2 >= adler_base) {
+            adler_sum2 -= adler_base;
+        }
+    } else {
+        for (size_t i = 0; i < length; i += adler_max_run_length) {
+            const size_t end = i + ok_min(length - i, adler_max_run_length);
+            for (size_t j = i; j < end; j++) {
+                adler_sum1 += buffer[j];
+                adler_sum2 += adler_sum1;
+            }
+            adler_sum1 %= adler_base;
+            adler_sum2 %= adler_base;
+        }
+    }
+    return (adler_sum2 << 16) | adler_sum1;
+}
+
+
+// MARK: Deflate
+
+#define OK_DEFLATE_BUFFER_LENGTH 0xffff
+#define OK_DEFLATE_BLOCK_TYPE_NO_COMPRESSION 0
+//#define OK_DEFLATE_BLOCK_TYPE_FIXED_HUFFMAN 1
+//#define OK_DEFLATE_BLOCK_TYPE_DYNAMIC_HUFFMAN 2
+
+struct ok_deflate {
+    ok_deflate_params params;
+    bool header_written;
+    uint32_t adler;
+    uint32_t bit_buffer;
+    uint8_t bit_buffer_length;
+    uint16_t buffer_length;
+    uint8_t buffer[OK_DEFLATE_BUFFER_LENGTH];
+};
+
+ok_deflate *ok_deflate_init(ok_deflate_params params) {
+#ifndef OK_NO_DEFAULT_ALLOCATOR
+    if (params.alloc == NULL && params.free == NULL) {
+        params.alloc = ok_stdlib_alloc;
+        params.free = ok_stdlib_free;
+    }
+#endif
+    bool has_allocator = params.alloc != NULL && params.free != NULL;
+    ok_assert(has_allocator);
+    if (!has_allocator) {
+        return NULL;
+    }
+    
+    bool has_write_function = params.write != NULL;
+    ok_assert(has_write_function);
+    if (!has_write_function) {
+        return NULL;
+    }
+
+    ok_deflate *deflate = params.alloc(params.allocator_context, sizeof(ok_deflate));
+    if (deflate) {
+        deflate->params = params;
+        deflate->header_written = false;
+        deflate->adler = ok_adler_init();
+        deflate->bit_buffer = 0;
+        deflate->bit_buffer_length = 0;
+        deflate->buffer_length = 0;
+    }
+    return deflate;
+}
+
+static bool ok_deflate_bit_buffer_flush(ok_deflate *deflate) {
+    while (deflate->bit_buffer_length >= 8) {
+        uint8_t v = deflate->bit_buffer & 0xff;
+        if (!deflate->params.write(deflate->params.write_context, &v, 1)) {
+            return false;
+        }
+        deflate->bit_buffer >>= 8;
+        deflate->bit_buffer_length -= 8;
+    }
     return true;
+}
+
+static bool ok_deflate_write_bits(ok_deflate *deflate, uint32_t value, uint8_t bits) {
+    ok_assert(deflate->bit_buffer_length + bits <= 32);
+    deflate->bit_buffer |= value << deflate->bit_buffer_length;
+    deflate->bit_buffer_length += bits;
+    return ok_deflate_bit_buffer_flush(deflate);
+}
+
+static bool ok_deflate_write_byte_align(ok_deflate *deflate) {
+    uint8_t b = deflate->bit_buffer_length & 7;
+    if (b == 0) {
+        return ok_deflate_bit_buffer_flush(deflate);
+    } else {
+        return ok_deflate_write_bits(deflate, 0, 8 - b);
+    }
+}
+
+static bool ok_deflate_write_stored_block(ok_deflate *deflate, const uint8_t *buffer, uint16_t buffer_length, bool is_final) {
+    ok_assert(buffer_length <= 0xffff);
+    const uint8_t block_length[4] = {
+        (buffer_length & 0xff), (buffer_length >> 8),
+        ((~buffer_length) & 0xff), ((~buffer_length) >> 8),
+    };
+    bool success = true;
+    success &= ok_deflate_write_bits(deflate, is_final ? 1 : 0, 1); // final block flag
+    success &= ok_deflate_write_bits(deflate, OK_DEFLATE_BLOCK_TYPE_NO_COMPRESSION, 2);
+    success &= ok_deflate_write_byte_align(deflate);
+    success &= deflate->params.write(deflate->params.write_context, block_length, sizeof(block_length));
+    success &= deflate->params.write(deflate->params.write_context, buffer, buffer_length);
+    return success;
+}
+
+bool ok_deflate_data(ok_deflate *deflate, const uint8_t *data, size_t length, bool is_final) {
+    do {
+        const uint8_t *current_buffer;
+        uint16_t current_buffer_length;
+        if (deflate->buffer_length == 0 && (length >= OK_DEFLATE_BUFFER_LENGTH || is_final)) {
+            // Deflate data directly without copying to buffer
+            current_buffer = data;
+            current_buffer_length = (uint16_t)ok_min(length, OK_DEFLATE_BUFFER_LENGTH);
+            data += current_buffer_length;
+            length -= current_buffer_length;
+        } else {
+            // Copy to buffer
+            if (length > 0) {
+                size_t copy_length = ok_min(length, sizeof(deflate->buffer) - deflate->buffer_length);
+                memcpy(deflate->buffer + deflate->buffer_length, data, copy_length);
+                deflate->buffer_length += copy_length;
+                data += copy_length;
+                length -= copy_length;
+            }
+            current_buffer = deflate->buffer;
+            current_buffer_length = deflate->buffer_length;
+        }
+        
+        const bool is_final_write = length == 0 && is_final;
+        if (current_buffer_length == OK_DEFLATE_BUFFER_LENGTH || is_final_write) {
+            // Write zlib header (RFC 1950)
+            if (!deflate->header_written && !deflate->params.nowrap) {
+                const uint16_t zlib_compression_info = 7; // 4 bits
+                const uint16_t zlib_compression_method = 8; // 4 bits
+                const uint16_t zlib_flag_compression_level = 0; // 2 bits
+                const uint16_t zlib_flag_dict = 0; // 1 bit
+                const uint16_t zlib_raw_header = ((zlib_compression_info << 12) |
+                                                  (zlib_compression_method << 8) |
+                                                  (zlib_flag_compression_level << 6) |
+                                                  (zlib_flag_dict << 5));
+                const uint16_t zlib_flag_check = 31 - (zlib_raw_header % 31); // 5 bits (ensure zlib_header is divisible by 31)
+                const uint16_t zlib_header = zlib_raw_header | zlib_flag_check;
+                const uint8_t header[2] = { (uint8_t)(zlib_header >> 8), (uint8_t)(zlib_header & 0xff) };
+                if (!deflate->params.write(deflate->params.write_context, header, sizeof(header))) {
+                    return false;
+                }
+                deflate->header_written = true;
+            }
+            
+            // Deflate
+            if (!ok_deflate_write_stored_block(deflate, current_buffer, current_buffer_length, is_final_write)) {
+                return false;
+            }
+            
+            // Update adler
+            if (!deflate->params.nowrap) {
+                deflate->adler = ok_adler_update(deflate->adler, current_buffer, current_buffer_length);
+            }
+            deflate->buffer_length = 0;
+            
+            // Write footer (RFC 1950) and reset
+            if (is_final_write) {
+                if (!ok_deflate_write_byte_align(deflate)) {
+                    return false;
+                }
+                if (!deflate->params.nowrap) {
+                    const uint8_t footer[4] = {
+                        (uint8_t)(deflate->adler >> 24), (uint8_t)(deflate->adler >> 16),
+                        (uint8_t)(deflate->adler >> 8), (uint8_t)(deflate->adler & 0xff)
+                    };
+                    if (!deflate->params.write(deflate->params.write_context, footer, sizeof(footer))) {
+                        return false;
+                    }
+                }
+                
+                // Reset
+                deflate->header_written = false;
+                deflate->adler = ok_adler_init();
+            }
+        }
+    } while (length > 0);
+    return true;
+}
+
+void ok_deflate_free(ok_deflate *deflate) {
+    if (deflate) {
+        deflate->params.free(deflate->params.allocator_context, deflate);
+    }
 }
