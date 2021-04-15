@@ -79,39 +79,51 @@ static void ok_crc_update(uint32_t *crc, const uint8_t *buffer, size_t length) {
     *crc = c ^ 0xffffffffL;
 }
 
-// MARK: Write helper macros
-
-// These macros require write_function and write_function_context be defined.
-// Each macro returns false on failure.
-
-#define ok_write(buffer, length, crc) \
-    if (!write_function(write_function_context, (buffer), (length))) return false; \
-    ok_crc_update(crc, (buffer), (length));
-
-#define ok_write_uint8(value, crc) {\
-    uint8_t _buffer[1] = { (uint8_t)(value) }; \
-    ok_write(_buffer, sizeof(_buffer), crc); \
-}
-
-#define ok_write_uint16(value, crc) {\
-    uint8_t _buffer[2] = { (uint8_t)((value) >> 8), (uint8_t)((value) & 0xff) }; \
-    ok_write(_buffer, sizeof(_buffer), crc); \
-}
-
-#define ok_write_uint32(value, crc) {\
-    uint8_t _buffer[4] = { (uint8_t)((value) >> 24), (uint8_t)((value) >> 16), (uint8_t)((value) >> 8), (uint8_t)((value) & 0xff) }; \
-    ok_write(_buffer, sizeof(_buffer), crc); \
-}
-
-#define ok_write_chunk_start(name, length, crc) \
-    ok_write_uint32(length, crc); \
-    *crc = 0; \
-    ok_write((const uint8_t *)(name), 4, crc);
-
-#define ok_write_chunk_end(crc) \
-    ok_write_uint32(crc, &crc);
-
 // MARK: PNG writer helper functions
+
+static inline void ok_uint16_to_bytes(uint16_t value, uint8_t bytes[2]) {
+    bytes[0] = value >> 8;
+    bytes[1] = value & 0xff;
+}
+
+static inline void ok_uint32_to_bytes(uint32_t value, uint8_t bytes[4]) {
+    bytes[0] = value >> 24;
+    bytes[1] = (value >> 16) & 0xff;
+    bytes[2] = (value >> 8) & 0xff;
+    bytes[3] = value & 0xff;
+}
+
+static bool ok_png_chunk_write(const char *name, const uint8_t *data, uint32_t length,
+                               ok_png_write_function write_function, void *write_function_context) {
+    ok_assert(name != NULL && strlen(name) == 4);
+    
+    uint32_t crc = 0;
+    
+    // Header (length, name)
+    uint8_t chunk_header[8];
+    ok_uint32_to_bytes(length, chunk_header);
+    chunk_header[4] = (uint8_t)name[0];
+    chunk_header[5] = (uint8_t)name[1];
+    chunk_header[6] = (uint8_t)name[2];
+    chunk_header[7] = (uint8_t)name[3];
+    if (!write_function(write_function_context, chunk_header, sizeof(chunk_header))) {
+        return false;
+    }
+    ok_crc_update(&crc, chunk_header + 4, 4);
+    
+    // Data
+    if (length > 0) {
+        if (!write_function(write_function_context, data, length)) {
+            return false;
+        }
+        ok_crc_update(&crc, data, length);
+    }
+    
+    // CRC
+    uint8_t chunk_footer[4];
+    ok_uint32_to_bytes(crc, chunk_footer);
+    return write_function(write_function_context, chunk_footer, sizeof(chunk_footer));
+}
 
 static uint8_t ok_color_type_channels(ok_png_write_color_type color_type) {
     switch (color_type) {
@@ -132,8 +144,8 @@ static uint8_t ok_color_type_channels(ok_png_write_color_type color_type) {
 
 typedef struct {
     uint8_t *data;
-    size_t length;
-    size_t capacity;
+    uint32_t length;
+    uint32_t capacity;
     
     ok_png_write_function write_function;
     void *write_function_context;
@@ -148,12 +160,8 @@ static bool ok_png_deflate_output_buffer_write(void *write_context, const uint8_
         data += copy_length;
         length -= copy_length;
         if (output_buffer->length == output_buffer->capacity) {
-            uint32_t crc = 0;
-            ok_png_write_function write_function = output_buffer->write_function;
-            void *write_function_context = output_buffer->write_function_context;
-            ok_write_chunk_start("IDAT", output_buffer->length, &crc);
-            ok_write(output_buffer->data, output_buffer->length, &crc);
-            ok_write_chunk_end(crc);
+            ok_png_chunk_write("IDAT", output_buffer->data, output_buffer->length,
+                               output_buffer->write_function, output_buffer->write_function_context);
             output_buffer->length = 0;
         }
     }
@@ -352,100 +360,101 @@ bool ok_png_write(ok_png_write_function write_function, void *write_function_con
         }
     }
     
-    // Create output buffer
-    ok_png_deflate_output_buffer deflate_output_buffer;
-    deflate_output_buffer.data = (uint8_t *)params.alloc(params.allocator_context, params.buffer_size);
-    deflate_output_buffer.length = 0;
-    deflate_output_buffer.capacity = params.buffer_size;
-    deflate_output_buffer.write_function = write_function;
-    deflate_output_buffer.write_function_context = write_function_context;
-    ok_assert(deflate_output_buffer.data != NULL);
-    if (deflate_output_buffer.data == NULL) {
-        return false;
-    }
-    
-    // Create deflater
-    ok_deflate *deflate = ok_deflate_init((ok_deflate_params) {
-        .nowrap = params.apple_cgbi_format,
-        .alloc = params.alloc,
-        .free = params.free,
-        .allocator_context = params.allocator_context,
-        .write = ok_png_deflate_output_buffer_write,
-        .write_context = &deflate_output_buffer,
-    });
-    ok_assert(deflate != NULL);
-    if (deflate == NULL) {
-        return NULL;
-    }
-
     // Initialize CRC table
-    uint32_t crc = 0;
     ok_crc_table_initialize();
 
     // Write PNG signature
     const uint8_t png_signature[8] = { 137, 80, 78, 71, 13, 10, 26, 10 };
-    ok_write(png_signature, sizeof(png_signature), &crc);
+    if (!write_function(write_function_context, png_signature, sizeof(png_signature))) {
+        return false;
+    }
     
     // Write CgBI chunk
     if (params.apple_cgbi_format) {
-        ok_write_chunk_start("CgBI", 4, &crc);
-        ok_write_uint32(0x50002002, &crc); // lower 16 bits are probably CGBitmapInfo mask
-        ok_write_chunk_end(crc);
+        const uint8_t cgbi_data[4] = { 0x50, 0x00, 0x20, 0x02 }; // lower 16 bits are probably CGBitmapInfo mask
+        if (!ok_png_chunk_write("CgBI", cgbi_data, sizeof(cgbi_data),write_function, write_function_context)) {
+            return false;
+        }
     }
     
     // Write IHDR chunk
-    ok_write_chunk_start("IHDR", 13, &crc);
-    ok_write_uint32(params.width, &crc);
-    ok_write_uint32(params.height, &crc);
-    ok_write_uint8(params.bit_depth, &crc);
-    ok_write_uint8(params.color_type, &crc);
-    ok_write_uint8(0, &crc); // compression method
-    ok_write_uint8(0, &crc); // filter method
-    ok_write_uint8(0, &crc); // interlace method
-    ok_write_chunk_end(crc);
+    uint8_t ihdr_data[13];
+    ok_uint32_to_bytes(params.width, ihdr_data + 0);
+    ok_uint32_to_bytes(params.height, ihdr_data + 4);
+    ihdr_data[8] = params.bit_depth;
+    ihdr_data[9] = (uint8_t)params.color_type;
+    ihdr_data[10] = 0; // compression method
+    ihdr_data[11] = 0; // filter method
+    ihdr_data[12] = 0; // interlace method
+    if (!ok_png_chunk_write("IHDR", ihdr_data, sizeof(ihdr_data), write_function, write_function_context)) {
+        return false;
+    }
     
     // Write additional chunks
     if (params.additional_chunks) {
         for (ok_png_write_chunk **chunk_ptr = params.additional_chunks; *chunk_ptr != NULL; chunk_ptr++) {
             ok_png_write_chunk *chunk = *chunk_ptr;
-            ok_write_chunk_start(chunk->name, chunk->length, &crc);
-            if (chunk->data && chunk->length > 0) {
-                ok_write(chunk->data, chunk->length, &crc);
+            if (!ok_png_chunk_write(chunk->name, chunk->data, chunk->length, write_function, write_function_context)) {
+                return false;
             }
-            ok_write_chunk_end(crc);
         }
     }
     
-    // Compress data, writing IDAT chunk(s) when deflate_output_buffer is full
-    bool success = true;
-    for (uint32_t y = 0; success && y < params.height; y++) {
-        const uint8_t filter = 0;
-        const uint8_t *src;
-        if (params.flip_y) {
-            src = params.data + (params.height - 1 - y) * params.data_stride;
-        } else {
-            src = params.data + y * params.data_stride;
+    // Write IDAT chunk(s)
+    {
+        // Create output buffer for deflater
+        ok_png_deflate_output_buffer deflate_output_buffer;
+        deflate_output_buffer.data = (uint8_t *)params.alloc(params.allocator_context, params.buffer_size);
+        deflate_output_buffer.length = 0;
+        deflate_output_buffer.capacity = params.buffer_size;
+        deflate_output_buffer.write_function = write_function;
+        deflate_output_buffer.write_function_context = write_function_context;
+        if (deflate_output_buffer.data == NULL) {
+            return false;
         }
-        success &= ok_deflate_data(deflate, &filter, 1, false);
-        success &= ok_deflate_data(deflate, src, bytes_per_row, y == params.height - 1);
-    }
-    ok_deflate_free(deflate);
-
-    // Write final IDAT chunk
-    if (success && deflate_output_buffer.length > 0) {
-        ok_write_chunk_start("IDAT", deflate_output_buffer.length, &crc);
-        ok_write(deflate_output_buffer.data, deflate_output_buffer.length, &crc);
-        ok_write_chunk_end(crc);
-    }
-    params.free(params.allocator_context, deflate_output_buffer.data);
-    if (!success) {
-        return false;
+        
+        // Create deflater
+        ok_deflate *deflate = ok_deflate_init((ok_deflate_params){
+            .nowrap = params.apple_cgbi_format,
+            .alloc = params.alloc,
+            .free = params.free,
+            .allocator_context = params.allocator_context,
+            .write = ok_png_deflate_output_buffer_write,
+            .write_context = &deflate_output_buffer,
+        });
+        if (deflate == NULL) {
+            params.free(params.allocator_context, deflate_output_buffer.data);
+            return false;
+        }
+       
+        // Deflate data, one row at a time. Write a IDAT chunk when deflate_output_buffer is full
+        bool idat_success = true;
+        for (uint32_t y = 0; idat_success && y < params.height; y++) {
+            const uint8_t filter = 0;
+            const uint8_t *src;
+            if (params.flip_y) {
+                src = params.data + (params.height - 1 - y) * params.data_stride;
+            } else {
+                src = params.data + y * params.data_stride;
+            }
+            idat_success &= ok_deflate_data(deflate, &filter, 1, false);
+            idat_success &= ok_deflate_data(deflate, src, bytes_per_row, y == params.height - 1);
+        }
+        ok_deflate_free(deflate);
+        
+        // Write final IDAT chunk
+        if (idat_success && deflate_output_buffer.length > 0) {
+            idat_success = ok_png_chunk_write("IDAT", deflate_output_buffer.data, deflate_output_buffer.length,
+                                              write_function, write_function_context);
+        }
+        params.free(params.allocator_context, deflate_output_buffer.data);
+        if (!idat_success) {
+            return false;
+        }
     }
     
     // Write IEND chunk
-    ok_write_chunk_start("IEND", 0, &crc);
-    ok_write_chunk_end(crc);
-    return success;
+    return ok_png_chunk_write("IEND", NULL, 0, write_function, write_function_context);
 }
 
 // MARK: Adler
@@ -613,8 +622,9 @@ bool ok_deflate_data(ok_deflate *deflate, const uint8_t *data, size_t length, bo
                                                   (zlib_flag_dict << 5));
                 const uint16_t zlib_flag_check = 31 - (zlib_raw_header % 31); // 5 bits (ensure zlib_header is divisible by 31)
                 const uint16_t zlib_header = zlib_raw_header | zlib_flag_check;
-                const uint8_t header[2] = { (uint8_t)(zlib_header >> 8), (uint8_t)(zlib_header & 0xff) };
-                if (!deflate->params.write(deflate->params.write_context, header, sizeof(header))) {
+                uint8_t zlib_header_buffer[2];
+                ok_uint16_to_bytes(zlib_header, zlib_header_buffer);
+                if (!deflate->params.write(deflate->params.write_context, zlib_header_buffer, sizeof(zlib_header_buffer))) {
                     return false;
                 }
                 deflate->header_written = true;
@@ -637,10 +647,8 @@ bool ok_deflate_data(ok_deflate *deflate, const uint8_t *data, size_t length, bo
                     return false;
                 }
                 if (!deflate->params.nowrap) {
-                    const uint8_t footer[4] = {
-                        (uint8_t)(deflate->adler >> 24), (uint8_t)(deflate->adler >> 16),
-                        (uint8_t)(deflate->adler >> 8), (uint8_t)(deflate->adler & 0xff)
-                    };
+                    uint8_t footer[4];
+                    ok_uint32_to_bytes(deflate->adler, footer);
                     if (!deflate->params.write(deflate->params.write_context, footer, sizeof(footer))) {
                         return false;
                     }
