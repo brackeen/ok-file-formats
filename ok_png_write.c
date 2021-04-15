@@ -222,6 +222,10 @@ bool ok_png_write(ok_png_write_function write_function, void *write_function_con
     }
     
     // Validate additional chunks
+    bool custom_cgbi_chunk = false;
+    bool custom_ihdr_chunk = false;
+    bool custom_idat_chunk = false;
+    bool custom_iend_chunk = false;
     size_t palette_color_count = 0;
     if (params.additional_chunks) {
         bool trns_found = false;
@@ -249,15 +253,11 @@ bool ok_png_write(ok_png_write_function write_function, void *write_function_con
                 return false;
             }
             
-            // Check if is existing chunk
-            bool is_existing_chunk = (strcmp("IHDR", chunk->name) == 0 ||
-                                      strcmp("IDAT", chunk->name) == 0 ||
-                                      strcmp("IEND", chunk->name) == 0 ||
-                                      strcmp("CgBI", chunk->name) == 0);
-            ok_assert(!is_existing_chunk);
-            if (is_existing_chunk) {
-                return false;
-            }
+            // Allow custom versions of all primary chunks (don't validate)
+            custom_ihdr_chunk = strcmp("IHDR", chunk->name) == 0;
+            custom_idat_chunk = strcmp("IDAT", chunk->name) == 0;
+            custom_iend_chunk = strcmp("IEND", chunk->name) == 0;
+            custom_cgbi_chunk = strcmp("CgBI", chunk->name) == 0;
             
             // Validate PLTE chunk
             if (strcmp("PLTE", chunk->name) == 0) {
@@ -370,7 +370,7 @@ bool ok_png_write(ok_png_write_function write_function, void *write_function_con
     }
     
     // Write CgBI chunk
-    if (params.apple_cgbi_format) {
+    if (params.apple_cgbi_format && !custom_cgbi_chunk) {
         const uint8_t cgbi_data[4] = { 0x50, 0x00, 0x20, 0x02 }; // lower 16 bits are probably CGBitmapInfo mask
         if (!ok_png_chunk_write("CgBI", cgbi_data, sizeof(cgbi_data),write_function, write_function_context)) {
             return false;
@@ -378,16 +378,18 @@ bool ok_png_write(ok_png_write_function write_function, void *write_function_con
     }
     
     // Write IHDR chunk
-    uint8_t ihdr_data[13];
-    ok_uint32_to_bytes(params.width, ihdr_data + 0);
-    ok_uint32_to_bytes(params.height, ihdr_data + 4);
-    ihdr_data[8] = params.bit_depth;
-    ihdr_data[9] = (uint8_t)params.color_type;
-    ihdr_data[10] = 0; // compression method
-    ihdr_data[11] = 0; // filter method
-    ihdr_data[12] = 0; // interlace method
-    if (!ok_png_chunk_write("IHDR", ihdr_data, sizeof(ihdr_data), write_function, write_function_context)) {
-        return false;
+    if (!custom_ihdr_chunk) {
+        uint8_t ihdr_data[13];
+        ok_uint32_to_bytes(params.width, ihdr_data + 0);
+        ok_uint32_to_bytes(params.height, ihdr_data + 4);
+        ihdr_data[8] = params.bit_depth;
+        ihdr_data[9] = (uint8_t)params.color_type;
+        ihdr_data[10] = 0; // compression method
+        ihdr_data[11] = 0; // filter method
+        ihdr_data[12] = 0; // interlace method
+        if (!ok_png_chunk_write("IHDR", ihdr_data, sizeof(ihdr_data), write_function, write_function_context)) {
+            return false;
+        }
     }
     
     // Write additional chunks
@@ -401,7 +403,7 @@ bool ok_png_write(ok_png_write_function write_function, void *write_function_con
     }
     
     // Write IDAT chunk(s)
-    {
+    if (!custom_idat_chunk) {
         // Create output buffer for deflater
         ok_png_deflate_output_buffer deflate_output_buffer;
         deflate_output_buffer.data = (uint8_t *)params.alloc(params.allocator_context, params.buffer_size);
@@ -415,7 +417,7 @@ bool ok_png_write(ok_png_write_function write_function, void *write_function_con
         
         // Create deflater
         ok_deflate *deflate = ok_deflate_init((ok_deflate_params){
-            .nowrap = params.apple_cgbi_format,
+            .nowrap = params.apple_cgbi_format || custom_cgbi_chunk,
             .alloc = params.alloc,
             .free = params.free,
             .allocator_context = params.allocator_context,
@@ -454,7 +456,7 @@ bool ok_png_write(ok_png_write_function write_function, void *write_function_con
     }
     
     // Write IEND chunk
-    return ok_png_chunk_write("IEND", NULL, 0, write_function, write_function_context);
+    return custom_iend_chunk || ok_png_chunk_write("IEND", NULL, 0, write_function, write_function_context);
 }
 
 // MARK: Adler
