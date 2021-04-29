@@ -1,32 +1,17 @@
-/*
- ok-file-formats
- https://github.com/brackeen/ok-file-formats
- Copyright (c) 2014-2019 David Brackeen
-
- Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
- associated documentation files (the "Software"), to deal in the Software without restriction,
- including without limitation the rights to use, copy, modify, merge, publish, distribute,
- sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
- furnished to do so, subject to the following conditions:
-
- The above copyright notice and this permission notice shall be included in all copies or
- substantial portions of the Software.
-
- THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
- NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
- DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT
- OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
- */
+// ok-file-formats
+// https://github.com/brackeen/ok-file-formats
 
 #include "ok_csv.h"
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 
-#ifndef min
-#define min(a, b) ((a) < (b) ? (a) : (b))
+#ifndef ok_assert
+#include <assert.h>
+#define ok_assert(expression) assert(expression);
 #endif
+
+#define ok_min(a, b) ((a) < (b) ? (a) : (b))
 
 // MARK: Circular buffer
 
@@ -53,13 +38,12 @@ static bool ok_csv_circular_buffer_init(ok_csv_circular_buffer *buffer, size_t c
 // Number of writable elements until edge of buffer
 static size_t ok_csv_circular_buffer_writable(ok_csv_circular_buffer *buffer) {
     size_t total_writable = buffer->capacity - buffer->length;
-    return min(total_writable,
-               buffer->capacity - ((buffer->start + buffer->length) % buffer->capacity));
+    return ok_min(total_writable, buffer->capacity - ((buffer->start + buffer->length) % buffer->capacity));
 }
 
 // Number of readable elements until edge of buffer
 static size_t ok_csv_circular_buffer_readable(ok_csv_circular_buffer *buffer) {
-    return min(buffer->length, buffer->capacity - buffer->start);
+    return ok_min(buffer->length, buffer->capacity - buffer->start);
 }
 
 // Doubles the size of the buffer
@@ -68,46 +52,43 @@ static bool ok_csv_circular_buffer_expand(ok_csv_circular_buffer *buffer) {
     uint8_t *new_data = malloc(new_capacity);
     if (!new_data) {
         return false;
-    } else {
-        const size_t readable1 = ok_csv_circular_buffer_readable(buffer);
-        const size_t readable2 = buffer->length - readable1;
-        memcpy(new_data, buffer->data + buffer->start, readable1);
-        memcpy(new_data + readable1, buffer->data, readable2);
-        free(buffer->data);
-        buffer->data = new_data;
-        buffer->capacity = new_capacity;
-        buffer->start = 0;
-        return true;
     }
+    const size_t readable1 = ok_csv_circular_buffer_readable(buffer);
+    const size_t readable2 = buffer->length - readable1;
+    memcpy(new_data, buffer->data + buffer->start, readable1);
+    memcpy(new_data + readable1, buffer->data, readable2);
+    free(buffer->data);
+    buffer->data = new_data;
+    buffer->capacity = new_capacity;
+    buffer->start = 0;
+    return true;
 }
 
-static bool ok_csv_circular_buffer_read(ok_csv_circular_buffer *buffer, uint8_t *dst,
-                                        size_t length) {
+static bool ok_csv_circular_buffer_read(ok_csv_circular_buffer *buffer, uint8_t *dst, size_t length) {
+    ok_assert(length <= buffer->length);
     if (length > buffer->length) {
         return false;
-    } else {
-        const size_t readable1 = ok_csv_circular_buffer_readable(buffer);
-        if (length <= readable1) {
-            memcpy(dst, buffer->data + buffer->start, length);
-        } else {
-            const size_t readable2 = buffer->length - readable1;
-            memcpy(dst, buffer->data + buffer->start, readable1);
-            memcpy(dst + readable1, buffer->data, readable2);
-        }
-        buffer->start = (buffer->start + length) % buffer->capacity;
-        buffer->length -= length;
-        return true;
     }
+    const size_t readable_length = ok_csv_circular_buffer_readable(buffer);
+    if (length <= readable_length) {
+        memcpy(dst, buffer->data + buffer->start, length);
+    } else {
+        memcpy(dst, buffer->data + buffer->start, readable_length);
+        memcpy(dst + readable_length, buffer->data, length - readable_length);
+    }
+    buffer->start = (buffer->start + length) % buffer->capacity;
+    buffer->length -= length;
+    return true;
 }
 
 static bool ok_csv_circular_buffer_skip(ok_csv_circular_buffer *buffer, size_t length) {
+    ok_assert(length <= buffer->length);
     if (length > buffer->length) {
         return false;
-    } else {
-        buffer->start = (buffer->start + length) % buffer->capacity;
-        buffer->length -= length;
-        return true;
     }
+    buffer->start = (buffer->start + length) % buffer->capacity;
+    buffer->length -= length;
+    return true;
 }
 
 // MARK: CSV Helper functions
