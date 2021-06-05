@@ -713,7 +713,7 @@ static void ok_wav_decode_ms_adpcm_data(ok_wav_decoder *decoder) {
     const bool is_le = wav->little_endian;
 
     // Allocate buffers
-    const uint64_t output_frames_max = (wav->num_frames + 1) & ~1u;
+    const uint64_t output_frames_max = wav->num_frames + 1;
     const uint8_t output_bit_depth = 16;
     channel_states = ok_malloc(num_channels * sizeof(struct ok_wav_ms_adpcm_state));
     if (!channel_states) {
