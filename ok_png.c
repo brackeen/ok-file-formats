@@ -941,6 +941,10 @@ static void ok_png_decode2(ok_png_decoder *decoder) {
             return;
         }
         if (chunk_type == OK_PNG_CHUNK_IHDR) {
+            if (hdr_found) {
+                ok_png_error(png, OK_PNG_ERROR_INVALID, "Multiple IHDR chunks not allowed");
+                return;
+            }
             hdr_found = true;
             success = ok_png_read_header(decoder, chunk_length);
             if (success && info_only) {
