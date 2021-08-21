@@ -1896,25 +1896,25 @@ static void ok_jpg_decode2(ok_jpg_decoder *decoder) {
 
     while (!decoder->eoi_found) {
         // Read marker
-        uint8_t buffer[2];
         int marker;
         if (decoder->next_marker != 0) {
             marker = decoder->next_marker;
             decoder->next_marker = 0;
         } else {
-            if (!ok_read(decoder, buffer, 2)) {
-                return;
-            }
-            if (buffer[0] == 0xFF) {
-                marker = buffer[1];
-            } else if (buffer[0] == 0x00 && buffer[1] == 0xFF) {
-                if (!ok_read(decoder, buffer, 1)) {
+            while (true) {
+                uint8_t b;
+                if (!ok_read(decoder, &b, 1)) {
                     return;
                 }
-                marker = buffer[0];
-            } else {
-                ok_jpg_error(jpg, OK_JPG_ERROR_INVALID, "Invalid JPEG marker");
-                return;
+                if (b == 0xFF) {
+                    if (!ok_read(decoder, &b, 1)) {
+                        return;
+                    }
+                    if (b != 0 && b != 0xFF) {
+                        marker = b;
+                        break;
+                    }
+                }
             }
         }
 
