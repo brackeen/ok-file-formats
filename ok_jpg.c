@@ -1959,7 +1959,12 @@ static void ok_jpg_decode2(ok_jpg_decoder *decoder) {
             success = ok_jpg_read_dri(decoder);
         } else if (marker == 0xE1) {
             // APP1 - EXIF metadata
-            success = ok_jpg_read_exif(decoder);
+            // (Expect to find before allocation in SOF)
+            if (decoder->sof_found) {
+                success = ok_jpg_skip_segment(decoder);
+            } else {
+                success = ok_jpg_read_exif(decoder);
+            }
         } else if ((marker >= 0xE0 && marker <= 0xEF) || marker == 0xFE) {
             // APP or Comment
             success = ok_jpg_skip_segment(decoder);
