@@ -4,8 +4,7 @@ The `ok_png`, `ok_jpg`, and `ok_wav` decoders are tested against the output of o
 
 On macOS, if you have [Homebrew](http://brew.sh/) installed:
 
-    brew install imagemagick
-    brew install sox --with-libsndfile
+    brew install imagemagick sox
 
 ## PNG
 
@@ -21,8 +20,7 @@ The JPEG results will vary based on what version of the IJG library ImageMagick 
 
 ## Test on macOS and Linux
 
-    mkdir build && cd build
-    cmake .. && cmake --build . && ctest --verbose
+    cmake -B build && cmake --build build && ctest --verbose --test-dir build
 
 ## Test on Windows using PowerShell
 
