@@ -147,7 +147,7 @@ static int test_image(const char *output_dir, ok_png_write_params params, bool v
 #if defined(__APPLE__) && TARGET_OS_OSX
     if (!params.apple_cgbi_format) {
         char command[4096];
-        snprintf(command, sizeof(command), "convert %s /dev/null", path);
+        snprintf(command, sizeof(command), "magick %s /dev/null", path);
         success = (system(command) == 0);
         if (!success) {
             printf("Error checking via convert command\n");
