@@ -52,7 +52,7 @@ static bool test_wav(const char *path, const char *container_type, const char *f
     bool success = false;
 
     // Load ok_wav
-    sprintf(src_filename, "sound-%s-%dch", format, channels);
+    snprintf(src_filename, sizeof(src_filename), "sound-%s-%dch", format, channels);
     char *src_path = get_full_path(path, src_filename, container_type);
     FILE *file = fopen(src_path, "rb");
     if (!file) {
