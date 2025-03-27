@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.3)
+cmake_minimum_required(VERSION 3.20)
 
 project(OK_FILE_FORMATS_TESTS C)
 
@@ -88,10 +88,13 @@ set(FUZZING_JPG_LIST "jpg-gray" "jpeg444" "LEVEL76" "65500w" "park" "orientation
 foreach(jpg_file ${test_jpg_files})
     get_filename_component(file_name ${jpg_file} NAME_WE)
     set(gen_file "${CMAKE_CURRENT_BINARY_DIR}/gen/${file_name}.rgba")
+
+    # Disable fancy upsampling because it uses a different upsampling method that ok_jpg.
+    # See also OK_JPG_IDCT_UPSAMPLING=0 below.
     add_custom_command(
         OUTPUT ${gen_file}
         DEPENDS ${jpg_file}
-        COMMAND magick ${jpg_file} -auto-orient ${gen_file}
+        COMMAND magick -define jpeg:fancy-upsampling=off ${jpg_file} -auto-orient ${gen_file}
         COMMENT "Converting ${file_name}.jpg"
         VERBATIM
     )
@@ -130,6 +133,10 @@ elseif (CMAKE_C_COMPILER_ID MATCHES "GNU")
 elseif (CMAKE_C_COMPILER_ID MATCHES "MSVC")
     set_target_properties(ok-file-formats-test PROPERTIES COMPILE_FLAGS "/Wall ${TREAT_WARNINGS_AS_ERRORS_FLAG}")
 endif()
+
+# Disable ok_jpg's IDCT upsampling because it uses a different upsampling method that libjpeg-turbo.
+# See also "jpeg:fancy-upsampling=off" above.
+target_compile_definitions(ok-file-formats-test PUBLIC OK_JPG_IDCT_UPSAMPLING=0)
 
 # CTest setup, using valgrind if found
 enable_testing()

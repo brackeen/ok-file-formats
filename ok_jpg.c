@@ -1,7 +1,7 @@
 /*
  ok-file-formats
  https://github.com/brackeen/ok-file-formats
- Copyright (c) 2014-2020 David Brackeen
+ Copyright (c) 2014-2024 David Brackeen
 
  Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
  associated documentation files (the "Software"), to deal in the Software without restriction,
@@ -47,6 +47,15 @@
 #define MAX_COMPONENTS 3
 #define HUFFMAN_LOOKUP_SIZE_BITS 10
 #define HUFFMAN_LOOKUP_SIZE (1 << HUFFMAN_LOOKUP_SIZE_BITS)
+
+#if !defined(OK_JPG_IDCT_UPSAMPLING)
+// By default, use IDCT upsampling, similar to libjpeg-8. This upsampling method is different than
+// libjpeg-62 and libjpeg-turbo. For tests, the user is likely using libjpeg-turbo, so this
+// value is set to zero for tests.
+// Another solution would be to match libjpeg-turbo's behavior, but that would require some
+// significant refactoring (keeping entire rows of data in memory before color conversion).
+#define OK_JPG_IDCT_UPSAMPLING 1
+#endif
 
 #ifndef OK_NO_DEFAULT_ALLOCATOR
 
@@ -674,6 +683,8 @@ static void ok_jpg_convert_data_unit(ok_jpg_decoder *decoder, int data_unit_x, i
     q2 = t0 + t2 + v5 * (c1 + c3 - c5 + c7); \
 } while (0)
 
+#if OK_JPG_IDCT_UPSAMPLING
+
 #define ok_jpg_idct_1d_16(v0, v1, v2, v3, v4, v5, v6, v7) do { \
     static const int c1 = 5765;  /* cos( 1*pi/32) * sqrt(2) * (1 << 12) */ \
     static const int c2 = 5681;  /* cos( 2*pi/32) * sqrt(2) * (1 << 12) */ \
@@ -739,6 +750,8 @@ static void ok_jpg_convert_data_unit(ok_jpg_decoder *decoder, int data_unit_x, i
     q3 = t0 + v3 * (-c11 + c7) + v5 * (-c3 + c7) + v7 * (c15 - c7); \
     q6 = t0 + t2 + v1 * (c13 - c7) + v5 * (c1 - c5); \
 } while (0)
+
+#endif
 
 // Output is scaled by (1 << 12) * sqrt(2) / (1 << out_shift)
 static inline void ok_jpg_idct_1d_col_8(const int16_t *in, int *out) {
@@ -808,6 +821,7 @@ static inline void ok_jpg_idct_1d_col_16(const int16_t *in, int *out) {
             out[14 * 8] = t0;
             out[15 * 8] = t0;
         } else {
+#if OK_JPG_IDCT_UPSAMPLING
             ok_jpg_idct_1d_16(in[0], in[1], in[2], in[3], in[4], in[5], in[6], in[7]);
             out[ 0 * 8] = (p0 + q0) >> out_shift;
             out[ 1 * 8] = (p1 + q1) >> out_shift;
@@ -825,6 +839,34 @@ static inline void ok_jpg_idct_1d_col_16(const int16_t *in, int *out) {
             out[13 * 8] = (p2 - q2) >> out_shift;
             out[14 * 8] = (p1 - q1) >> out_shift;
             out[15 * 8] = (p0 - q0) >> out_shift;
+#else
+            ok_jpg_idct_1d_8(in[0], in[1], in[2], in[3], in[4], in[5], in[6], in[7]);
+            p4 = (p0 + q0) >> out_shift;
+            p5 = (p1 + q1) >> out_shift;
+            p6 = (p2 + q2) >> out_shift;
+            p7 = (p3 + q3) >> out_shift;
+            q4 = (p3 - q3) >> out_shift;
+            q5 = (p2 - q2) >> out_shift;
+            q6 = (p1 - q1) >> out_shift;
+            q7 = (p0 - q0) >> out_shift;
+
+            out[ 0 * 8] = p4;
+            out[ 1 * 8] = p4;
+            out[ 2 * 8] = p5;
+            out[ 3 * 8] = p5;
+            out[ 4 * 8] = p6;
+            out[ 5 * 8] = p6;
+            out[ 6 * 8] = p7;
+            out[ 7 * 8] = p7;
+            out[ 8 * 8] = q4;
+            out[ 9 * 8] = q4;
+            out[10 * 8] = q5;
+            out[11 * 8] = q5;
+            out[12 * 8] = q6;
+            out[13 * 8] = q6;
+            out[14 * 8] = q7;
+            out[15 * 8] = q7;
+#endif
         }
 
         in += 8;
@@ -879,6 +921,7 @@ static inline void ok_jpg_idct_1d_row_16(int h, const int *in, uint8_t *out) {
             t0 = (in[0] + offset) >> (out_shift - 12);
             memset(out, ok_jpg_clip_uint8(t0 + 128), 16);
         } else {
+#if OK_JPG_IDCT_UPSAMPLING
             ok_jpg_idct_1d_16(in[0], in[1], in[2], in[3], in[4], in[5], in[6], in[7]);
             out[0]  = ok_jpg_clip_uint8(((p0 + q0) >> out_shift) + 128);
             out[1]  = ok_jpg_clip_uint8(((p1 + q1) >> out_shift) + 128);
@@ -896,6 +939,34 @@ static inline void ok_jpg_idct_1d_row_16(int h, const int *in, uint8_t *out) {
             out[13] = ok_jpg_clip_uint8(((p2 - q2) >> out_shift) + 128);
             out[14] = ok_jpg_clip_uint8(((p1 - q1) >> out_shift) + 128);
             out[15] = ok_jpg_clip_uint8(((p0 - q0) >> out_shift) + 128);
+#else
+            ok_jpg_idct_1d_8(in[0], in[1], in[2], in[3], in[4], in[5], in[6], in[7]);
+            p4 = ok_jpg_clip_uint8(((p0 + q0) >> out_shift) + 128);
+            p5 = ok_jpg_clip_uint8(((p1 + q1) >> out_shift) + 128);
+            p6 = ok_jpg_clip_uint8(((p2 + q2) >> out_shift) + 128);
+            p7 = ok_jpg_clip_uint8(((p3 + q3) >> out_shift) + 128);
+            q4 = ok_jpg_clip_uint8(((p3 - q3) >> out_shift) + 128);
+            q5 = ok_jpg_clip_uint8(((p2 - q2) >> out_shift) + 128);
+            q6 = ok_jpg_clip_uint8(((p1 - q1) >> out_shift) + 128);
+            q7 = ok_jpg_clip_uint8(((p0 - q0) >> out_shift) + 128);
+
+            out[ 0] = (uint8_t)p4;
+            out[ 1] = (uint8_t)p4;
+            out[ 2] = (uint8_t)p5;
+            out[ 3] = (uint8_t)p5;
+            out[ 4] = (uint8_t)p6;
+            out[ 5] = (uint8_t)p6;
+            out[ 6] = (uint8_t)p7;
+            out[ 7] = (uint8_t)p7;
+            out[ 8] = (uint8_t)q4;
+            out[ 9] = (uint8_t)q4;
+            out[10] = (uint8_t)q5;
+            out[11] = (uint8_t)q5;
+            out[12] = (uint8_t)q6;
+            out[13] = (uint8_t)q6;
+            out[14] = (uint8_t)q7;
+            out[15] = (uint8_t)q7;
+#endif
         }
         in += 8;
         out += C_WIDTH;
