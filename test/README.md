@@ -32,25 +32,26 @@ The JPEG results will vary based on what version of the IJG library ImageMagick 
 
 ## Test with a fuzzer
 
-American Fuzzy Lop can be used for fuzz testing.
+American Fuzzy Lop++ can be used for fuzz testing.
 
-Install American Fuzzy Lop on macOS:
+Install American Fuzzy Lop++ on macOS:
 
-    brew install afl-fuzz
+    brew install afl++
 
-Then build the test as usual, which builds `ok-file-formats-fuzzing` and generates some test input files:
+Then build `ok-file-formats-fuzz-test`:
 
-    mkdir build && cd build
-    cmake .. && cmake --build .
+    cmake -B build -DFUZZ_TEST=ON && cmake --build build
 
-Optionally, the `ok-file-formats-fuzzing` binary can be built with Address Sanitizer by setting `FUZZ_WITH_ASAN` to `ON`. This is slow, however. (Thanks to [WayneDevMaze](https://github.com/WayneDevMaze) for the idea to fuzz with Address Sanitizer.)
+Optionally, enable Address Sanitizer (warning, this is slow):
+
+    cmake -B build -DFUZZ_TEST=ON -DFUZZ_WITH_ASAN=ON && cmake --build build
 
 Then run one of these commands:
 
-    afl-fuzz -i gen/fuzzing/input/wav -o gen/fuzzing/afl_results/wav ./ok-file-formats-fuzzing --wav
-    afl-fuzz -i gen/fuzzing/input/caf -o gen/fuzzing/afl_results/caf ./ok-file-formats-fuzzing --caf
-    afl-fuzz -t 1000 -x ../png.dict -i gen/fuzzing/input/png -o gen/fuzzing/afl_results/png ./ok-file-formats-fuzzing --png
-    afl-fuzz -t 1000 -x ../jpg.dict -i gen/fuzzing/input/jpg -o gen/fuzzing/afl_results/jpg ./ok-file-formats-fuzzing --jpg
+    afl-fuzz -i build/gen/fuzzing/input/wav -o build/gen/fuzzing/afl_results/wav ./build/ok-file-formats-fuzz-test --wav
+    afl-fuzz -i build/gen/fuzzing/input/caf -o build/gen/fuzzing/afl_results/caf ./build/ok-file-formats-fuzz-test --caf
+    afl-fuzz -t 1000 -x png.dict -i build/gen/fuzzing/input/png -o build/gen/fuzzing/afl_results/png ./build/ok-file-formats-fuzz-test --png
+    afl-fuzz -t 1000 -x jpg.dict -i build/gen/fuzzing/input/jpg -o build/gen/fuzzing/afl_results/jpg ./build/ok-file-formats-fuzz-test --jpg
 
 Fuzzing will take hours or even days to complete, depending on the input. `afl-fuzz` runs on one core, so if you have a multi-core machine you can run multiple tests at once.
 
