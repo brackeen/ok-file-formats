@@ -163,5 +163,21 @@ int wav_test(const char *path, bool verbose) {
     if (verbose) {
         printf("Duration: %f seconds\n", elapsedTime);
     }
+
+#if 0
+    char *test_path = append_path(path, "../../wav/issue-21.wav");
+    FILE *file = fopen(test_path, "rb");
+    if (!file) {
+        printf("Not found: %s\n", test_path);
+    } else {
+        printf("Testing %s\n", test_path);
+        ok_wav wav = ok_wav_read(file, OK_WAV_ENDIAN_NO_CONVERSION);
+        fclose(file);
+        free(wav.data);
+    }
+    free(test_path);
+
+#endif
+
     return num_failures;
 }
