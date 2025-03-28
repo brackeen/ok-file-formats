@@ -4,10 +4,6 @@ set(WAV_FUZZING_OUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/gen/fuzzing/input/wav")
 set(CAF_FUZZING_OUT_DIR "${CMAKE_CURRENT_BINARY_DIR}/gen/fuzzing/input/caf")
 
 find_program(AFCONVERT_COMMAND afconvert)
-find_program(SOX_COMMAND sox)
-if (NOT SOX_COMMAND)
-    message(FATAL_ERROR "SoX required. See http://sox.sourceforge.net/")
-endif()
 
 if (FUZZING_COMPILER)
     # For the fuzzer, use short (32 frames) silent files
@@ -19,13 +15,13 @@ if (FUZZING_COMPILER)
     set(WAV_FUZZING_IN_FILES "${WAV_OUT_DIR}/temp_silence.wav" "${WAV_OUT_DIR}/temp_silence2.wav")
     add_custom_command(
         OUTPUT ${WAV_OUT_DIR}/temp_silence.wav
-        COMMAND sox -n -r 44100 --bits 16 -c 1 ${WAV_OUT_DIR}/temp_silence.wav trim 0s 32s
+        COMMAND ${SOX_COMMAND} -n -r 44100 --bits 16 -c 1 ${WAV_OUT_DIR}/temp_silence.wav trim 0s 32s
         COMMENT "Creating for fuzzing: temp_silence.wav"
         VERBATIM
     )
     add_custom_command(
         OUTPUT ${WAV_OUT_DIR}/temp_silence2.wav
-        COMMAND sox -n -r 44100 --bits 16 -c 2 ${WAV_OUT_DIR}/temp_silence2.wav trim 0s 32s
+        COMMAND ${SOX_COMMAND} -n -r 44100 --bits 16 -c 2 ${WAV_OUT_DIR}/temp_silence2.wav trim 0s 32s
         COMMENT "Creating for fuzzing: temp_silence2.wav"
         VERBATIM
     )
@@ -115,7 +111,7 @@ foreach(WAV_IN_FILE ${WAV_IN_FILES})
                 add_custom_command(
                     OUTPUT ${WAV_OUT_DIR}/${RAW_FILE_NAME}
                     DEPENDS ${WAV_OUT_DIR}/${CAF_FILE_NAME}
-                    COMMAND sox ${WAV_OUT_DIR}/${CAF_FILE_NAME} ${WAV_OUT_DIR}/${RAW_FILE_NAME}
+                    COMMAND ${SOX_COMMAND} ${WAV_OUT_DIR}/${CAF_FILE_NAME} ${WAV_OUT_DIR}/${RAW_FILE_NAME}
                     COMMENT "Creating ${RAW_FILE_NAME}"
                     VERBATIM
                 )
@@ -124,7 +120,7 @@ foreach(WAV_IN_FILE ${WAV_IN_FILES})
                     OUTPUT ${WAV_OUT_DIR}/${RAW_FILE_NAME}
                     DEPENDS ${WAV_OUT_DIR}/${CAF_FILE_NAME}
                     COMMAND afconvert -f WAVE -c ${WAV_CHANNELS} -d LEI16 ${WAV_OUT_DIR}/${CAF_FILE_NAME} ${WAV_OUT_DIR}/temp.wav
-                    COMMAND sox ${WAV_OUT_DIR}/temp.wav --endian ${WAV_SYSTEM_ENDIAN} ${WAV_OUT_DIR}/${RAW_FILE_NAME}
+                    COMMAND ${SOX_COMMAND} ${WAV_OUT_DIR}/temp.wav --endian ${WAV_SYSTEM_ENDIAN} ${WAV_OUT_DIR}/${RAW_FILE_NAME}
                     COMMENT "Creating ${RAW_FILE_NAME}"
                     VERBATIM
                 )
@@ -166,7 +162,7 @@ foreach(WAV_IN_FILE ${WAV_IN_FILES})
         add_custom_command(
             OUTPUT ${WAV_OUT_DIR}/${WAV_FILE_NAME}
             DEPENDS ${WAV_IN_FILE}
-            COMMAND sox ${WAV_IN_FILE} ${ENCODE_PARAMS} --channels ${WAV_CHANNELS} ${WAV_OUT_DIR}/${WAV_FILE_NAME}
+            COMMAND ${SOX_COMMAND} ${WAV_IN_FILE} ${ENCODE_PARAMS} --channels ${WAV_CHANNELS} ${WAV_OUT_DIR}/${WAV_FILE_NAME}
             COMMENT "Creating ${WAV_FILE_NAME}"
             VERBATIM
         )
@@ -177,7 +173,7 @@ foreach(WAV_IN_FILE ${WAV_IN_FILES})
             add_custom_command(
                 OUTPUT ${WAV_FUZZING_OUT_DIR}/${WAV_FILE_NAME}
                 DEPENDS ${WAV_FUZZING_IN_FILE}
-                COMMAND sox ${WAV_FUZZING_IN_FILE} ${ENCODE_PARAMS} --channels ${WAV_CHANNELS} ${WAV_FUZZING_OUT_DIR}/${WAV_FILE_NAME}
+                COMMAND ${SOX_COMMAND} ${WAV_FUZZING_IN_FILE} ${ENCODE_PARAMS} --channels ${WAV_CHANNELS} ${WAV_FUZZING_OUT_DIR}/${WAV_FILE_NAME}
                 COMMENT "Creating ${WAV_FILE_NAME} [for fuzzing]"
                 VERBATIM
             )
@@ -197,7 +193,7 @@ foreach(WAV_IN_FILE ${WAV_IN_FILES})
         add_custom_command(
             OUTPUT ${WAV_OUT_DIR}/${RAW_FILE_NAME}
             DEPENDS ${WAV_OUT_DIR}/${WAV_FILE_NAME}
-            COMMAND sox ${WAV_OUT_DIR}/${WAV_FILE_NAME} ${DECODE_PARAMS} --channels ${WAV_CHANNELS} ${WAV_OUT_DIR}/${RAW_FILE_NAME} ${TRIM_PARAM}
+            COMMAND ${SOX_COMMAND} ${WAV_OUT_DIR}/${WAV_FILE_NAME} ${DECODE_PARAMS} --channels ${WAV_CHANNELS} ${WAV_OUT_DIR}/${RAW_FILE_NAME} ${TRIM_PARAM}
             COMMENT "Creating ${RAW_FILE_NAME}"
             VERBATIM
         )
@@ -213,7 +209,7 @@ foreach(WAV_IN_FILE ${WAV_IN_FILES})
         add_custom_command(
             OUTPUT ${WAV_OUT_DIR}/${WAV_FILE_NAME}
             DEPENDS ${WAV_IN_FILE}
-            COMMAND sox ${WAV_IN_FILE} ${ENCODE_PARAMS} --channels ${WAV_CHANNELS} ${WAV_OUT_DIR}/${WAV_FILE_NAME}
+            COMMAND ${SOX_COMMAND} ${WAV_IN_FILE} ${ENCODE_PARAMS} --channels ${WAV_CHANNELS} ${WAV_OUT_DIR}/${WAV_FILE_NAME}
             COMMENT "Creating ${WAV_FILE_NAME}"
             VERBATIM
         )
@@ -224,7 +220,7 @@ foreach(WAV_IN_FILE ${WAV_IN_FILES})
             add_custom_command(
                 OUTPUT ${WAV_FUZZING_OUT_DIR}/${WAV_FILE_NAME}
                 DEPENDS ${WAV_FUZZING_IN_FILE}
-                COMMAND sox ${WAV_FUZZING_IN_FILE} ${ENCODE_PARAMS} --channels ${WAV_CHANNELS} ${WAV_FUZZING_OUT_DIR}/${WAV_FILE_NAME}
+                COMMAND ${SOX_COMMAND} ${WAV_FUZZING_IN_FILE} ${ENCODE_PARAMS} --channels ${WAV_CHANNELS} ${WAV_FUZZING_OUT_DIR}/${WAV_FILE_NAME}
                 COMMENT "Creating ${WAV_FILE_NAME} [for fuzzing]"
                 VERBATIM
             )
@@ -238,7 +234,7 @@ foreach(WAV_IN_FILE ${WAV_IN_FILES})
         add_custom_command(
             OUTPUT ${WAV_OUT_DIR}/${RAW_FILE_NAME}
             DEPENDS ${WAV_OUT_DIR}/${WAV_FILE_NAME}
-            COMMAND sox ${WAV_OUT_DIR}/${WAV_FILE_NAME} ${DECODE_PARAMS} --channels ${WAV_CHANNELS} ${WAV_OUT_DIR}/${RAW_FILE_NAME}
+            COMMAND ${SOX_COMMAND} ${WAV_OUT_DIR}/${WAV_FILE_NAME} ${DECODE_PARAMS} --channels ${WAV_CHANNELS} ${WAV_OUT_DIR}/${RAW_FILE_NAME}
             COMMENT "Creating ${RAW_FILE_NAME}"
             VERBATIM
         )

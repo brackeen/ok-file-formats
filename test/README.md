@@ -24,6 +24,10 @@ To run the correctness test:
 
     cmake -B build && cmake --build build && ctest --verbose --test-dir build
 
+Alternatively, to run the correctness test from an IDE:
+
+    cmake -B build && cmake --build build -G Xcode
+
 ### PNG
 
 For PNG tests, the [PngSuite](http://www.schaik.com/pngsuite/pngsuite.html) images from Willem van

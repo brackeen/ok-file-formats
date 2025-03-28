@@ -86,6 +86,22 @@ char *append_path(const char *path, const char *name) {
     return get_full_path(path, name, "");
 }
 
+bool parent_path(char *path) {
+#ifdef _WIN32
+    const char sep = '\\';
+#else
+    const char sep = '/';
+#endif
+
+    char *result = strrchr(path, sep);
+    if (result) {
+        *result = '\0';
+        return true;
+    } else {
+        return false;
+    }
+}
+
 char *get_full_path(const char *path, const char *name, const char *ext) {
 #ifdef _WIN32
     const char *sep = "\\";

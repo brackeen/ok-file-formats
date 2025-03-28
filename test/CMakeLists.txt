@@ -20,6 +20,11 @@ if (NOT IMAGEMAGICK_COMMAND)
     message(FATAL_ERROR "ImageMagick 7 not found")
 endif()
 
+find_program(SOX_COMMAND sox)
+if (NOT SOX_COMMAND)
+    message(FATAL_ERROR "SoX not found. See http://sox.sourceforge.net/")
+endif()
+
 # Project setup
 project(OK_FILE_FORMATS_TESTS C)
 
@@ -79,7 +84,7 @@ foreach(png_file ${test_png_files})
         add_custom_command(
             OUTPUT ${gen_file}
             DEPENDS ${png_file}
-            COMMAND ${CMAKE_COMMAND} -DIN_FILE=${png_file} -DOUT_FILE=${gen_file} -P ${CMAKE_CURRENT_LIST_DIR}/cmake/ConvertPNG.cmake
+            COMMAND ${CMAKE_COMMAND} -DIMAGEMAGICK_COMMAND=${IMAGEMAGICK_COMMAND} -DIN_FILE=${png_file} -DOUT_FILE=${gen_file} -P ${CMAKE_CURRENT_LIST_DIR}/cmake/ConvertPNG.cmake
             COMMENT "Converting ${file_name}.png"
             VERBATIM
         )
@@ -111,7 +116,7 @@ foreach(jpg_file ${test_jpg_files})
         add_custom_command(
             OUTPUT ${gen_file}
             DEPENDS ${jpg_file}
-            COMMAND magick -define jpeg:fancy-upsampling=off ${jpg_file} -auto-orient ${gen_file}
+            COMMAND ${IMAGEMAGICK_COMMAND} -define jpeg:fancy-upsampling=off ${jpg_file} -auto-orient ${gen_file}
             COMMENT "Converting ${file_name}.jpg"
             VERBATIM
         )

@@ -14,6 +14,9 @@ uint8_t *custom_audio_alloc(void *user_data, uint64_t num_frames, uint8_t num_ch
 
 char *append_path(const char *path, const char *name);
 
+// Converts a path to the parent path. Returns true on success.
+bool parent_path(char *path);
+
 char *get_full_path(const char *path, const char *name, const char *ext);
 
 uint8_t *read_file(const char *filename, unsigned long *length);
