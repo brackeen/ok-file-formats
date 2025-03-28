@@ -1141,6 +1141,9 @@ static void ok_wav_decode_caf_file(ok_wav_decoder *decoder) {
             }
 
             decoder->wav->num_frames = readBE64(chunk_data + 8);
+        } else if (chunk_length < 0) {
+            ok_wav_error(wav, OK_WAV_ERROR_INVALID, "Invalid chunk length");
+            return;
         } else {
             // Skip ignored chunk
             //printf("Ignoring chunk '%.4s'\n", chunk_header);
