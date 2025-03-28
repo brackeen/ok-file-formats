@@ -972,18 +972,20 @@ static void ok_wav_decode_wav_file(ok_wav_decoder *decoder, bool is_little_endia
                 decoder->encoding = OK_WAV_ENCODING_UNKNOWN;
             }
 
-            if (chunk_length >= 20 && (decoder->encoding == OK_WAV_ENCODING_MS_ADPCM ||
-                                       decoder->encoding == OK_WAV_ENCODING_MS_IMA_ADPCM)) {
-                decoder->frames_per_block = (is_little_endian ? readLE16(chunk_data + 18) :
-                                             readBE16(chunk_data + 18));
+            if (decoder->encoding == OK_WAV_ENCODING_MS_ADPCM ||
+                decoder->encoding == OK_WAV_ENCODING_MS_IMA_ADPCM) {
                 bool valid_frames_per_block = false;
-                if (decoder->frames_per_block > 0) {
-                    if (decoder->encoding == OK_WAV_ENCODING_MS_ADPCM) {
-                        valid_frames_per_block = (((decoder->frames_per_block - 1) / 2 + 7) *
-                                                  wav->num_channels == decoder->block_size);
-                    } else if (decoder->encoding == OK_WAV_ENCODING_MS_IMA_ADPCM) {
-                        valid_frames_per_block = (((decoder->frames_per_block - 1) / 2 + 4) *
-                                                  wav->num_channels == decoder->block_size);
+                if (chunk_length >= 20) {
+                    decoder->frames_per_block = (is_little_endian ? readLE16(chunk_data + 18) :
+                                                 readBE16(chunk_data + 18));
+                    if (decoder->frames_per_block > 0) {
+                        if (decoder->encoding == OK_WAV_ENCODING_MS_ADPCM) {
+                            valid_frames_per_block = (((decoder->frames_per_block - 1) / 2 + 7) *
+                                                      wav->num_channels == decoder->block_size);
+                        } else if (decoder->encoding == OK_WAV_ENCODING_MS_IMA_ADPCM) {
+                            valid_frames_per_block = (((decoder->frames_per_block - 1) / 2 + 4) *
+                                                      wav->num_channels == decoder->block_size);
+                        }
                     }
                 }
                 if (!valid_frames_per_block) {
